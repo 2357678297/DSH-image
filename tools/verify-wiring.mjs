@@ -22,7 +22,40 @@ const PLUGIN_NAME = "dsh-plugin-velapi-image-go";
 const LOADER_ID = "velapi-image-go";
 const DSH_HOME = process.env.DSH_HOME || path.join(os.homedir(), ".dsh");
 const PROFILE_DIR = path.join(DSH_HOME, "profiles", "desktop");
-const API = process.env.DSH_API || "http://127.0.0.1:60898/api/velapi-image-go";
+/* API 地址：--api 参数 > DSH_API 环境变量 > 自动探测本机监听端口。
+   DSH 每次重启监听端口都可能变（60898 → 54419 这种），所以默认走探测。 */
+const argApi = (() => {
+  const index = process.argv.indexOf("--api");
+  return index > 0 ? process.argv[index + 1] : "";
+})();
+const API = argApi || process.env.DSH_API || (await detectApi());
+
+async function detectApi() {
+  const candidates = [];
+  try {
+    const { execSync } = await import("node:child_process");
+    const out = execSync("netstat -ano -p TCP", { encoding: "utf8", windowsHide: true });
+    for (const line of out.split(/\r?\n/)) {
+      if (!/LISTENING/i.test(line)) continue;
+      const local = (line.trim().split(/\s+/)[1] || "").trim();
+      const port = Number(local.split(":").pop());
+      if (Number.isInteger(port) && port >= 1024 && port <= 65535 && !candidates.includes(port)) candidates.push(port);
+    }
+  } catch {
+    /* netstat 拿不到就只试默认端口 */
+  }
+  for (const port of candidates.slice(0, 60)) {
+    const base = `http://127.0.0.1:${port}/api/velapi-image-go`;
+    try {
+      const response = await fetch(`${base}/status`, { signal: AbortSignal.timeout(400) });
+      const payload = await response.json();
+      if (payload?.plugin === "velapi-image-go") return base;
+    } catch {
+      /* 不是插件的端口：跳过 */
+    }
+  }
+  return "http://127.0.0.1:60898/api/velapi-image-go";
+}
 
 const results = [];
 const add = (id, ok, detail) => results.push({ id, ok, detail });

@@ -1,0 +1,18 @@
+# 依赖 / 构建产物
+node_modules/
+dist/
+*.log
+
+# 本地产物（可由 tools/viewer-check.mjs 重新生成，不进仓库）
+docs/preview/
+docs/ui-audit/*.png
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 本地敏感配置（真实密钥只在 ~/.dsh/state 或环境变量里，不进仓库）
+.env
+.env.*
+*.local.json

@@ -1,0 +1,66 @@
+{
+  "name": "dsh-plugin-velapi-image-go",
+  "version": "0.1.0",
+  "description": "velapi-image-go —— DeepSeek Harness 右侧栏「API 对话生图工作台」：对话生图 / 图片管理 / 信息管理 / 供应商管理，后端对接 velapi 兼容生图接口。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client.js",
+    "cordis.patch.yml",
+    "docs",
+    "README.md"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "test": "node test/host.test.mjs && node test/client.test.mjs",
+    "test:live": "node test/host.test.mjs --live",
+    "preview": "node tools/preview.mjs",
+    "fit": "node tools/fit-check.mjs",
+    "ps": "node tools/ps-check.mjs",
+    "ruler": "node tools/ruler-check.mjs",
+    "warp": "node tools/warp-check.mjs",
+    "dock": "node tools/dock-check.mjs",
+    "guide": "node tools/guide-preview.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "dsh-plugins",
+    "deepseek-harness",
+    "velapi",
+    "image",
+    "text-to-image",
+    "workbench",
+    "生图",
+    "工作台"
+  ],
+  "dsh": {
+    "engines": {
+      "dsh": ">=0.1.5-rc.1"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

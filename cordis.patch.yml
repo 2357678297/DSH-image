@@ -1,0 +1,37 @@
+# dsh-plugin-velapi-image-go —— bundle patch
+#
+# 只在这里插入一次 loader 条目。`name` 通过 profile package.json 里
+# `"dsh-plugin-velapi-image-go": "link:C:/Users/Administrator/.dsh/local-plugins/dsh-plugin-velapi-image-go"`
+# 解析，不要同时把它写进 `dsh.profile.bundles`，否则会出现重复 loader 条目 id
+# （assertUniqueEntryIds 会把它当硬启动错误）。
+#
+# 所有字段都有默认值，可以整段删掉靠内置默认跑：
+#   baseUrl        上游 OpenAI 兼容根（含 /v1）
+#   apiKeyEnv      从进程环境读取密钥的变量名
+#   apiKey         直接内联密钥（优先级高于 apiKeyEnv，会被 uid=600 写进 state 目录）
+#   defaultModel   新建会话默认模型
+#   defaultSize    默认尺寸
+#   defaultQuality LOW / MEDIUM / HIGH
+#   defaultCount   每次生成张数（接口上限 8）
+#   concurrency    同时在飞的生成任务数（接口上限 20）
+#   timeoutMs      单次上游请求超时
+#   surfaces       工作台落点：rightbar（产品右侧栏标签页）/ overlay（右侧停靠面板）
+#                  / settings（设置页分区）/ both；失败互不影响
+#   guideOrder     右侧栏引导页里的排序权重，数字越小越靠前
+- insert:
+    - id: velapi-image-go
+      name: dsh-plugin-velapi-image-go
+      config:
+        surfaces:
+          - rightbar
+          - overlay
+          - settings
+        baseUrl: https://api.velapi.cc/v1
+        apiKeyEnv: VELAPI_API_KEY
+        defaultModel: nano-banana-2.1
+        defaultSize: 1024x1024
+        defaultQuality: LOW
+        defaultCount: 1
+        concurrency: 3
+        timeoutMs: 300000
+        guideOrder: 30

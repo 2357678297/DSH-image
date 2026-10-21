@@ -196,6 +196,16 @@
 | 发送 `.vig-send` | 32 圆形墨黑底白字；hover 提亮；禁用灰底 |
 | 计数 `0/500` | 11px tabular，三级灰 |
 
+### 4.4e 回到底部浮标 `.vig-bottom-jump`
+
+| 项 | 规格 |
+|---|---|
+| 出现条件 | 用户离底 >160px（`trackStick` 判定 `atBottom=false`）；贴底自动消失 |
+| 形态 | 32px 高胶囊：`chevronDown` 14 + 「回到底部」12px；`rgba(255,255,255,.94)` + 1px `--vig-line` + 毛玻璃 + `--vig-sh-2`；右下 sticky（`bottom:22px`），`pointer-events` 只落在按钮上 |
+| 未读 | 不在底部时新消息累计到数字徽标（`--vig-accent` 底、白字、`min-width:18px`），回底清零 |
+| 回底 | `scrollTo({behavior:"smooth"})`；480ms 内忽略 scroll 判定，避免平滑滚动途中按钮闪现 |
+| 深色 / 动效 | 深色主题换 `rgba(26,26,28,.94)`；`prefers-reduced-motion` 关过渡 |
+
 ### 4.5b 图片 / 视频参数分区
 
 | 项 | 规格 |
@@ -373,6 +383,7 @@
 - 验收：client 394、真机 44、宿主 120、引擎 133、探针 13、路由 11 全绿。
 - **v2.3（图库布局密度）**：工具行加「小图 / 标准 / 大图」三段胶囊，密度记在 localStorage；图片一律 1:1 裁切（竖图不再把卡片撑高，网格行高统一），卡片 `align-self:start` + `min-width:0` 保证任意容器宽度下都不会退化成单列巨图；
 - 截图：`docs/ui-audit/layout-compact.png` / `layout-standard.png` / `layout-large.png`（`node tools/viewer-check.mjs --hold library --query "hold=library&density=large" --shot x.png`）。
+- **v2.25（回到底部浮标）**：上翻历史（离底 >160px）时对话区右下角出现「⌄ 回到底部」胶囊（白底细线 + 毛玻璃 + 轻阴影，sticky 悬浮在滚动区底部）；有未读新消息时带 `--vig-accent` 数字徽标；点击平滑回底（480ms 守卫防止滚动途中按钮闪现）并自动收起；贴底即隐藏；
 - **v2.24（刷新停在最新一条）**：会话滚动改用「贴底跟随」`stickRef`——刷新/切会话强制回底并补 60/320ms 两帧兜底；图片 `load`（捕获阶段）与 DOM 变化（MutationObserver）撑高时只要还贴着底就继续跟到底；上翻历史（离底 >160px）不抢滚动；真机断言 20 条消息下 `scrollTop+clientHeight === scrollHeight`；
 - **v2.23（更新通道接壤）**：宿主实现 `POST /update/check`（`git ls-remote` 拿远端 `main` HEAD 对比本地 `rev-parse HEAD`，无需 GitHub token/API 速率）；返回 `code=latest|behind|not_a_repo|remote_unreachable` + 短 SHA + hint；界面「更新」按钮按 code 给提示（已是最新 / 远端有更新 xxxxxxx / 远端不可达原因），进度条三态不变；host 测试用本地临时 git 仓库覆盖 behind/latest/unreachable 三条分支（host 130）；
 - **v2.22（视频时长）**：视频协议加第三个下拉「时长 4/6/8/10/12 秒」，`videoSeconds` 独立存；生成时视频 body 带 `seconds`（缺省 4s，图片请求不带）；三下拉文案收紧成 `16:9 / 720p / 4s` 避免挤行；

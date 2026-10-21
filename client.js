@@ -440,6 +440,7 @@ window.__ModuleLoader__.load({
 			"chat.pasted": "已粘贴为参考图",
 			"chat.refClear": "移除参考图",
 			"chat.refLimit": "参考图最多挂 4 张，先移掉一张",
+			"chat.toBottom": "回到底部",
 			"chat.expandTools": "展开更多参数",
 			"chat.collapseTools": "收起参数",
 			"chat.me": "我",
@@ -860,6 +861,7 @@ window.__ModuleLoader__.load({
 			"chat.pasted": "Pasted as the reference image",
 			"chat.refClear": "Remove reference",
 			"chat.refLimit": "Up to 4 reference images — remove one first",
+			"chat.toBottom": "Jump to latest",
 			"chat.expandTools": "More options",
 			"chat.collapseTools": "Fewer options",
 			"chat.me": "Me",
@@ -2183,6 +2185,21 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 .vig-ctx-val{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;min-width:18px;text-align:right}
 .vig-ctx-hot{flex-wrap:wrap}
 .vig-ctx-hint{flex-basis:100%;font-size:10.5px;color:var(--vig-text-faint);padding-left:22px}
+/* ============================================================
+   设计系统 v2.25 · 「回到底部」浮标（上翻历史时出现）
+   ============================================================ */
+.vig-bottom-dock{position:sticky;bottom:22px;display:flex;justify-content:flex-end;height:0;z-index:7;pointer-events:none}
+.vig-bottom-jump{pointer-events:auto;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;
+	border-radius:var(--vig-r-pill);border:1px solid var(--vig-line);background:rgba(255,255,255,.94);
+	-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:var(--vig-sh-2);
+	color:var(--vig-text);font-size:12px;font-weight:500;cursor:pointer;transform:translateY(4px);
+	transition:background-color var(--vig-dur) var(--vig-ease),transform var(--vig-dur) var(--vig-ease)}
+.vig-bottom-jump:hover{background:var(--vig-surface-sunken)}
+.vig-bottom-jump-count{min-width:18px;height:18px;padding:0 5px;border-radius:var(--vig-r-pill);background:var(--vig-accent);
+	color:#fff;font-size:10px;font-weight:650;display:inline-flex;align-items:center;justify-content:center;
+	font-variant-numeric:tabular-nums;line-height:1}
+body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-color:var(--vig-line-strong)}
+@media (prefers-reduced-motion: reduce){.vig-bottom-jump{transition:none;transform:none}}
 /* 更新入口与统计一起贴底：更新块吃掉 nav 剩余的 auto 空白，统计紧跟它 */
 .vig-update{margin-top:auto}
 .vig-nav-foot{margin-top:0!important;padding-top:8px;border-top:1px solid var(--vig-line)}
@@ -3411,14 +3428,35 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 			   图片 load、字体撑高、消息追加都会改变 scrollHeight —— 只要还贴着底就继续跟到底，
 			   所以不会再出现「刷新后焦点停在中途」的情况。 */
 			const stickRef = useRef(true);
+			/* 贴底状态与未读数：上翻历史时右下角出现「回到底部」浮标 */
+			const [atBottom, setAtBottom] = useState(true);
+			const [unread, setUnread] = useState(0);
+			const jumpGuardRef = useRef(0);
 			const scrollToBottom = () => {
 				const box = bodyRef.current;
 				if (box) box.scrollTop = box.scrollHeight;
+				setAtBottom(true);
+				setUnread(0);
 			};
 			const trackStick = () => {
+				// 点「回到底部」后平滑滚动途中不要再把按钮翻出来
+				if (Date.now() < jumpGuardRef.current) return;
 				const box = bodyRef.current;
 				if (!box) return;
-				stickRef.current = box.scrollHeight - box.scrollTop - box.clientHeight < 160;
+				const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 160;
+				stickRef.current = nearBottom;
+				setAtBottom(nearBottom);
+				if (nearBottom) setUnread(0);
+			};
+			const jumpToBottom = () => {
+				const box = bodyRef.current;
+				if (!box) return;
+				jumpGuardRef.current = Date.now() + 480;
+				stickRef.current = true;
+				setAtBottom(true);
+				setUnread(0);
+				if (typeof box.scrollTo === "function") box.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
+				else box.scrollTop = box.scrollHeight;
 			};
 			const [dragOver, setDragOver] = useState(false);
 			// 输入框旁的「信息卡」：点开先快速选一张，二级「管理」才跳信息管理页
@@ -3497,7 +3535,9 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 			useEffect(() => {
 				const box = bodyRef.current;
 				if (!box) return;
+				const grew = jobs.length > lastJobCount.current;
 				if (jobs.length !== lastJobCount.current || stickRef.current) scrollToBottom();
+				else if (grew) setUnread((value) => value + (jobs.length - lastJobCount.current));
 				lastJobCount.current = jobs.length;
 			}, [jobs]);
 
@@ -3667,7 +3707,21 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 							h("div", { className: "vig-hint-sub" }, t("chat.hint.sub"))
 						)
 					),
-					thread.length > 0 ? h("div", { className: "vig-thread" }, thread) : h("div", { className: "vig-empty" }, t("chat.empty"))
+					thread.length > 0 ? h("div", { className: "vig-thread" }, thread) : h("div", { className: "vig-empty" }, t("chat.empty")),
+					// 回到底部浮标：上翻历史时出现在右下角，贴底自动收起
+					!atBottom
+						? h(
+								"div",
+								{ className: "vig-bottom-dock" },
+								h(
+									"button",
+									{ className: "vig-bottom-jump", onClick: jumpToBottom, title: t("chat.toBottom") },
+									h(Icon, { name: "chevronDown", size: 14 }),
+									h("span", null, t("chat.toBottom")),
+									unread > 0 ? h("span", { className: "vig-bottom-jump-count" }, unread > 99 ? "99+" : String(unread)) : null
+								)
+							)
+						: null
 				),
 				h(
 					"div",

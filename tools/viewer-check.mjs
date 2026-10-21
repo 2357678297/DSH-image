@@ -228,7 +228,12 @@ window.fetch = async (url, init) => {
 		/* 截图用：?order=single 把单图那一轮放前面，方便一次截到两种占比 */
 		const order = new URLSearchParams(location.search).get("order");
 		const conversationQuery = new URLSearchParams(pathname.split("?")[1] || "").get("conversationId");
-		const items = conversationQuery ? convJobs[conversationQuery] || [] : order === "single" ? [SINGLE_JOB, JOB] : [JOB, SINGLE_JOB];
+		const base = conversationQuery ? convJobs[conversationQuery] || [] : order === "single" ? [SINGLE_JOB, JOB] : [JOB, SINGLE_JOB];
+		// 滚动/浮标验证：?many=1 造 20 条（内容远高于一屏）
+		const many = new URLSearchParams(location.search).get("many") === "1";
+		const items = many
+			? Array.from({ length: 20 }, (_, index) => ({ ...base[0], id: "job_many_" + index, createdAt: new Date(Date.now() - index * 60000).toISOString() }))
+			: base;
 		return json({ ok: true, items, pending: 0 });
 	}
 	if (pathname.startsWith("/presets")) return json({ ok: true, items: [] });
@@ -305,11 +310,14 @@ const ratioOf = (grid) => {
 	const box = grid ? grid.getBoundingClientRect().width : 0;
 	return card && box > 0 ? card.getBoundingClientRect().width / box : 0;
 };
-check(
-	"结果图尺寸：单图约一半宽（0.44~0.54），两张收敛到三成六（0.3~0.42）",
-	Boolean(singleGrid) && Boolean(duoGrid) && ratioOf(singleGrid) >= 0.44 && ratioOf(singleGrid) <= 0.54 && ratioOf(duoGrid) >= 0.3 && ratioOf(duoGrid) <= 0.42,
-	JSON.stringify({ single: ratioOf(singleGrid).toFixed(3), duo: ratioOf(duoGrid).toFixed(3) })
-);
+/* many=1 时 20 条全是双图任务：单图占比断言不适用，跳过 */
+if (new URLSearchParams(location.search).get("many") !== "1") {
+	check(
+		"结果图尺寸：单图约一半宽（0.44~0.54），两张收敛到三成六（0.3~0.42）",
+		Boolean(singleGrid) && Boolean(duoGrid) && ratioOf(singleGrid) >= 0.44 && ratioOf(singleGrid) <= 0.54 && ratioOf(duoGrid) >= 0.3 && ratioOf(duoGrid) <= 0.42,
+		JSON.stringify({ single: ratioOf(singleGrid).toFixed(3), duo: ratioOf(duoGrid).toFixed(3) })
+	);
+}
 /* ---- 右侧检查器折叠（图片 / 预设卡 / 供应商那一列） ---- */
 {
 	const side = host.querySelector("aside.vig-side");
@@ -513,8 +521,31 @@ check(
 }
 /* 调试用：?hold=chat 停在这里（配合 --shot 截一张对话布局的图） */
 if (new URLSearchParams(location.search).get("hold") === "chat") {
+	// 浮标验证：&scrolltop=1 只滚到顶（截图用）；&tobottom=1 滚到顶再点浮标
+	if (new URLSearchParams(location.search).get("scrolltop") === "1" || new URLSearchParams(location.search).get("tobottom") === "1") {
+		const box = host.querySelector(".vig-main-body");
+		if (box) {
+			flushSync(() => {
+				box.scrollTop = 0;
+				box.dispatchEvent(new Event("scroll", { bubbles: false }));
+			});
+			await wait(400);
+			const jump = host.querySelector(".vig-bottom-jump");
+			check("回到底部浮标：上翻历史后出现（带「回到底部」文案）", Boolean(jump) && text(jump).includes("回到底部"), JSON.stringify({ jump: Boolean(jump) }));
+			if (jump && new URLSearchParams(location.search).get("tobottom") === "1") flushSync(() => jump.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			if (new URLSearchParams(location.search).get("tobottom") === "1") {
+			await wait(900);
+			const boxAfter = host.querySelector(".vig-main-body");
+			check(
+				"回到底部浮标：点一下平滑回到底部并收起",
+				Boolean(boxAfter) && boxAfter.scrollHeight - boxAfter.scrollTop - boxAfter.clientHeight < 40 && !host.querySelector(".vig-bottom-jump"),
+				JSON.stringify({ gap: Math.round((boxAfter?.scrollHeight ?? 0) - (boxAfter?.scrollTop ?? 0) - (boxAfter?.clientHeight ?? 0)), jump: Boolean(host.querySelector(".vig-bottom-jump")) })
+			);
+		}
+	}
+	}
 	// 滚动验证：&many=1 时 20 条消息，图片撑高后也应贴着最新一条
-	if (new URLSearchParams(location.search).get("many") === "1") {
+	if (new URLSearchParams(location.search).get("many") === "1" && new URLSearchParams(location.search).get("scrolltop") !== "1") {
 		await wait(1600);
 		const box = host.querySelector(".vig-main-body");
 		check(

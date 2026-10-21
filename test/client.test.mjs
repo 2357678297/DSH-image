@@ -3395,7 +3395,11 @@ check(
     /jobs\s*\n?\s*\.slice\(\)\s*\n?\s*\.reverse\(\)/.test(SOURCE) &&
       /box\.scrollTop = box\.scrollHeight/.test(SOURCE) &&
       /const stickRef = useRef\(true\)/.test(SOURCE) &&
-      /stickRef\.current = box\.scrollHeight - box\.scrollTop - box\.clientHeight < 160/.test(SOURCE) &&
+      /const nearBottom = box\.scrollHeight - box\.scrollTop - box\.clientHeight < 160/.test(SOURCE) &&
+      /stickRef\.current = nearBottom/.test(SOURCE) &&
+      /const jumpToBottom = \(\) => \{/.test(SOURCE) &&
+      /className: "vig-bottom-jump"/.test(SOURCE) &&
+      /box\.scrollTo\(\{ top: box\.scrollHeight, behavior: "smooth" \}\)/.test(SOURCE) &&
       /onScroll: trackStick/.test(SOURCE) &&
       /addEventListener\("load", onLoad, true\)/.test(SOURCE) &&
       /\}, \[conversationId\]\)/.test(SOURCE)

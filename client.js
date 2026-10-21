@@ -3406,6 +3406,20 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 			const dropRef = useRef(null);
 			const bodyRef = useRef(null);
 			const lastJobCount = useRef(0);
+			/* 刷新 / 切会话后必须停在「最新一条」：
+			   stickRef = 用户当前是不是贴着底部（默认 true，刷新后从 true 起步）。
+			   图片 load、字体撑高、消息追加都会改变 scrollHeight —— 只要还贴着底就继续跟到底，
+			   所以不会再出现「刷新后焦点停在中途」的情况。 */
+			const stickRef = useRef(true);
+			const scrollToBottom = () => {
+				const box = bodyRef.current;
+				if (box) box.scrollTop = box.scrollHeight;
+			};
+			const trackStick = () => {
+				const box = bodyRef.current;
+				if (!box) return;
+				stickRef.current = box.scrollHeight - box.scrollTop - box.clientHeight < 160;
+			};
 			const [dragOver, setDragOver] = useState(false);
 			// 输入框旁的「信息卡」：点开先快速选一张，二级「管理」才跳信息管理页
 			const [noteOpen, setNoteOpen] = useState(false);
@@ -3483,12 +3497,44 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 			useEffect(() => {
 				const box = bodyRef.current;
 				if (!box) return;
-				const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 160;
-				if (jobs.length !== lastJobCount.current || nearBottom) {
-					box.scrollTop = box.scrollHeight;
-				}
+				if (jobs.length !== lastJobCount.current || stickRef.current) scrollToBottom();
 				lastJobCount.current = jobs.length;
 			}, [jobs]);
+
+			/* 刷新 / 切会话：强制回到底部，并补两帧兜底（首帧图片还没量出高度时会差一截）。 */
+			useEffect(() => {
+				stickRef.current = true;
+				const raf = window.requestAnimationFrame(() => scrollToBottom());
+				const early = window.setTimeout(() => {
+					if (stickRef.current) scrollToBottom();
+				}, 60);
+				const late = window.setTimeout(() => {
+					if (stickRef.current) scrollToBottom();
+				}, 320);
+				return () => {
+					window.cancelAnimationFrame(raf);
+					window.clearTimeout(early);
+					window.clearTimeout(late);
+				};
+			}, [conversationId]);
+
+			/* 图片 / 内容撑高时继续贴底（img load 不冒泡，用捕获阶段听）。 */
+			useEffect(() => {
+				const box = bodyRef.current;
+				if (!box) return undefined;
+				const onLoad = (event) => {
+					if (event.target?.tagName === "IMG" && stickRef.current) scrollToBottom();
+				};
+				const observer = new MutationObserver(() => {
+					if (stickRef.current) scrollToBottom();
+				});
+				box.addEventListener("load", onLoad, true);
+				observer.observe(box, { childList: true, subtree: true });
+				return () => {
+					box.removeEventListener("load", onLoad, true);
+					observer.disconnect();
+				};
+			}, []);
 
 			const limit = 500;
 			const onInput = (event) => {
@@ -3609,7 +3655,7 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 				),
 				h(
 					"div",
-					{ className: "vig-main-body", ref: bodyRef },
+					{ className: "vig-main-body", ref: bodyRef, onScroll: trackStick },
 					h(
 						"div",
 						{ className: "vig-hint" },

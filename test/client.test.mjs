@@ -3391,10 +3391,14 @@ check(
     })()
   );
   check(
-    "新消息自动滚到底：原来贴着底部才跟着滚，往上翻历史不抢滚动",
+    "刷新/切会话停在最新一条：贴底跟随（stickRef）+ 图片撑高补滚 + 上翻历史不抢滚动",
     /jobs\s*\n?\s*\.slice\(\)\s*\n?\s*\.reverse\(\)/.test(SOURCE) &&
       /box\.scrollTop = box\.scrollHeight/.test(SOURCE) &&
-      /nearBottom = box\.scrollHeight - box\.scrollTop - box\.clientHeight < 160/.test(SOURCE)
+      /const stickRef = useRef\(true\)/.test(SOURCE) &&
+      /stickRef\.current = box\.scrollHeight - box\.scrollTop - box\.clientHeight < 160/.test(SOURCE) &&
+      /onScroll: trackStick/.test(SOURCE) &&
+      /addEventListener\("load", onLoad, true\)/.test(SOURCE) &&
+      /\}, \[conversationId\]\)/.test(SOURCE)
   );
   check(
     "信息卡：点开先快速选择（点一张插进输入框），二级「管理」才跳信息管理页",

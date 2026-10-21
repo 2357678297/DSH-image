@@ -373,6 +373,7 @@
 - 验收：client 394、真机 44、宿主 120、引擎 133、探针 13、路由 11 全绿。
 - **v2.3（图库布局密度）**：工具行加「小图 / 标准 / 大图」三段胶囊，密度记在 localStorage；图片一律 1:1 裁切（竖图不再把卡片撑高，网格行高统一），卡片 `align-self:start` + `min-width:0` 保证任意容器宽度下都不会退化成单列巨图；
 - 截图：`docs/ui-audit/layout-compact.png` / `layout-standard.png` / `layout-large.png`（`node tools/viewer-check.mjs --hold library --query "hold=library&density=large" --shot x.png`）。
+- **v2.24（刷新停在最新一条）**：会话滚动改用「贴底跟随」`stickRef`——刷新/切会话强制回底并补 60/320ms 两帧兜底；图片 `load`（捕获阶段）与 DOM 变化（MutationObserver）撑高时只要还贴着底就继续跟到底；上翻历史（离底 >160px）不抢滚动；真机断言 20 条消息下 `scrollTop+clientHeight === scrollHeight`；
 - **v2.23（更新通道接壤）**：宿主实现 `POST /update/check`（`git ls-remote` 拿远端 `main` HEAD 对比本地 `rev-parse HEAD`，无需 GitHub token/API 速率）；返回 `code=latest|behind|not_a_repo|remote_unreachable` + 短 SHA + hint；界面「更新」按钮按 code 给提示（已是最新 / 远端有更新 xxxxxxx / 远端不可达原因），进度条三态不变；host 测试用本地临时 git 仓库覆盖 behind/latest/unreachable 三条分支（host 130）；
 - **v2.22（视频时长）**：视频协议加第三个下拉「时长 4/6/8/10/12 秒」，`videoSeconds` 独立存；生成时视频 body 带 `seconds`（缺省 4s，图片请求不带）；三下拉文案收紧成 `16:9 / 720p / 4s` 避免挤行；
 - **v2.21（视频比例 / 分辨率分段）**：视频协议从单一下拉拆成「比例 + 分辨率」两段（16:9/9:16/1:1/4:3/3:4/21:9 × 480p/720p/1080p），像素 size 由短边规则组合写回 `videoSize`；`videoRatio` / `videoResolution` 宿主分字段存；切协议自动换到对应 kind 的模型（并切供应商）。（注：本轮 host 侧联网检索不可用，参数集合按 OpenAI `size` 像素与 Kling/Seedance/Veo 的 `aspect_ratio`+`resolution` 公开规范归一实现）

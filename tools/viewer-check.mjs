@@ -513,6 +513,16 @@ check(
 }
 /* 调试用：?hold=chat 停在这里（配合 --shot 截一张对话布局的图） */
 if (new URLSearchParams(location.search).get("hold") === "chat") {
+	// 滚动验证：&many=1 时 20 条消息，图片撑高后也应贴着最新一条
+	if (new URLSearchParams(location.search).get("many") === "1") {
+		await wait(1600);
+		const box = host.querySelector(".vig-main-body");
+		check(
+			"刷新后停在最新一条：图片撑高也贴着底部",
+			Boolean(box) && box.scrollHeight - box.scrollTop - box.clientHeight < 40,
+			JSON.stringify({ scrollTop: Math.round(box?.scrollTop ?? -1), scrollHeight: Math.round(box?.scrollHeight ?? -1), clientHeight: Math.round(box?.clientHeight ?? -1) })
+		);
+	}
 	// 截图用：&popover=tools 展开工具面板 / &popover=model 打开模型下拉
 	if (new URLSearchParams(location.search).get("popover") === "tools") {
 		const toolsBtn = host.querySelector("[data-tools-toggle]");

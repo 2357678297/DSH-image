@@ -372,6 +372,45 @@ if (!new URLSearchParams(location.search).get("model")) {
 			flushSync(() => navItem.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 			await wait(600);
 		}
+		// 图片处理：&ps=load 先从「最近生成」点一张当底图，验证底部图层控制条
+		if (holdView === "ps" && new URLSearchParams(location.search).get("ps") === "load") {
+			const tile = await waitFor(() => host.querySelector(".vig-ps-recent-tile"), 5000);
+			if (tile) {
+				flushSync(() => tile.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+				await wait(1200);
+			}
+			const bar = host.querySelector(".vig-ps-layerbar");
+			check(
+				"图层控制条：载入底图后出现在画布下方（底图 chip + 加层按钮）",
+				Boolean(bar) && Boolean(bar.querySelector(".vig-ps-chip.is-base")) && Boolean(bar.querySelector(".vig-ps-chip.is-add")),
+				JSON.stringify({ bar: Boolean(bar) })
+			);
+			// 应用一次调整（默认应该新建图层）：打开「调整」浮窗 → 改亮度 → 应用
+			const adjustBtn = Array.from(host.querySelectorAll(".vig-ps-tool")).find((node) => String(node.getAttribute("title") || "").includes("调整"));
+			if (adjustBtn) {
+				flushSync(() => adjustBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+				await wait(300);
+				const applyBtn = Array.from(host.querySelectorAll("button")).find((node) => /应用|Apply/.test(text(node)));
+				if (applyBtn) {
+					flushSync(() => applyBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+					await wait(500);
+				}
+			}
+			const barRect = host.querySelector(".vig-ps-layerbar")?.getBoundingClientRect();
+			check(
+				"控制条位置：在画布下方、横向铺开（不被挤到角落）",
+				Boolean(barRect) && barRect.width > 200 && barRect.height > 40,
+				JSON.stringify(barRect ? { x: Math.round(barRect.x), y: Math.round(barRect.y), w: Math.round(barRect.width), h: Math.round(barRect.height) } : null)
+			);
+			const barNow = host.querySelector(".vig-ps-layerbar");
+			check(
+				"控制条父级 / grid 定位",
+				Boolean(barNow),
+				JSON.stringify({ parent: barNow?.parentElement?.className ?? "", gridColumn: barNow ? getComputedStyle(barNow).gridColumn : "", display: barNow ? getComputedStyle(barNow).display : "", parentDisplay: barNow?.parentElement ? getComputedStyle(barNow.parentElement).display : "" })
+			);
+			const chips = host.querySelectorAll(".vig-ps-chip").length;
+			check("所有改动默认新图层：应用一次调整后控制条多一层", chips >= 3, JSON.stringify({ chips }));
+		}
 		// 图库布局密度：&density=compact|standard|large（截图/审计用）
 		const densityText = { compact: "小图", standard: "标准", large: "大图" }[new URLSearchParams(location.search).get("density")];
 		if (densityText) {

@@ -326,6 +326,17 @@
 | 展开 | 头部「展开 / 收起」链接（`aria-expanded`）→ 壳 `.is-open{max-height:none;mask:none}` |
 | 滚动 | 收起态也能在格子里滚（`overscroll-behavior:contain`，不带着整页跑） |
 
+### 4.12c 图片处理·图层控制条 `.vig-ps-layerbar`
+
+| 项 | 规格 |
+|---|---|
+| 位置 | `.vig-ps` 网格第 2 行跨全宽（`grid-column:1/-1;grid-row:2`，画布下方）；窄屏 compact 下回到文档流 |
+| 卡片 | `.vig-ps-chip` 78px 宽：52px 缩略图（`psLayerThumb` 缩到 56px 的 dataURL）+ 10.5px 名字；底图 chip 在前，`is-add` 虚线「+ 加图层」在末尾 |
+| 状态 | `is-on` 选中（accent 环）、`is-hidden` 不可见（缩略图 35%）、`is-dragging` 拖拽中、`is-editing` 单层编辑中（虚线 outline） |
+| 操作 | 点击选中；hover/选中出左上眼睛（显隐切换）与右上 ×（删除）；HTML5 `draggable` 拖拽换序（`psMoveLayerTo`，末尾追加）；双击进单层编辑；末尾「+ 加图层」走图库选择器 |
+| 默认新图层 | `commit()` 判断 `geometry`：无几何步骤 → 结果压成新图层、旧层全部隐藏（已烘焙，历史快照可撤销），底图不动；有几何步骤（裁切/旋转/画布/缩放/翻转）仍改写底图以保持坐标一致 |
+| 右栏 | 图层列表默认折叠（`.vig-ps-layers.is-fold .vig-ps-layer-row{display:none}`），头部 chevron 展开看叠加算法/不透明度/蒙版 |
+
 ### 4.13 图片处理 `.vig-ps` 工具条
 
 - 左侧工具列：48px 宽，工具按钮 36×36 圆角 12（工具是「画布工具」，用 tile 圆角不是 pill），选中墨黑底白字；
@@ -384,6 +395,7 @@
 - 验收：client 394、真机 44、宿主 120、引擎 133、探针 13、路由 11 全绿。
 - **v2.3（图库布局密度）**：工具行加「小图 / 标准 / 大图」三段胶囊，密度记在 localStorage；图片一律 1:1 裁切（竖图不再把卡片撑高，网格行高统一），卡片 `align-self:start` + `min-width:0` 保证任意容器宽度下都不会退化成单列巨图；
 - 截图：`docs/ui-audit/layout-compact.png` / `layout-standard.png` / `layout-large.png`（`node tools/viewer-check.mjs --hold library --query "hold=library&density=large" --shot x.png`）。
+- **v2.27（图片处理·图层控制条）**：图层从右侧列表改成**画布下方横排控制条**（底图 + 各层 78px 缩略卡片 + 加层按钮，横向滚动）；每张卡：点击选中（`--vig-accent` 2px 环）、hover 出眼睛/×、**拖拽排序**（`psMoveLayerTo`）、双击进单层编辑；右栏图层列表默认折叠（头部 chevron 展开看叠加算法/不透明度）；**所有颜色/滤镜类改动默认新建图层**（旧层隐藏=已烘焙，历史可撤销），几何类（裁切/旋转等改尺寸）仍改写底图；截图 docs/ui-audit/ps-layerbar.png；
 - **v2.26（视频模型联动）**：`modelKindOf` 先看 `modelMeta.kind`、缺失按名字兜底（wan3.0-video-1080p / veo / sora / kling / seedance…）；选中视频模型自动切 `videos_generations` 协议并显示视频参数（16:9 / 720p / 4s），选回图片模型自动切回图片生成；真机断言（hold=chat&model=omni-flash）覆盖协议切换与参数区两段；
 - **v2.25（回到底部浮标）**：上翻历史（离底 >160px）时对话区右下角出现「⌄ 回到底部」胶囊（白底细线 + 毛玻璃 + 轻阴影，sticky 悬浮在滚动区底部）；有未读新消息时带 `--vig-accent` 数字徽标；点击平滑回底（480ms 守卫防止滚动途中按钮闪现）并自动收起；贴底即隐藏；
 - **v2.24（刷新停在最新一条）**：会话滚动改用「贴底跟随」`stickRef`——刷新/切会话强制回底并补 60/320ms 两帧兜底；图片 `load`（捕获阶段）与 DOM 变化（MutationObserver）撑高时只要还贴着底就继续跟到底；上翻历史（离底 >160px）不抢滚动；真机断言 20 条消息下 `scrollTop+clientHeight === scrollHeight`；

@@ -236,6 +236,8 @@ window.__ModuleLoader__.load({
 			"ps.layer.maskRemove": "删掉蒙版",
 			"ps.layer.opacity": "不透明度",
 			"ps.layer.mode": "叠加算法",
+			"ps.layer.new": "新图层",
+			"ps.layer.props": "图层属性",
 			"ps.layer.empty": "还没有图层。加一层就能用叠加算法（正片叠底 / 滤色 / 叠加 / 变暗 / 变亮 / 相加）。",
 			"ps.layer.base": "底图",
 			"ps.layer.baseHint": "合成的最底层：你正在编辑的这张图本身。畸变 / 裁切 / 旋转改的就是它，不会另存一层；落定后这里显示的就是变换后的图。",
@@ -2198,6 +2200,8 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 .vig-bottom-jump-count{min-width:18px;height:18px;padding:0 5px;border-radius:var(--vig-r-pill);background:var(--vig-accent);
 	color:#fff;font-size:10px;font-weight:650;display:inline-flex;align-items:center;justify-content:center;
 	font-variant-numeric:tabular-nums;line-height:1}
+	color:#fff;font-size:10px;font-weight:650;display:inline-flex;align-items:center;justify-content:center;
+	font-variant-numeric:tabular-nums;line-height:1}
 body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-color:var(--vig-line-strong)}
 @media (prefers-reduced-motion: reduce){.vig-bottom-jump{transition:none;transform:none}}
 /* 更新入口与统计一起贴底：更新块吃掉 nav 剩余的 auto 空白，统计紧跟它 */
@@ -2240,6 +2244,44 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-head .vig-title{font-size:16px;font-weight:650;letter-spacing:-.01em}
 /* 截图驱动的结果节点只是数据载体，不参与视觉 */
 #vig-viewer-out{position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden}
+/* ============================================================
+   设计系统 v2.27 · 图片处理 · 图层控制条（画布下方横排）
+   ============================================================ */
+.vig-ps{grid-template-rows:auto auto}
+.vig-ps-tools{grid-column:1;grid-row:1}
+.vig-ps-stage{grid-column:2;grid-row:1}
+.vig-ps-layers{grid-column:3;grid-row:1}
+.vig-root[data-compact="1"] .vig-ps-tools,
+.vig-root[data-compact="1"] .vig-ps-stage,
+.vig-root[data-compact="1"] .vig-ps-layers,
+.vig-root[data-compact="1"] .vig-ps-layerbar{grid-column:auto;grid-row:auto}
+.vig-ps-layerbar{grid-column:1 / -1;grid-row:2;display:flex;align-items:stretch;gap:8px;padding:10px 12px;
+	border:1px solid var(--vig-line);border-radius:var(--vig-r-card);background:var(--vig-surface);
+	overflow-x:auto;overflow-y:hidden;min-height:84px;scrollbar-width:thin}
+.vig-ps-chip{position:relative;display:flex;flex-direction:column;gap:4px;width:78px;flex:none;padding:4px;
+	border:1px solid var(--vig-line);border-radius:var(--vig-r-tile);background:var(--vig-surface);cursor:pointer;
+	transition:border-color var(--vig-dur) var(--vig-ease),box-shadow var(--vig-dur) var(--vig-ease)}
+.vig-ps-chip:hover{border-color:var(--vig-line-strong)}
+.vig-ps-chip.is-on{border-color:var(--vig-accent);box-shadow:0 0 0 2px var(--vig-accent-soft)}
+.vig-ps-chip.is-hidden .vig-ps-chip-thumb{opacity:.35}
+.vig-ps-chip.is-dragging{opacity:.5}
+.vig-ps-chip.is-editing{outline:1px dashed var(--vig-accent);outline-offset:2px}
+.vig-ps-chip-thumb{width:100%;height:52px;object-fit:cover;border-radius:8px;background:var(--vig-surface-sunken);display:block}
+.vig-ps-chip-name{font-size:10.5px;color:var(--vig-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.vig-ps-chip.is-base .vig-ps-chip-name{color:var(--vig-text)}
+.vig-ps-chip-eye,.vig-ps-chip-x{position:absolute;top:-6px;width:16px;height:16px;border-radius:999px;
+	border:1px solid var(--vig-line);background:var(--vig-surface);color:var(--vig-text-muted);display:flex;
+	align-items:center;justify-content:center;padding:0;opacity:0;transition:opacity var(--vig-dur) var(--vig-ease)}
+.vig-ps-chip-eye{left:-6px}
+.vig-ps-chip-x{right:-6px}
+.vig-ps-chip:hover .vig-ps-chip-eye,.vig-ps-chip:hover .vig-ps-chip-x,
+.vig-ps-chip.is-on .vig-ps-chip-eye,.vig-ps-chip.is-on .vig-ps-chip-x{opacity:1}
+.vig-ps-chip-x:hover{color:var(--vig-danger);border-color:var(--vig-danger)}
+.vig-ps-chip.is-add{width:auto;min-width:64px;align-items:center;justify-content:center;gap:6px;color:var(--vig-text-muted);
+	font-size:11px;border-style:dashed;flex-direction:row}
+.vig-ps-chip.is-add:hover{color:var(--vig-text);border-color:var(--vig-line-strong)}
+/* 右栏图层列表默认收起：图层操作走底部控制条，展开才看叠加算法/不透明度等高级项 */
+.vig-ps-layers.is-fold .vig-ps-layer-row{display:none}
 `;
 
 		/* ------------------------------------------------------------------ *
@@ -6986,6 +7028,31 @@ h(
 			return list;
 		}
 
+		/** 图层拖拽排序：把 fromId 挪到 toId 的位置（控制条里直接拖）。 */
+		function psMoveLayerTo(layers, fromId, toId) {
+			const list = Array.isArray(layers) ? layers.slice() : [];
+			const from = list.findIndex((item) => item.id === fromId);
+			const to = list.findIndex((item) => item.id === toId);
+			if (from < 0 || to < 0 || from === to) return list;
+			const [moved] = list.splice(from, 1);
+			list.splice(to, 0, moved);
+			return list;
+		}
+
+		/** 图层缩略图：画布缩到 56px 的 dataURL（控制条用，惰性缓存由调用方管）。 */
+		function psLayerThumb(canvas, size = 56) {
+			try {
+				if (!canvas || !canvas.width || !canvas.height) return "";
+				const thumb = psCanvas(size, size);
+				const context = thumb.getContext("2d");
+				context.imageSmoothingQuality = "high";
+				context.drawImage(canvas, 0, 0, size, size);
+				return thumb.toDataURL("image/png");
+			} catch (error) {
+				return "";
+			}
+		}
+
 		/** 合成用的那张图：底图 + 图层（导出、设为参考图都走它，保证「看到的就是导出的」）。
 		 *  蒙版必须和画布上一样参与合成 —— 以前这里不传 prepare，导出会把蒙住的内容原样露出来。 */
 		function psLayerExport(base, layers, width, height) {
@@ -7753,10 +7820,21 @@ h(
 			const [layers, setLayers] = useState(() => (Array.isArray(initial?.layers) ? initial.layers : []));
 			// 单层编辑会话：正在把哪一层当底图在改（null = 改底图）；initial.layerSession 同样是预览种子
 			const [layerSession, setLayerSession] = useState(() => initial?.layerSession || null);
+			// 底部控制条：当前选中的图层（"" = 底图）与正在拖拽的图层
+			const [activeLayerId, setActiveLayerId] = useState("");
+			// 右栏图层列表默认收起（图层操作走底部控制条；展开可看叠加算法 / 不透明度等高级项）
+			const [layersOpen, setLayersOpen] = useState(false);
+			const [dragLayerId, setDragLayerId] = useState("");
 			// 会话锁：state 要等下一轮渲染才看得到，连点两下同一层靠这个 ref 当场挡掉
 			const layerSessionRef = useRef(initial?.layerSession || null);
 			// 「加图层」从图库挑：复用同一个选择器，只是挑回来当成一层
 			const [layerPick, setLayerPick] = useState(false);
+			// 底部控制条缩略图（底图 + 各层）：随 source / layers 变化重算
+			const layerThumbs = useMemo(() => {
+				const base = psLayerThumb(source?.canvas);
+				const items = (layers || []).map((layer) => psLayerThumb(layer.canvas));
+				return { base, items };
+			}, [source, layers]);
 			// 参数面板浮窗的位置（拖过就记住）
 			const lastFloat = useRef(null);
 			const [floatPos, setFloatPos] = useState(() => {
@@ -8182,6 +8260,10 @@ h(
 			 * 提交一张新底图。geometry（可选）= 这一步做的几何：裁切 / 旋转 / 拉直 / 改画布 /
 			 * 缩放 / 翻转。底图变了图层和蒙版也得跟着变，而变换前那套 layers 要先被历史拍下来，
 			 * 撤销才回得去。单层编辑会话里不跟着变 —— 那时候画布上只有正在编辑的这一层。
+			 *
+			 * 「所有改动都默认新图层」：颜色 / 滤镜这类不改尺寸的调整不再直接改写底图，
+			 * 而是把结果压成一层新的叠上去（旧层先隐藏：它们已经被烘焙进这一层，历史里可撤回）。
+			 * 几何类（改尺寸）仍改写底图，否则图层坐标对不上。
 			 */
 			const commit = (canvas, name, geometry, label) => {
 				if (!canvas) return;
@@ -8197,6 +8279,25 @@ h(
 						w: canvas.width,
 						h: canvas.height
 					}));
+				const isGeometryChange = steps.length > 0;
+				if (!isGeometryChange && !layerSessionRef.current) {
+					// 默认新图层：结果压成一层，旧层隐藏（已被烘焙进去），底图保持不动
+					const layerName = label || name || (tool ? t(`ps.tool.${tool}`) : t("ps.layer.new"));
+					setLayers((list) => [
+						...list.map((item) => ({ ...item, visible: false })),
+						{
+							id: `layer_${Date.now().toString(36)}_${list.length}`,
+							name: layerName,
+							canvas,
+							visible: true,
+							mode: "normal",
+							opacity: 1
+						}
+					]);
+					setActiveLayerId((value) => value);
+					if (name !== null) setSelection(null);
+					return;
+				}
 				if (steps.length && !layerSessionRef.current) {
 					const nextLayers = psTransformLayers(layers, steps);
 					if (nextLayers !== layers) setLayers(nextLayers);
@@ -9758,16 +9859,107 @@ h(
 									)
 								: null
 						),
+						// 图层控制条（画布下方横排）：底图 + 各层缩略图；点选中、×删除、眼睛显隐、拖拽排序、双击进单层编辑
+						h(
+							"div",
+							{ className: "vig-ps-layerbar", role: "list", "aria-label": t("ps.layers") },
+							h(
+								"button",
+								{
+									className: `vig-ps-chip is-base${activeLayerId ? "" : " is-on"}`,
+									title: t("ps.layer.baseHint"),
+									onClick: () => setActiveLayerId("")
+								},
+								layerThumbs.base ? h("img", { className: "vig-ps-chip-thumb", src: layerThumbs.base, alt: "" }) : h("span", { className: "vig-ps-chip-thumb is-empty" }),
+								h("span", { className: "vig-ps-chip-name" }, t("ps.layer.base"))
+							),
+							(layers || []).map((layer, index) =>
+								h(
+									"div",
+									{
+										key: layer.id,
+										className: `vig-ps-chip${activeLayerId === layer.id ? " is-on" : ""}${layer.visible === false ? " is-hidden" : ""}${layerSession?.id === layer.id ? " is-editing" : ""}${dragLayerId === layer.id ? " is-dragging" : ""}`,
+										role: "listitem",
+										draggable: true,
+										title: `${layer.name} · 拖拽排序 / 双击进入单层编辑`,
+										onDragStart: () => setDragLayerId(layer.id),
+										onDragEnd: () => setDragLayerId(""),
+										onDragOver: (event) => event.preventDefault(),
+										onDrop: (event) => {
+											event.preventDefault();
+											const from = dragLayerId;
+											setDragLayerId("");
+											if (from && from !== layer.id) setLayers((list) => psMoveLayerTo(list, from, layer.id));
+										},
+										onClick: () => setActiveLayerId(layer.id),
+										onDoubleClick: () => void enterLayer(layer)
+									},
+									layerThumbs.items[index]
+										? h("img", { className: "vig-ps-chip-thumb", src: layerThumbs.items[index], alt: "" })
+										: h("span", { className: "vig-ps-chip-thumb is-empty" }),
+									h("span", { className: "vig-ps-chip-name", title: layer.name }, layer.name),
+									h(
+										"button",
+										{
+											className: "vig-ps-chip-eye",
+											title: t("ps.layer.visible"),
+											"aria-pressed": layer.visible !== false,
+											onClick: (event) => {
+												event.stopPropagation();
+												setLayers((list) => list.map((item) => (item.id === layer.id ? { ...item, visible: item.visible === false } : item)));
+											}
+										},
+										h(Icon, { name: layer.visible === false ? "close" : "check", size: 10 })
+									),
+									h(
+										"button",
+										{
+											className: "vig-ps-chip-x",
+											title: t("ps.layer.remove"),
+											onClick: (event) => {
+												event.stopPropagation();
+												setLayers((list) => list.filter((item) => item.id !== layer.id));
+												if (activeLayerId === layer.id) setActiveLayerId("");
+											}
+										},
+										h(Icon, { name: "close", size: 10 })
+									)
+								)
+							),
+							h(
+								"button",
+								{
+									className: "vig-ps-chip is-add",
+									title: t("ps.layer.addLayer"),
+									onClick: () => {
+										setLayerPick(true);
+										setPickOpen(true);
+									}
+								},
+								h(Icon, { name: "plus", size: 14 }),
+								h("span", null, t("ps.layer.addLayer"))
+							)
+						),
 						// 原来参数栏的位置：图层（叠加算法）。参数改成浮窗，压在画布上。
 						h(
 							"div",
-							{ className: "vig-ps-layers" },
+							{ className: `vig-ps-layers${layersOpen ? "" : " is-fold"}` },
 							h(
 								"div",
 								{ className: "vig-ps-layers-head" },
 								h(Icon, { name: "image", size: 15 }),
 								h("span", null, t("ps.layers")),
 								h("div", { className: "vig-spacer" }),
+								h(
+									"button",
+									{
+										className: "vig-ps-layer-mini",
+										title: layersOpen ? t("ps.collapse") : t("ps.expand"),
+										"aria-expanded": layersOpen ? "true" : "false",
+										onClick: () => setLayersOpen((value) => !value)
+									},
+									h(Icon, { name: layersOpen ? "chevronDown" : "chevron", size: 12 })
+								),
 								h(
 									"button",
 									{

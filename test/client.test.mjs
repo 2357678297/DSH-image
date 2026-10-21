@@ -3342,6 +3342,19 @@ check(
       /updateState\.phase === "done"/.test(SOURCE)
   );
   check(
+    "更新通道两段式：检查到 behind 后再点一次 → 拉取（/update/apply）并重启（/update/restart）",
+    /call\("\/update\/apply", \{ method: "POST", body: \{\} \}\)/.test(SOURCE) &&
+      /call\("\/update\/restart", \{ method: "POST", body: \{\} \}\)/.test(SOURCE) &&
+      /updateInfoRef/.test(SOURCE) &&
+      /update\.clickAgain/.test(SOURCE)
+  );
+  check(
+    "模型 kind 只认目录元数据（不再按名字猜视频：wan3.0-video-1080p 不会被误切视频协议）",
+    /function modelKindOf\(id, providers\)/.test(SOURCE) &&
+      !/VIDEO_NAME_HINT/.test(SOURCE) &&
+      /const selectedModelKind = modelKindOf\(config\.defaultModel, providers\)/.test(SOURCE)
+  );
+  check(
     "视频参数与图片配置分开：模型按 kind 过滤 + 比例/分辨率两段 + 视频张数固定 1",
     /const endpointKind = \(\(\) => \{/.test(SOURCE) &&
       /const pickerModels = catalog\.models\.filter/.test(SOURCE) &&

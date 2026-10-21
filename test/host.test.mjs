@@ -657,6 +657,19 @@ await runMockJob("视频默认时长");
   const hit = mockHits.find((item) => item.url.includes("/videos/generations"));
   check("视频时长缺省回落 4 秒（不传也不会漏字段）", hit?.body?.seconds === "4", JSON.stringify({ seconds: hit?.body?.seconds ?? null }));
 }
+/* 视频比例 / 分辨率：原生字段（aspect_ratio + resolution）跟 size 像素一起带（Kling/Seedance/Veo 系认原生字段） */
+{
+  await call("/config", { method: "POST", body: { videoRatio: "9:16", videoResolution: "1080p" } });
+  mockHits.length = 0;
+  await runMockJob("视频原生字段");
+  const hit = mockHits.find((item) => item.url.includes("/videos/generations"));
+  check(
+    "视频请求同时带原生字段（aspect_ratio=9:16 / resolution=1080p）与像素 size",
+    hit?.body?.aspect_ratio === "9:16" && hit?.body?.resolution === "1080p" && typeof hit?.body?.size === "string",
+    JSON.stringify({ aspect_ratio: hit?.body?.aspect_ratio ?? null, resolution: hit?.body?.resolution ?? null, size: hit?.body?.size ?? null })
+  );
+  await call("/config", { method: "POST", body: { videoRatio: "16:9", videoResolution: "720p" } });
+}
 
 const weirdProtocol = await saveMockProvider({ id: mockProvider.id, endpoint: "chatgpt-ultra" });
 check("认不出的协议回落成「自动检测」，不把生成打死", weirdProtocol?.endpoint === "auto", weirdProtocol?.endpoint);
@@ -697,6 +710,20 @@ check(
     "更新通道：远端不可达 → code=remote_unreachable + hint（不让界面以为有新版本）",
     unreachable.body?.code === "remote_unreachable" && unreachable.body?.available === false && Boolean(unreachable.body?.hint),
     JSON.stringify({ code: unreachable.body?.code })
+  );
+
+  /* /update/apply：已最新时不动仓库；远端不可达时给原因（不 execute 危险的 pull） */
+  const applySame = await call("/update/apply", { method: "POST", body: { remote: PLUGIN_ROOT } });
+  check(
+    "更新通道：/update/apply 在已最新时不动仓库（pulled=false）",
+    applySame.body?.pulled === false && applySame.body?.code === "latest" && Boolean(applySame.body?.short?.from),
+    JSON.stringify({ code: applySame.body?.code, pulled: applySame.body?.pulled })
+  );
+  const applyBad = await call("/update/apply", { method: "POST", body: { remote: path.join(tmpRemote, "no-such-repo") } });
+  check(
+    "更新通道：/update/apply 远端不可达 → remote_unreachable（不执行 pull）",
+    applyBad.body?.ok === false && applyBad.body?.code === "remote_unreachable",
+    JSON.stringify({ code: applyBad.body?.code })
   );
   fs.rmSync(tmpRemote, { recursive: true, force: true });
 }

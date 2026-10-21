@@ -558,6 +558,10 @@ window.__ModuleLoader__.load({
 			"update.latest": "已是最新版本",
 			"update.ready": "有新版本，按 PR 流程更新",
 			"update.behind": "远端有更新 {sha}，拉取后需重启 DSH",
+			"update.clickAgain": "再点一次更新即拉取并重启",
+			"update.applied": "已更新到 {sha}，正在重启 DSH…",
+			"update.restarting": "正在重启 DSH：页面会短暂断开，重连后即新版本",
+			"update.pullFailed": "更新失败：{reason}",
 			"update.notWired": "更新通道还没接壤（宿主未实现 /update/check）",
 			"update.prFlow": "PR 流程",
 			"prov.storageMovePick": "输入新的素材目录路径；现有素材会复制过去，旧目录原样保留。",
@@ -977,6 +981,10 @@ window.__ModuleLoader__.load({
 			"update.latest": "You are on the latest version",
 			"update.ready": "Update available — shipped via PR flow",
 			"update.behind": "Remote has {sha} — pull then restart DSH",
+			"update.clickAgain": "click Update again to pull and restart",
+			"update.applied": "Updated to {sha}, restarting DSH…",
+			"update.restarting": "Restarting DSH: the page will reconnect shortly",
+			"update.pullFailed": "Update failed: {reason}",
 			"update.notWired": "Update channel not wired yet (host has no /update/check)",
 			"update.prFlow": "PR flow",
 			"prov.storageMovePick": "Enter the new media folder path; existing files are copied there and the old folder is kept.",
@@ -4133,15 +4141,14 @@ h(
 			return { models: [...ids], meta, owners };
 		}
 
-		/* 模型是出图还是出视频：优先用目录里的 kind（中转站 image_family / video_family 带的），
-		   没有元数据的老目录按名字兜底 —— wan3.0-video-1080p 这种名字里带 video 的不能当图片模型。 */
-		const VIDEO_NAME_HINT = /(^|[-_.])(video|veo|sora|kling|wan|vidu|hailuo|seedance|t2v|i2v|runway|pika)([-_.]|$)/i;
+		/* 模型是出图还是出视频：**只认目录里的 kind**（中转站 image_family / video_family 带的）。
+		   不再按名字兜底 —— 实测踩过：wan3.0-video-1080p 名字带 video，但上游把它注册成图片模型，
+		   按名字猜成视频会直接 400「不是视频模型」。没有 kind 的模型按图片处理，视频协议由用户手动切。 */
 		function modelKindOf(id, providers) {
 			for (const provider of providers || []) {
 				const kind = provider?.modelMeta?.[id]?.kind;
 				if (typeof kind === "string" && kind) return kind;
 			}
-			if (VIDEO_NAME_HINT.test(String(id || ""))) return "video";
 			return "";
 		}
 
@@ -10767,18 +10774,47 @@ h(
 			})();
 			const selectedModelKind = modelKindOf(config.defaultModel, providers);
 			const isVideoEndpoint = endpointKind === "video" || selectedModelKind === "video";
-			/* 更新入口（先设计、宿主未接壤）：进度条只在这期间出现，结束就收起 */
+			/* 更新入口：一次点击 = 检查；查到新版本后再点一次 = 拉取 + 重启。
+			   （进度条只在这期间出现，结束就收起。） */
 			const [updateState, setUpdateState] = useState({ phase: "idle", percent: 0 });
+			const updateInfoRef = useRef(null);
 			const checkUpdate = async () => {
 				if (updateState.phase === "running") return;
+				const recent = updateInfoRef.current;
+				// 第二次点击（刚查到 behind，两分钟内有效）：直接拉取 + 重启
+				if (recent?.code === "behind" && Date.now() - recent.at < 120000) {
+					updateInfoRef.current = null;
+					setUpdateState({ phase: "running", percent: 45 });
+					try {
+						const applied = await call("/update/apply", { method: "POST", body: {} });
+						if (applied?.pulled) {
+							setUpdateState({ phase: "done", percent: 100 });
+							toast(t("update.applied", { sha: applied.short?.to || "" }));
+							// 拉取成功：让宿主 15 秒后重启（页面会断开重连）
+							await call("/update/restart", { method: "POST", body: {} });
+							toast(t("update.restarting"));
+							return;
+						}
+						setUpdateState({ phase: "done", percent: 100 });
+						toast(applied?.hint || t("update.latest"));
+						if (applied?.code !== "latest") setUpdateState({ phase: "unwired", percent: 100 });
+						window.setTimeout(() => setUpdateState({ phase: "idle", percent: 0 }), 3600);
+					} catch (error) {
+						setUpdateState({ phase: "unwired", percent: 100 });
+						toast(t("update.pullFailed", { reason: String(error?.message ?? error) }), "err");
+						window.setTimeout(() => setUpdateState({ phase: "idle", percent: 0 }), 3600);
+					}
+					return;
+				}
+				// 第一次点击：检查远端有没有新提交
 				setUpdateState({ phase: "running", percent: 12 });
 				const finish = (phase, ms) => window.setTimeout(() => setUpdateState({ phase: "idle", percent: 0 }), ms);
 				try {
 					const payload = await call("/update/check", { method: "POST", body: {} });
 					setUpdateState({ phase: "done", percent: 100 });
 					if (payload?.code === "behind") {
-						// 远端有新提交：给短 SHA，说明拉取后要重启
-						toast(t("update.behind", { sha: payload.short?.remote || payload.remoteSha?.slice(0, 7) || "?" }));
+						updateInfoRef.current = { code: "behind", at: Date.now(), remote: payload.short?.remote };
+						toast(`${t("update.behind", { sha: payload.short?.remote || payload.remoteSha?.slice(0, 7) || "?" })} · ${t("update.clickAgain")}`);
 					} else if (payload?.code === "latest") {
 						toast(`${t("update.latest")}${payload.short?.local ? ` · ${payload.short.local}` : ""}`);
 					} else {

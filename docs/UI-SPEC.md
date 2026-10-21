@@ -395,6 +395,8 @@
 - 验收：client 394、真机 44、宿主 120、引擎 133、探针 13、路由 11 全绿。
 - **v2.3（图库布局密度）**：工具行加「小图 / 标准 / 大图」三段胶囊，密度记在 localStorage；图片一律 1:1 裁切（竖图不再把卡片撑高，网格行高统一），卡片 `align-self:start` + `min-width:0` 保证任意容器宽度下都不会退化成单列巨图；
 - 截图：`docs/ui-audit/layout-compact.png` / `layout-standard.png` / `layout-large.png`（`node tools/viewer-check.mjs --hold library --query "hold=library&density=large" --shot x.png`）。
+- **v2.30（更新通道两段式）**：第一次点更新 = 检查（check），查到 behind 后再点一次 = 拉取（`/update/apply`，`git pull --ff-only`，本地脏则拒绝并提示）+ 重启（`/update/restart` 调 ASCII 版 restart 脚本，15 秒后宿主重启）；
+- **v2.31（视频原生字段实测 + 不猜视频）**：宿主视频 body 同时带 `aspect_ratio` / `resolution` / `seconds` 与像素 `size`；实测 velapi `veo-3.1-flash` 返回 200 queued（原生字段被接受）；`wan3.0-video-1080p` 上游实为图片模型（400 不是视频模型），因此模型能力只认目录 `kind`，删除名字兜底，无 kind 的模型按图片处理（不自动切视频协议）；
 - **v2.29（模型下拉两类都给）**：之前按当前协议过滤会导致「选了视频模型后图片模型消失、切不回来」；改成下拉里图片+视频分组都给（音频/对话仍不列），选中哪类就自动切到哪类协议与参数区；真机断言更新为「图片与视频模型都能选，音频/对话不列」；
 - **v2.28（图层控制条自洽）**：控制条 sticky 贴底（滚动也在），选中层后**右侧出现属性条**（叠加算法下拉 / 不透明度滑块+读数 / 上移 / 下移 / 蒙版加反转 / 单层编辑 / 删除，共 5 个迷你按钮），不用再去右栏；chip 底改 `--vig-surface-sunken`（浅色假图也看得出卡片）；真机断言：选中出属性条、删除后层消失；
 - **v2.27（图片处理·图层控制条）**：图层从右侧列表改成**画布下方横排控制条**（底图 + 各层 78px 缩略卡片 + 加层按钮，横向滚动）；每张卡：点击选中（`--vig-accent` 2px 环）、hover 出眼睛/×、**拖拽排序**（`psMoveLayerTo`）、双击进单层编辑；右栏图层列表默认折叠（头部 chevron 展开看叠加算法/不透明度）；**所有颜色/滤镜类改动默认新建图层**（旧层隐藏=已烘焙，历史可撤销），几何类（裁切/旋转等改尺寸）仍改写底图；截图 docs/ui-audit/ps-layerbar.png；

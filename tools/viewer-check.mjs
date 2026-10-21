@@ -119,7 +119,7 @@ const providers = [
 		enabled: true,
 		keyMask: "sk-••••mQcp",
 		usesRuntimeKey: false,
-		models: ["grok-4.6", "grok-imagine-image", "omni-flash", "suno"],
+		models: ["grok-4.6", "grok-imagine-image", "omni-flash", "suno", "wan3.0-video-1080p"],
 		// kind 来自中转站目录（image / video / audio / chat）：模型下拉按它过滤
 		modelMeta: {
 			"grok-4.6": { kind: "chat" },
@@ -289,7 +289,16 @@ window.fetch = async (url, init) => {
 	}
 	if (pathname.startsWith("/job")) return json({ ok: true, job: JOB });
 	if (pathname.startsWith("/models")) return json({ ok: true, items: [], models: [] });
-	if (pathname.startsWith("/update/check")) return json({ ok: true, latest: false, version: "0.2.0" });
+	if (pathname.startsWith("/update/check")) {
+		const behind = new URLSearchParams(location.search).get("behind") === "1";
+		return json(
+			behind
+				? { ok: true, latest: false, available: true, code: "behind", version: "0.1.0", localSha: "1111111", remoteSha: "2222222", short: { local: "1111111", remote: "2222222" }, hint: "远端有更新：2222222（更新后需重启 DSH）" }
+				: { ok: true, latest: true, code: "latest", version: "0.1.0", localSha: "1111111", remoteSha: "1111111", short: { local: "1111111", remote: "1111111" }, hint: "已是最新（1111111）" }
+		);
+	}
+	if (pathname.startsWith("/update/apply")) return json({ ok: true, pulled: true, code: "applied", needsRestart: true, from: "1111111", to: "2222222", short: { from: "1111111", to: "2222222" }, hint: "已更新到 2222222，重启 DSH 生效" });
+	if (pathname.startsWith("/update/restart")) return json({ ok: true, restarting: true, delaySeconds: 15, hint: "15 秒后重启" });
 	return json({ ok: true });
 };
 
@@ -614,8 +623,19 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 		}
 	}
 	}
+	// 名称带 video 但 kind 为空：不能自动切视频协议（实测 wan3.0-video-1080p 上游是图片模型）
+	if (new URLSearchParams(location.search).get("model") === "wan3.0-video-1080p") {
+		await wait(1200);
+		const wrongPost = posts.filter((item) => item.path.startsWith("/config") && item.body && item.body.defaultEndpoint === "videos_generations").pop();
+		const sizeValues = Array.from(host.querySelectorAll(".vig-tools .vig-sel")).map((node) => String(node.value || ""));
+		check(
+			"kind 为空的模型不猜视频：不切视频协议，参数区仍是图片尺寸",
+			!wrongPost && sizeValues.some((value) => /x\\d+$/.test(value)),
+			JSON.stringify({ wrongPost: Boolean(wrongPost), values: sizeValues })
+		);
+	}
 	// 视频模型联动：&model=omni-flash 应自动切视频协议 + 参数区变比例/分辨率/时长
-	if (new URLSearchParams(location.search).get("model")) {
+	if (new URLSearchParams(location.search).get("model") === "omni-flash") {
 		await wait(1200);
 		const endpointPost = posts.filter((item) => item.path.startsWith("/config") && item.body && item.body.defaultEndpoint).pop();
 		const values = Array.from(host.querySelectorAll(".vig-tools .vig-sel")).map((node) => String(node.value || ""));
@@ -697,6 +717,23 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			});
 			await wait(400);
 		}
+	}
+	// 更新通道两段式：&behind=1&update=2 → 第一次点检查到 behind，第二次点拉取 + 重启
+	if (new URLSearchParams(location.search).get("update") === "2") {
+		const btn = host.querySelector(".vig-update-btn");
+		if (btn) {
+			flushSync(() => btn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			await wait(700);
+			flushSync(() => btn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			await wait(1200);
+		}
+		const applyPost = posts.filter((item) => item.path.startsWith("/update/apply")).pop();
+		const restartPost = posts.filter((item) => item.path.startsWith("/update/restart")).pop();
+		check(
+			"更新通道两段式：第一次检查到 behind，第二次拉取（/update/apply）并重启（/update/restart）",
+			Boolean(applyPost) && Boolean(restartPost),
+			JSON.stringify({ apply: Boolean(applyPost), restart: Boolean(restartPost), posts: posts.filter((item) => item.path.startsWith("/update")).map((item) => item.path) })
+		);
 	}
 	// 截图用：&update=1 点一下「更新」，截进度条（按需出现的那个）
 	if (new URLSearchParams(location.search).get("update") === "1") {

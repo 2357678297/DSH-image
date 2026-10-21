@@ -1075,3 +1075,23 @@ node tools/verify-wiring.mjs --api http://127.0.0.1:54419/api/velapi-image-go   
 - `restart-dsh.cmd` / `restart-harness.cmd` **必须是纯 ASCII**：`cmd.exe` 按 GBK 读 `.cmd`，中文注释会变成乱码并报「不是内部或外部命令」（用户截图里的那个错误窗口就是它）。
 - **不再自动排定重启**：宿主半边（`lib/index.js`）改动需要生效时先说明，由用户手动运行脚本或在用户明确同意后再排；浏览器半边（`client.js`）刷新页面即可。
 - 重启后 GUI 端口会变，用 `node tools/verify-wiring.mjs` 自动探测确认接壤 8/8。
+
+### 更新通道（两段式，已接壤）
+
+- 第一次点「更新」→ `POST /update/check`（`git ls-remote` 对比本地 HEAD），返回 `latest` / `behind` / `not_a_repo` / `remote_unreachable`；
+- 查到 `behind` 后**再点一次** → `POST /update/apply`（`git pull --ff-only`，本地有未提交改动会被拒绝）→ 成功后自动 `POST /update/restart`（调 `~/.dsh/restart-dsh.cmd`，15 秒后重启宿主）。
+- 实测：远端 `c3c0886` 之后本机连续 3 个更新包，界面显示「已是最新（591fb71）」。
+
+### 视频上游字段（已实测，2026-10-21）
+
+用配置里的 key 直接打 `https://gank.velapi.cc/v1/videos/generations`：
+
+```text
+POST  {model:"veo-3.1-flash", prompt, aspect_ratio:"16:9", resolution:"720p", seconds:"8"}
+→ 200  {"id":"video_4eb6...","status":"queued","model":"veo_3_1_t2v_fast_8s","seconds":8}
+```
+
+结论：
+- **原生字段 `aspect_ratio` / `resolution` / `seconds` 上游认**（宿主视频 body 已同时带原生字段 + 像素 `size`）；
+- 上游真实视频模型是 `veo-3.1-lite / veo-3.1-flash / veo-3.1-pro`（目录里 `kind=video`），以及一堆 `veo_3_1_*` 变体；
+- `wan3.0-video-1080p` **名字带 video 但上游当图片模型**：发视频请求直接 400 `{"detail":"不是视频模型: wan3.0-video-1080p"}`。所以模型能力**只按目录 `kind` 判断，不再按名字猜**；没有 kind 的模型按图片处理，视频协议由用户手动切。

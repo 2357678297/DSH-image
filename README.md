@@ -1050,7 +1050,8 @@ node tools/fit-check.mjs
 ## 插件接壤自检
 
 ```powershell
-node tools/verify-wiring.mjs        # 或 npm run wiring
+node tools/verify-wiring.mjs        # 自动探测宿主端口（DSH 每次重启端口会变）
+node tools/verify-wiring.mjs --api http://127.0.0.1:54419/api/velapi-image-go   # 指定端口
 ```
 
 四段链路逐项检查（退出码 0 = 接壤完整）：
@@ -1061,3 +1062,10 @@ node tools/verify-wiring.mjs        # 或 npm run wiring
 5. 宿主加载的是当前代码（`/status` 里能看到最新字段，例如视频的 `videoRatio` / `videoSeconds`）。
 
 **宿主半边（`lib/index.js`）改动必须重启 DSH 进程才生效；浏览器半边（`client.js`）在 `patchReload: live` 下可热加载。**
+
+### 重启宿主
+
+- `C:\Users\Administrator\.dsh\restart-dsh.cmd`（双击或 `cmd /c`）：延时 15 秒 → 结束 `DeepSeek Harness.exe` → 6 秒后重新拉起；
+- `C:\Users\Administrator\.dsh\restart-harness.cmd`：同流程，延时 20 秒（留给当前回答写完）；
+- 旧脚本里的 `G:\deepseek webui\DSH Desktop\DSH Desktop.exe` 路径已不存在，两个脚本都已修正为 `G:\deepseek-harness\DeepSeek Harness.exe`；
+- 重启后 GUI 端口会变（60898 → 54419 这种），用 `node tools/verify-wiring.mjs` 自动找新端口确认接壤 8/8。

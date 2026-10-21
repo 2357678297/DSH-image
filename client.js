@@ -3557,9 +3557,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			   分类以宿主给的 modelMeta.kind 为准（中转站目录里带的），没有元数据的按图片算。 */
 			const endpointKind = isVideoEndpoint ? "video" : "image";
 			const pickerModels = catalog.models.filter((id) => {
+				// 下拉里图片和视频模型都给（ModelPicker 自己按 kind 分组）：选中哪类就自动切到哪类协议，
+				// 协议只决定参数区/路由，**不再把另一类模型藏起来** —— 否则选了视频模型就切不回图片了。
 				const kind = (catalog.meta[id] || {}).kind || modelKindOf(id, providers) || "";
-				if (!kind) return !isVideoEndpoint;
-				return kind === endpointKind;
+				return !kind || kind === "image" || kind === "video";
 			});
 			/* 切到视频协议时，当前模型如果还是图片模型，自动换成该协议下的第一个可用模型
 			   （否则下拉里选不到、发出去也多半会报错）。*/

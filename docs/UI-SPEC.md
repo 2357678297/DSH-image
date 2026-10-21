@@ -210,7 +210,7 @@
 
 | 项 | 规格 |
 |---|---|
-| 模型列表 | 按 `kind` 过滤：`image` 协议只列图片模型、`video` 协议只列视频模型；音频/对话/向量模型一律不进下拉。`kind` 优先取目录元数据，缺失时按名字兜底（`video/veo/sora/kling/wan/seedance/t2v/i2v/runway/pika` 视为视频）——`wan3.0-video-1080p` 这类名字不再被当图片模型 |
+| 模型列表 | 下拉里**图片与视频模型都列**（ModelPicker 按 `kind` 分组：图片 / 视频），音频/对话/向量模型不列；`kind` 优先取目录元数据，缺失时按名字兜底（`video/veo/sora/kling/wan/seedance/t2v/i2v/runway/pika` 视为视频）。**不再按当前协议隐藏另一类模型**（否则选了视频模型就切不回图片） |
 | 模型↔协议联动 | **选中视频模型自动切到「视频生成」协议**（参数区立刻变比例/分辨率/时长）；选中图片模型却停在视频协议时自动切回图片生成；改协议也会自动换成该 kind 的模型 |
 | 尺寸 | 图片协议 → `defaultSize`（比例 · 像素）；视频协议 → **比例 + 分辨率两段分开选**：比例 `16:9 / 9:16 / 1:1 / 4:3 / 3:4 / 21:9`（`videoRatio`），分辨率 `480p / 720p / 1080p`（`videoResolution`）；像素 size 由 `videoSizeFor(ratio, resolution)`（短边=分辨率档、长边按比例取偶）组合后写回 `videoSize`，宿主 config 三者分开存、互不覆盖 |
 | 模型联动 | 切到视频协议时，若当前 `defaultModel` 还是图片模型，自动换成该协议下第一个可用视频模型（并切它所属供应商）；反之切回图片同理 |
@@ -395,6 +395,7 @@
 - 验收：client 394、真机 44、宿主 120、引擎 133、探针 13、路由 11 全绿。
 - **v2.3（图库布局密度）**：工具行加「小图 / 标准 / 大图」三段胶囊，密度记在 localStorage；图片一律 1:1 裁切（竖图不再把卡片撑高，网格行高统一），卡片 `align-self:start` + `min-width:0` 保证任意容器宽度下都不会退化成单列巨图；
 - 截图：`docs/ui-audit/layout-compact.png` / `layout-standard.png` / `layout-large.png`（`node tools/viewer-check.mjs --hold library --query "hold=library&density=large" --shot x.png`）。
+- **v2.29（模型下拉两类都给）**：之前按当前协议过滤会导致「选了视频模型后图片模型消失、切不回来」；改成下拉里图片+视频分组都给（音频/对话仍不列），选中哪类就自动切到哪类协议与参数区；真机断言更新为「图片与视频模型都能选，音频/对话不列」；
 - **v2.28（图层控制条自洽）**：控制条 sticky 贴底（滚动也在），选中层后**右侧出现属性条**（叠加算法下拉 / 不透明度滑块+读数 / 上移 / 下移 / 蒙版加反转 / 单层编辑 / 删除，共 5 个迷你按钮），不用再去右栏；chip 底改 `--vig-surface-sunken`（浅色假图也看得出卡片）；真机断言：选中出属性条、删除后层消失；
 - **v2.27（图片处理·图层控制条）**：图层从右侧列表改成**画布下方横排控制条**（底图 + 各层 78px 缩略卡片 + 加层按钮，横向滚动）；每张卡：点击选中（`--vig-accent` 2px 环）、hover 出眼睛/×、**拖拽排序**（`psMoveLayerTo`）、双击进单层编辑；右栏图层列表默认折叠（头部 chevron 展开看叠加算法/不透明度）；**所有颜色/滤镜类改动默认新建图层**（旧层隐藏=已烘焙，历史可撤销），几何类（裁切/旋转等改尺寸）仍改写底图；截图 docs/ui-audit/ps-layerbar.png；
 - **v2.26（视频模型联动）**：`modelKindOf` 先看 `modelMeta.kind`、缺失按名字兜底（wan3.0-video-1080p / veo / sora / kling / seedance…）；选中视频模型自动切 `videos_generations` 协议并显示视频参数（16:9 / 720p / 4s），选回图片模型自动切回图片生成；真机断言（hold=chat&model=omni-flash）覆盖协议切换与参数区两段；

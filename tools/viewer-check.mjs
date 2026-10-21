@@ -670,17 +670,17 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 		// 图片协议下：模型下拉只该出现图片模型（audio / video / chat 都被过滤掉）
 		const popText = text(host.querySelector(".vig-pop"));
 		check(
-			"模型下拉按 kind 过滤：图片协议只列图片模型（音频/视频/对话模型不进列表）",
+			"模型下拉：图片与视频模型都能选（分组显示），音频/对话模型不列",
 			Boolean(host.querySelector(".vig-pop")) &&
 				popText.includes("gpt-image-2.5-c") &&
 				popText.includes("grok-imagine-image") &&
+				popText.includes("omni-flash") &&
 				!popText.includes("suno") &&
-				!popText.includes("omni-flash") &&
 				!popText.includes("grok-4.6"),
 			JSON.stringify({
 				hasImage: popText.includes("gpt-image-2.5-c"),
+				hasVideo: popText.includes("omni-flash"),
 				audio: popText.includes("suno"),
-				video: popText.includes("omni-flash"),
 				chat: popText.includes("grok-4.6")
 			})
 		);

@@ -1035,3 +1035,14 @@ node tools/fit-check.mjs
 - 把生成能力暴露成 dsh 工具，让会话里的模型自己调（当前只有人工在界面上点）
 
 
+
+## 仓库与更新包
+
+- 仓库：<https://github.com/2357678297/DSH-image>（分支 `main`）。
+- 以后**每次改动都作为一个「更新包」提交**：
+  - 手动：`git add -A && git commit -m "feat: ..." && git push`
+  - 或：`pwsh tools/push-update.ps1 "feat: ..."`（不带消息时用时间戳）
+- 提交前自检（本机）：`node test/host.test.mjs`、`node test/client.test.mjs`、`node test/engine.test.mjs`、
+  `node tools/viewer-check.mjs`（真机 Chrome 渲染检查，CI 里不跑）。
+- CI：`.github/workflows/test.yml` 在每次 push / PR 时跑 host / client / engine 三套离线测试。
+- 不进货：`node_modules`、`docs/preview/`、`docs/ui-audit/*.png`（本地渲染产物，可重新生成）、密钥与环境变量。

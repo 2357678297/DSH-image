@@ -3349,7 +3349,10 @@ check(
       /videoRatio: ratio, videoSize: videoSizeFor/.test(SOURCE) &&
       /videoResolution: resolution, videoSize: videoSizeFor/.test(SOURCE) &&
       /isVideoEndpoint \? config\.videoSize \|\| "1280x720" : config\.defaultSize/.test(SOURCE) &&
-      /n: isVideoEndpoint \? 1 : config\.defaultCount/.test(SOURCE)
+      /n: isVideoEndpoint \? 1 : config\.defaultCount/.test(SOURCE) &&
+      /const VIDEO_SECONDS = \[/.test(SOURCE) &&
+      /actions\.saveConfig\(\{ videoSeconds: event\.target\.value \}\)/.test(SOURCE) &&
+      /seconds: isVideoEndpoint \? config\.videoSeconds \|\| "4" : ""/.test(SOURCE)
   );
   check(
     "查看器四点变形：角点可拖出图外，应用走单应逆变换 + 上传成新库图",

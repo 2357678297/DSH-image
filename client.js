@@ -44,6 +44,7 @@ window.__ModuleLoader__.load({
 		   Kling/Seedance/Veo 用 aspect_ratio + resolution，这里先归一到像素 size）。 */
 		const VIDEO_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"];
 		const VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"];
+		const VIDEO_SECONDS = ["4", "6", "8", "10", "12"];
 		const VIDEO_SHORT_SIDE = { "480p": 480, "720p": 720, "1080p": 1080 };
 		/** 比例 × 分辨率 → 像素尺寸（短边 = 分辨率档，长边按比例四舍五入到偶数）。 */
 		function videoSizeFor(ratio, resolution) {
@@ -408,6 +409,7 @@ window.__ModuleLoader__.load({
 			"chat.videoSize": "视频尺寸",
 			"chat.videoRatio": "比例",
 			"chat.videoResolution": "分辨率",
+			"chat.videoSeconds": "时长（秒）",
 			"chat.cancel": "取消",
 			"chat.copy": "复制链接",
 			"chat.copyTitle": "复制的是链接文本（想贴图片请用「复制图片」）",
@@ -827,6 +829,7 @@ window.__ModuleLoader__.load({
 			"chat.videoSize": "Video size",
 			"chat.videoRatio": "Ratio",
 			"chat.videoResolution": "Resolution",
+			"chat.videoSeconds": "Duration (s)",
 			"chat.cancel": "Cancel",
 			"chat.copy": "Copy link",
 			"chat.copyTitle": "Copies the link text — use Copy image if you want to paste the picture",
@@ -2129,7 +2132,7 @@ body[data-ds-dark-theme] .vig-mask-pill{background:rgba(20,20,22,.94)}
 .vig-tools{position:relative;flex-wrap:nowrap}
 .vig-tools .vig-picker{min-width:0;flex:0 1 auto}
 .vig-tools .vig-send{margin-left:auto;flex:none}
-.vig-tools .vig-sel{min-width:0;max-width:170px}
+.vig-tools .vig-sel{min-width:0;max-width:170px;flex:none;white-space:nowrap}
 /* 展开器：一块浮在工具行上方的面板，不占行内空间（不是把按钮塞回行里） */
 .vig-tools-pop{position:absolute;left:0;bottom:calc(100% + 10px);z-index:34;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
 	min-width:min(340px,calc(100vw - 56px));max-width:min(560px,calc(100vw - 56px));padding:10px 12px;
@@ -3771,7 +3774,7 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 												void actions.saveConfig({ videoRatio: ratio, videoSize: videoSizeFor(ratio, config.videoResolution || "720p") });
 											}
 										},
-										VIDEO_RATIOS.map((value) => h("option", { key: value, value }, `${value} · ${t("chat.videoRatio")}`))
+										VIDEO_RATIOS.map((value) => h("option", { key: value, value, title: `${value} · ${t("chat.videoRatio")}` }, value))
 									),
 									h(
 										"select",
@@ -3786,7 +3789,20 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 												void actions.saveConfig({ videoResolution: resolution, videoSize: videoSizeFor(config.videoRatio || "16:9", resolution) });
 											}
 										},
-										VIDEO_RESOLUTIONS.map((value) => h("option", { key: value, value }, `${value} · ${t("chat.videoResolution")}`))
+										VIDEO_RESOLUTIONS.map((value) => h("option", { key: value, value, title: `${value} · ${t("chat.videoResolution")}` }, value))
+									),
+									// 时长：上游视频接口的 seconds（4/6/8/10/12 秒）
+									h(
+										"select",
+										{
+											key: "video-seconds",
+											className: "vig-sel",
+											style: { width: "auto", height: 28, padding: "0 8px" },
+											value: VIDEO_SECONDS.includes(config.videoSeconds || "") ? config.videoSeconds : "4",
+											title: `${t("chat.videoSeconds")} · ${videoSizeFor(config.videoRatio || "16:9", config.videoResolution || "720p")}`,
+											onChange: (event) => void actions.saveConfig({ videoSeconds: event.target.value })
+										},
+										VIDEO_SECONDS.map((value) => h("option", { key: value, value, title: `${value} 秒 · ${t("chat.videoSeconds")}` }, `${value}s`))
 									)
 								]
 							: h(
@@ -10331,7 +10347,7 @@ h(
 				}
 			});
 			const [chatModels, setChatModels] = useState([]);
-			const [config, setConfig] = useState({ baseUrl: "", apiKeyEnv: "", keyMask: "", hasKey: false, defaultModel: "", defaultSize: "1024x1024", videoSize: "1280x720", videoRatio: "16:9", videoResolution: "720p", defaultQuality: "LOW", defaultCount: 1, defaultEndpoint: window.localStorage.getItem(ENDPOINT_KEY) || "auto", activeProviderId: "", stateDir: "", chatModel: "", contextTurns: 6 });
+			const [config, setConfig] = useState({ baseUrl: "", apiKeyEnv: "", keyMask: "", hasKey: false, defaultModel: "", defaultSize: "1024x1024", videoSize: "1280x720", videoRatio: "16:9", videoResolution: "720p", videoSeconds: "4", defaultQuality: "LOW", defaultCount: 1, defaultEndpoint: window.localStorage.getItem(ENDPOINT_KEY) || "auto", activeProviderId: "", stateDir: "", chatModel: "", contextTurns: 6 });
 			const [providers, setProviders] = useState([]);
 			const [library, setLibrary] = useState([]);
 			const [notes, setNotes] = useState([]);
@@ -10761,10 +10777,11 @@ h(
 								model: config.defaultModel,
 								// 模型属于谁就发给谁（宿主也会按模型再校正一遍，这里先把话说清楚）
 								providerId: providerIdForModel(providers, config),
-								// 视频协议用独立的视频尺寸；张数固定 1（视频一次一条）
+								// 视频协议用独立的视频尺寸与时长；张数固定 1（视频一次一条）
 								size: isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
 								quality: config.defaultQuality,
 								n: isVideoEndpoint ? 1 : config.defaultCount,
+								seconds: isVideoEndpoint ? config.videoSeconds || "4" : "",
 								endpoint: config.defaultEndpoint || "auto",
 								referenceUrl: effectiveReferenceUrls[0] || "",
 								referenceUrls: effectiveReferenceUrls,

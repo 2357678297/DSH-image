@@ -203,6 +203,7 @@
 | 模型列表 | 按协议 `kind` 过滤：`image` 协议只列 `modelMeta.kind==="image"`（无元数据按图片算）；`video` 协议只列 `kind==="video"`；音频/对话/向量模型一律不进下拉 |
 | 尺寸 | 图片协议 → `defaultSize`（比例 · 像素）；视频协议 → **比例 + 分辨率两段分开选**：比例 `16:9 / 9:16 / 1:1 / 4:3 / 3:4 / 21:9`（`videoRatio`），分辨率 `480p / 720p / 1080p`（`videoResolution`）；像素 size 由 `videoSizeFor(ratio, resolution)`（短边=分辨率档、长边按比例取偶）组合后写回 `videoSize`，宿主 config 三者分开存、互不覆盖 |
 | 模型联动 | 切到视频协议时，若当前 `defaultModel` 还是图片模型，自动换成该协议下第一个可用视频模型（并切它所属供应商）；反之切回图片同理 |
+| 时长 | 视频协议第三个下拉：`4s / 6s / 8s / 10s / 12s`（`videoSeconds`，默认 4），落上游 body 的 `seconds`（OpenAI 视频接口字段，字符串）；图片请求不带 |
 | 张数 | 图片协议显示 `x1–x4`；视频协议固定 1，控件隐藏 |
 | 请求 | 生成与 `/chat/plan` 的 `size` 按协议取；视频 `n=1`；`videoSize` 走 `POST /config` 校验 `^\d{2,5}x\d{2,5}$` |
 
@@ -372,6 +373,7 @@
 - 验收：client 394、真机 44、宿主 120、引擎 133、探针 13、路由 11 全绿。
 - **v2.3（图库布局密度）**：工具行加「小图 / 标准 / 大图」三段胶囊，密度记在 localStorage；图片一律 1:1 裁切（竖图不再把卡片撑高，网格行高统一），卡片 `align-self:start` + `min-width:0` 保证任意容器宽度下都不会退化成单列巨图；
 - 截图：`docs/ui-audit/layout-compact.png` / `layout-standard.png` / `layout-large.png`（`node tools/viewer-check.mjs --hold library --query "hold=library&density=large" --shot x.png`）。
+- **v2.22（视频时长）**：视频协议加第三个下拉「时长 4/6/8/10/12 秒」，`videoSeconds` 独立存；生成时视频 body 带 `seconds`（缺省 4s，图片请求不带）；三下拉文案收紧成 `16:9 / 720p / 4s` 避免挤行；
 - **v2.21（视频比例 / 分辨率分段）**：视频协议从单一下拉拆成「比例 + 分辨率」两段（16:9/9:16/1:1/4:3/3:4/21:9 × 480p/720p/1080p），像素 size 由短边规则组合写回 `videoSize`；`videoRatio` / `videoResolution` 宿主分字段存；切协议自动换到对应 kind 的模型（并切供应商）。（注：本轮 host 侧联网检索不可用，参数集合按 OpenAI `size` 像素与 Kling/Seedance/Veo 的 `aspect_ratio`+`resolution` 公开规范归一实现）
 - **v2.20（视频参数与图片配置分开）**：模型下拉按 `modelMeta.kind` 过滤（图片协议只列 image 模型、视频协议只列 video 模型，音频/对话/向量模型不进列表）；视频协议用**独立 `videoSize`**（1280×720 / 1920×1080 / 720×1280 / 1080×1920，宿主 config 单独存、改它不影响 `defaultSize`），张数固定 1 并隐藏；生成/plan 按协议分别带图片或视频尺寸；
 - **v2.19（上下文管理·对话式）**：✨ 从「一键开关」改成打开一块设置浮层——每轮自动整理、上下文轮数滑块（0–12，写宿主 config）、**限制上下文模型直接调供应商出图**（默认开，localStorage 记忆；开启时 `/chat/plan` 带 `noAutoImage`，宿主在提示词里禁止它自行切编辑/决定参考图，客户端也忽略 plan 的自动切编辑）；底部「已读取：对话/生图/尺寸」把接壤的配置直接摆出来；

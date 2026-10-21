@@ -640,6 +640,20 @@ check(
   JSON.stringify(videoJob.job?.video ?? null)
 );
 
+/* 视频时长：秒数落到上游 body（OpenAI 视频接口的 seconds），缺省回落 4 */
+mockHits.length = 0;
+await runMockJob("视频带时长", { seconds: "8" });
+{
+  const hit = mockHits.find((item) => item.url.includes("/videos/generations"));
+  check("视频时长：请求里的 seconds 落到上游 body（8 秒）", hit?.body?.seconds === "8", JSON.stringify({ seconds: hit?.body?.seconds ?? null }));
+}
+mockHits.length = 0;
+await runMockJob("视频默认时长");
+{
+  const hit = mockHits.find((item) => item.url.includes("/videos/generations"));
+  check("视频时长缺省回落 4 秒（不传也不会漏字段）", hit?.body?.seconds === "4", JSON.stringify({ seconds: hit?.body?.seconds ?? null }));
+}
+
 const weirdProtocol = await saveMockProvider({ id: mockProvider.id, endpoint: "chatgpt-ultra" });
 check("认不出的协议回落成「自动检测」，不把生成打死", weirdProtocol?.endpoint === "auto", weirdProtocol?.endpoint);
 

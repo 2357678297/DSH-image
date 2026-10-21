@@ -554,6 +554,7 @@ window.__ModuleLoader__.load({
 			"update.title": "更新",
 			"update.latest": "已是最新版本",
 			"update.ready": "有新版本，按 PR 流程更新",
+			"update.behind": "远端有更新 {sha}，拉取后需重启 DSH",
 			"update.notWired": "更新通道还没接壤（宿主未实现 /update/check）",
 			"update.prFlow": "PR 流程",
 			"prov.storageMovePick": "输入新的素材目录路径；现有素材会复制过去，旧目录原样保留。",
@@ -971,6 +972,7 @@ window.__ModuleLoader__.load({
 			"update.title": "Update",
 			"update.latest": "You are on the latest version",
 			"update.ready": "Update available — shipped via PR flow",
+			"update.behind": "Remote has {sha} — pull then restart DSH",
 			"update.notWired": "Update channel not wired yet (host has no /update/check)",
 			"update.prFlow": "PR flow",
 			"prov.storageMovePick": "Enter the new media folder path; existing files are copied there and the old folder is kept.",
@@ -10366,16 +10368,26 @@ h(
 			const checkUpdate = async () => {
 				if (updateState.phase === "running") return;
 				setUpdateState({ phase: "running", percent: 12 });
+				const finish = (phase, ms) => window.setTimeout(() => setUpdateState({ phase: "idle", percent: 0 }), ms);
 				try {
 					const payload = await call("/update/check", { method: "POST", body: {} });
 					setUpdateState({ phase: "done", percent: 100 });
-					toast(payload?.latest === false ? t("update.ready") : t("update.latest"));
-					window.setTimeout(() => setUpdateState({ phase: "idle", percent: 0 }), 2400);
+					if (payload?.code === "behind") {
+						// 远端有新提交：给短 SHA，说明拉取后要重启
+						toast(t("update.behind", { sha: payload.short?.remote || payload.remoteSha?.slice(0, 7) || "?" }));
+					} else if (payload?.code === "latest") {
+						toast(`${t("update.latest")}${payload.short?.local ? ` · ${payload.short.local}` : ""}`);
+					} else {
+						// not_a_repo / remote_unreachable：宿主说清楚了为什么，直接展示它的 hint
+						setUpdateState({ phase: "unwired", percent: 100 });
+						toast(payload?.hint || t("update.notWired"), "err");
+					}
+					finish(payload?.code === "behind" || payload?.code === "latest" ? "done" : "unwired", 3200);
 				} catch (error) {
-					// 宿主还没有 /update/check：进度条走到「检查」就停在错误色，并说清楚没接壤
+					// 宿主连这个端点都没有（老版本）：说清楚没接壤
 					setUpdateState({ phase: "unwired", percent: 100 });
 					toast(t("update.notWired"), "err");
-					window.setTimeout(() => setUpdateState({ phase: "idle", percent: 0 }), 3200);
+					finish("unwired", 3200);
 				}
 			};
 			const [jobs, setJobs] = useState([]);

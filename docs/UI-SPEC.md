@@ -125,7 +125,7 @@
 | 内容 | `⟳ 更新` 胶囊按钮（24 高，11px，flex:none 不换行）+ 版本号 `v0.1.0`（9.5px 大写字距、三级灰，来自 `PLUGIN_VERSION`，与 package.json 对齐）；「PR 流程」只放 `title` 提示 |
 | 行为 | 点击 → `POST /update/check`；`running` 时按钮 spinner + 禁用；宿主未实现 → 进度条转 `--vig-danger` 并提示「更新通道还没接壤」 |
 | 进度条 | **按需出现**（仅检查中 / 完成瞬间 / 失败）：3px 圆角条，`order:-1` 排在按钮上方；墨黑进行、`--vig-ok` 完成、`--vig-danger` 失败；`role=progressbar` + `aria-valuenow`；结束后自动收起 |
-| 接壤顺序（后续） | ① 宿主实现 `/update/check`（比较 Git 远端 tag）→ ② 返回 `{latest, version, notes}` → ③ 前端出「有新版本」+ PR 链接 → ④ 接 PR 更新流程（先设计、未接壤） |
+| 接壤 | 宿主 `POST /update/check` 已实现：`git ls-remote https://github.com/2357678297/DSH-image.git refs/heads/main` 对比本地 `git rev-parse HEAD`；返回 `code=latest/behind/not_a_repo/remote_unreachable`、`short.local/remote`、`hint`；界面按 code 提示（已是最新 / 远端有更新 + 短 SHA / 具体失败原因），进度条三态不变；拉取更新用 `git pull`（或 `tools/push-update.ps1` 的反向流程），改完重启 DSH |
 
 ### 4.2 左侧导航 `.vig-nav-item`
 
@@ -373,6 +373,7 @@
 - 验收：client 394、真机 44、宿主 120、引擎 133、探针 13、路由 11 全绿。
 - **v2.3（图库布局密度）**：工具行加「小图 / 标准 / 大图」三段胶囊，密度记在 localStorage；图片一律 1:1 裁切（竖图不再把卡片撑高，网格行高统一），卡片 `align-self:start` + `min-width:0` 保证任意容器宽度下都不会退化成单列巨图；
 - 截图：`docs/ui-audit/layout-compact.png` / `layout-standard.png` / `layout-large.png`（`node tools/viewer-check.mjs --hold library --query "hold=library&density=large" --shot x.png`）。
+- **v2.23（更新通道接壤）**：宿主实现 `POST /update/check`（`git ls-remote` 拿远端 `main` HEAD 对比本地 `rev-parse HEAD`，无需 GitHub token/API 速率）；返回 `code=latest|behind|not_a_repo|remote_unreachable` + 短 SHA + hint；界面「更新」按钮按 code 给提示（已是最新 / 远端有更新 xxxxxxx / 远端不可达原因），进度条三态不变；host 测试用本地临时 git 仓库覆盖 behind/latest/unreachable 三条分支（host 130）；
 - **v2.22（视频时长）**：视频协议加第三个下拉「时长 4/6/8/10/12 秒」，`videoSeconds` 独立存；生成时视频 body 带 `seconds`（缺省 4s，图片请求不带）；三下拉文案收紧成 `16:9 / 720p / 4s` 避免挤行；
 - **v2.21（视频比例 / 分辨率分段）**：视频协议从单一下拉拆成「比例 + 分辨率」两段（16:9/9:16/1:1/4:3/3:4/21:9 × 480p/720p/1080p），像素 size 由短边规则组合写回 `videoSize`；`videoRatio` / `videoResolution` 宿主分字段存；切协议自动换到对应 kind 的模型（并切供应商）。（注：本轮 host 侧联网检索不可用，参数集合按 OpenAI `size` 像素与 Kling/Seedance/Veo 的 `aspect_ratio`+`resolution` 公开规范归一实现）
 - **v2.20（视频参数与图片配置分开）**：模型下拉按 `modelMeta.kind` 过滤（图片协议只列 image 模型、视频协议只列 video 模型，音频/对话/向量模型不进列表）；视频协议用**独立 `videoSize`**（1280×720 / 1920×1080 / 720×1280 / 1080×1920，宿主 config 单独存、改它不影响 `defaultSize`），张数固定 1 并隐藏；生成/plan 按协议分别带图片或视频尺寸；

@@ -16,7 +16,11 @@ import http from "node:http";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { apply } from "../lib/index.js";
+
+const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const LIVE = process.argv.includes("--live");
 const KEY = process.env.VIG_KEY || process.env.VELAPI_API_KEY || "";
@@ -664,6 +668,38 @@ check(
   hitPaths().includes("/v1/images/generations"),
   hitPaths().join(",")
 );
+
+/* ---- 更新通道 /update/check ----------------------------------------
+   用本地临时 git 仓库当 remote：ls-remote 对本地路径同样有效，不依赖网络。 */
+{
+  const tmpRemote = fs.mkdtempSync(path.join(os.tmpdir(), "vig-remote-"));
+  const git = (args, cwd) => execFileSync("git", args, { cwd, windowsHide: true });
+  git(["init", "-q", "-b", "main"], tmpRemote);
+  git(["config", "user.name", "test"], tmpRemote);
+  git(["config", "user.email", "test@example.com"], tmpRemote);
+  fs.writeFileSync(path.join(tmpRemote, "a.txt"), "x");
+  git(["add", "-A"], tmpRemote);
+  git(["commit", "-q", "-m", "first"], tmpRemote);
+  const ahead = await call("/update/check", { method: "POST", body: { remote: tmpRemote } });
+  check(
+    "更新通道：远端有别的提交 → code=behind + 短 SHA",
+    ahead.body?.code === "behind" && ahead.body?.available === true && /^[0-9a-f]{7}$/.test(String(ahead.body?.short?.remote ?? "")),
+    JSON.stringify({ code: ahead.body?.code, remote: ahead.body?.short?.remote })
+  );
+  const same = await call("/update/check", { method: "POST", body: { remote: PLUGIN_ROOT } });
+  check(
+    "更新通道：远端 = 本地仓库 → code=latest（已是最新）",
+    same.body?.code === "latest" && same.body?.latest === true && Boolean(same.body?.short?.local),
+    JSON.stringify({ code: same.body?.code, local: same.body?.short?.local })
+  );
+  const unreachable = await call("/update/check", { method: "POST", body: { remote: path.join(tmpRemote, "no-such-repo") } });
+  check(
+    "更新通道：远端不可达 → code=remote_unreachable + hint（不让界面以为有新版本）",
+    unreachable.body?.code === "remote_unreachable" && unreachable.body?.available === false && Boolean(unreachable.body?.hint),
+    JSON.stringify({ code: unreachable.body?.code })
+  );
+  fs.rmSync(tmpRemote, { recursive: true, force: true });
+}
 
 /* ---- 模型属于谁就打到谁那儿 --------------------------------------
    踩过：provider 管理里加了两条链（grok / GPT），模型选了 GPT 的 gpt-image-2.5-c，

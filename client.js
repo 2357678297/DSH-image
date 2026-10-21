@@ -3508,7 +3508,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			   分类以宿主给的 modelMeta.kind 为准（中转站目录里带的），没有元数据的按图片算。 */
 			const endpointKind = isVideoEndpoint ? "video" : "image";
 			const pickerModels = catalog.models.filter((id) => {
-				const kind = (catalog.meta[id] || {}).kind || "";
+				const kind = (catalog.meta[id] || {}).kind || modelKindOf(id, providers) || "";
 				if (!kind) return !isVideoEndpoint;
 				return kind === endpointKind;
 			});
@@ -4081,6 +4081,18 @@ h(
 			}
 			if (config.defaultModel) ids.add(config.defaultModel);
 			return { models: [...ids], meta, owners };
+		}
+
+		/* 模型是出图还是出视频：优先用目录里的 kind（中转站 image_family / video_family 带的），
+		   没有元数据的老目录按名字兜底 —— wan3.0-video-1080p 这种名字里带 video 的不能当图片模型。 */
+		const VIDEO_NAME_HINT = /(^|[-_.])(video|veo|sora|kling|wan|vidu|hailuo|seedance|t2v|i2v|runway|pika)([-_.]|$)/i;
+		function modelKindOf(id, providers) {
+			for (const provider of providers || []) {
+				const kind = provider?.modelMeta?.[id]?.kind;
+				if (typeof kind === "string" && kind) return kind;
+			}
+			if (VIDEO_NAME_HINT.test(String(id || ""))) return "video";
+			return "";
 		}
 
 		/**
@@ -10456,13 +10468,15 @@ h(
 			const [presets, setPresets] = useState([]);
 			// 端点协议整表由宿主 /status 给（宿主给了就用它那份带 label 的）。
 			const [protocols, setProtocols] = useState([]);
-			/* 这次要出的是图还是视频（按端点协议的 kind 判断）：视频协议用独立的视频尺寸与固定张数。
+			/* 这次要出的是图还是视频：优先看「选中的模型」是不是视频模型（用户常常直接点
+			   wan3.0-video-1080p 这种模型），其次看端点协议的 kind。视频走独立尺寸/时长参数。
 			   放在 Workbench 层，是因为 generate（actions 里）和 ChatView 的渲染都要用它。 */
 			const endpointKind = (() => {
 				const hit = (protocols || []).find((item) => item.id === (config.defaultEndpoint || "auto"));
 				return hit?.kind === "video" ? "video" : "image";
 			})();
-			const isVideoEndpoint = endpointKind === "video";
+			const selectedModelKind = modelKindOf(config.defaultModel, providers);
+			const isVideoEndpoint = endpointKind === "video" || selectedModelKind === "video";
 			/* 更新入口（先设计、宿主未接壤）：进度条只在这期间出现，结束就收起 */
 			const [updateState, setUpdateState] = useState({ phase: "idle", percent: 0 });
 			const checkUpdate = async () => {
@@ -11372,6 +11386,16 @@ h(
 					}
 				}
 			};
+
+			/* 模型和协议自动对齐：选了视频模型就切到「视频生成」协议（参数区跟视频走），
+			   选了图片模型却停在视频协议时切回图片生成。只在两者真正冲突时写一次配置。 */
+			useEffect(() => {
+				if (!providers.length || !protocols.length) return;
+				const modelKind = modelKindOf(config.defaultModel, providers);
+				const currentKind = protocols.find((item) => item.id === (config.defaultEndpoint || "auto"))?.kind || "auto";
+				if (modelKind === "video" && currentKind !== "video") void actions.saveConfig({ defaultEndpoint: "videos_generations" });
+				else if (modelKind === "image" && currentKind === "video") void actions.saveConfig({ defaultEndpoint: "images_generations" });
+			}, [config.defaultModel, config.defaultEndpoint, providers, protocols]); // eslint-disable-line react-hooks/exhaustive-deps
 
 			const state = {
 				config,

@@ -153,6 +153,9 @@ window.fetch = async (url, init) => {
 		return json({ ok: true, dir: "C:/x/exports", items: files.map((file) => ({ name: file, path: "C:/x/exports/" + file })) });
 	}
 	if (pathname.includes("/asset/") || raw.startsWith("data:")) return new Response(PNG, { status: 200, headers: { "content-type": "image/png" } });
+	// 验证「选中视频模型 → 参数区跟视频走」：?model=omni-flash 让初始 defaultModel 就是视频模型
+	const modelOverride = new URLSearchParams(location.search).get("model");
+	if (pathname === "/status" && modelOverride) config = { ...config, defaultModel: modelOverride };
 	if (pathname === "/status")
 		return json({
 			ok: true,
@@ -338,8 +341,8 @@ if (new URLSearchParams(location.search).get("many") !== "1") {
 		JSON.stringify({ wideWidth, collapsedWidth, reopenedWidth })
 	);
 }
-/* ---- 尺寸下拉：先给比例，选中后把像素写进配置 ---- */
-{
+/* ---- 尺寸下拉：先给比例，选中后把像素写进配置（选了视频模型时这里变视频参数，跳过） ---- */
+if (!new URLSearchParams(location.search).get("model")) {
 	const sizeSelect = host.querySelector(".vig-tools select.vig-sel");
 	const optionLabels = sizeSelect ? Array.from(sizeSelect.options).map((option) => text(option)) : [];
 	const optionTitles = sizeSelect ? Array.from(sizeSelect.options).map((option) => option.getAttribute("title") || "") : [];
@@ -543,6 +546,22 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			);
 		}
 	}
+	}
+	// 视频模型联动：&model=omni-flash 应自动切视频协议 + 参数区变比例/分辨率/时长
+	if (new URLSearchParams(location.search).get("model")) {
+		await wait(1200);
+		const endpointPost = posts.filter((item) => item.path.startsWith("/config") && item.body && item.body.defaultEndpoint).pop();
+		const values = Array.from(host.querySelectorAll(".vig-tools .vig-sel")).map((node) => String(node.value || ""));
+		check(
+			"选视频模型 → 协议自动切视频生成",
+			endpointPost?.body?.defaultEndpoint === "videos_generations",
+			JSON.stringify({ endpoint: endpointPost?.body?.defaultEndpoint ?? null })
+		);
+		check(
+			"选视频模型 → 参数区是视频的（比例 16:9 / 分辨率 720p / 时长档 4–12s）",
+			values.includes("16:9") && values.includes("720p") && values.some((value) => ["4", "6", "8", "10", "12"].includes(value)),
+			JSON.stringify(values)
+		);
 	}
 	// 滚动验证：&many=1 时 20 条消息，图片撑高后也应贴着最新一条
 	if (new URLSearchParams(location.search).get("many") === "1" && new URLSearchParams(location.search).get("scrolltop") !== "1") {

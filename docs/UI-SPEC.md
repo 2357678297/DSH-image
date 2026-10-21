@@ -210,7 +210,8 @@
 
 | 项 | 规格 |
 |---|---|
-| 模型列表 | 按协议 `kind` 过滤：`image` 协议只列 `modelMeta.kind==="image"`（无元数据按图片算）；`video` 协议只列 `kind==="video"`；音频/对话/向量模型一律不进下拉 |
+| 模型列表 | 按 `kind` 过滤：`image` 协议只列图片模型、`video` 协议只列视频模型；音频/对话/向量模型一律不进下拉。`kind` 优先取目录元数据，缺失时按名字兜底（`video/veo/sora/kling/wan/seedance/t2v/i2v/runway/pika` 视为视频）——`wan3.0-video-1080p` 这类名字不再被当图片模型 |
+| 模型↔协议联动 | **选中视频模型自动切到「视频生成」协议**（参数区立刻变比例/分辨率/时长）；选中图片模型却停在视频协议时自动切回图片生成；改协议也会自动换成该 kind 的模型 |
 | 尺寸 | 图片协议 → `defaultSize`（比例 · 像素）；视频协议 → **比例 + 分辨率两段分开选**：比例 `16:9 / 9:16 / 1:1 / 4:3 / 3:4 / 21:9`（`videoRatio`），分辨率 `480p / 720p / 1080p`（`videoResolution`）；像素 size 由 `videoSizeFor(ratio, resolution)`（短边=分辨率档、长边按比例取偶）组合后写回 `videoSize`，宿主 config 三者分开存、互不覆盖 |
 | 模型联动 | 切到视频协议时，若当前 `defaultModel` 还是图片模型，自动换成该协议下第一个可用视频模型（并切它所属供应商）；反之切回图片同理 |
 | 时长 | 视频协议第三个下拉：`4s / 6s / 8s / 10s / 12s`（`videoSeconds`，默认 4），落上游 body 的 `seconds`（OpenAI 视频接口字段，字符串）；图片请求不带 |
@@ -383,6 +384,7 @@
 - 验收：client 394、真机 44、宿主 120、引擎 133、探针 13、路由 11 全绿。
 - **v2.3（图库布局密度）**：工具行加「小图 / 标准 / 大图」三段胶囊，密度记在 localStorage；图片一律 1:1 裁切（竖图不再把卡片撑高，网格行高统一），卡片 `align-self:start` + `min-width:0` 保证任意容器宽度下都不会退化成单列巨图；
 - 截图：`docs/ui-audit/layout-compact.png` / `layout-standard.png` / `layout-large.png`（`node tools/viewer-check.mjs --hold library --query "hold=library&density=large" --shot x.png`）。
+- **v2.26（视频模型联动）**：`modelKindOf` 先看 `modelMeta.kind`、缺失按名字兜底（wan3.0-video-1080p / veo / sora / kling / seedance…）；选中视频模型自动切 `videos_generations` 协议并显示视频参数（16:9 / 720p / 4s），选回图片模型自动切回图片生成；真机断言（hold=chat&model=omni-flash）覆盖协议切换与参数区两段；
 - **v2.25（回到底部浮标）**：上翻历史（离底 >160px）时对话区右下角出现「⌄ 回到底部」胶囊（白底细线 + 毛玻璃 + 轻阴影，sticky 悬浮在滚动区底部）；有未读新消息时带 `--vig-accent` 数字徽标；点击平滑回底（480ms 守卫防止滚动途中按钮闪现）并自动收起；贴底即隐藏；
 - **v2.24（刷新停在最新一条）**：会话滚动改用「贴底跟随」`stickRef`——刷新/切会话强制回底并补 60/320ms 两帧兜底；图片 `load`（捕获阶段）与 DOM 变化（MutationObserver）撑高时只要还贴着底就继续跟到底；上翻历史（离底 >160px）不抢滚动；真机断言 20 条消息下 `scrollTop+clientHeight === scrollHeight`；
 - **v2.23（更新通道接壤）**：宿主实现 `POST /update/check`（`git ls-remote` 拿远端 `main` HEAD 对比本地 `rev-parse HEAD`，无需 GitHub token/API 速率）；返回 `code=latest|behind|not_a_repo|remote_unreachable` + 短 SHA + hint；界面「更新」按钮按 code 给提示（已是最新 / 远端有更新 xxxxxxx / 远端不可达原因），进度条三态不变；host 测试用本地临时 git 仓库覆盖 behind/latest/unreachable 三条分支（host 130）；

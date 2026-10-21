@@ -1046,3 +1046,18 @@ node tools/fit-check.mjs
   `node tools/viewer-check.mjs`（真机 Chrome 渲染检查，CI 里不跑）。
 - CI：`.github/workflows/test.yml` 在每次 push / PR 时跑 host / client / engine 三套离线测试。
 - 不进货：`node_modules`、`docs/preview/`、`docs/ui-audit/*.png`（本地渲染产物，可重新生成）、密钥与环境变量。
+
+## 插件接壤自检
+
+```powershell
+node tools/verify-wiring.mjs        # 或 npm run wiring
+```
+
+四段链路逐项检查（退出码 0 = 接壤完整）：
+1. profile `package.json` 里的 `link:` 依赖指向本目录；
+2. profile `node_modules` 是 junction/symlink；
+3. profile `cordis.patch.yml` 有 `id: velapi-image-go` 的 insert 条目（且没同时列进 `dsh.profile.bundles`）；
+4. 宿主 API 可达（`/api/velapi-image-go/status`）；
+5. 宿主加载的是当前代码（`/status` 里能看到最新字段，例如视频的 `videoRatio` / `videoSeconds`）。
+
+**宿主半边（`lib/index.js`）改动必须重启 DSH 进程才生效；浏览器半边（`client.js`）在 `patchReload: live` 下可热加载。**

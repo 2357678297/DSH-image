@@ -19,6 +19,7 @@
   "license": "MIT",
   "scripts": {
     "test": "node test/host.test.mjs && node test/client.test.mjs",
+    "wiring": "node tools/verify-wiring.mjs",
     "test:live": "node test/host.test.mjs --live",
     "preview": "node tools/preview.mjs",
     "fit": "node tools/fit-check.mjs",

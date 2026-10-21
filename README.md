@@ -1069,3 +1069,9 @@ node tools/verify-wiring.mjs --api http://127.0.0.1:54419/api/velapi-image-go   
 - `C:\Users\Administrator\.dsh\restart-harness.cmd`：同流程，延时 20 秒（留给当前回答写完）；
 - 旧脚本里的 `G:\deepseek webui\DSH Desktop\DSH Desktop.exe` 路径已不存在，两个脚本都已修正为 `G:\deepseek-harness\DeepSeek Harness.exe`；
 - 重启后 GUI 端口会变（60898 → 54419 这种），用 `node tools/verify-wiring.mjs` 自动找新端口确认接壤 8/8。
+
+### 重启约定（2026-10-21 修正）
+
+- `restart-dsh.cmd` / `restart-harness.cmd` **必须是纯 ASCII**：`cmd.exe` 按 GBK 读 `.cmd`，中文注释会变成乱码并报「不是内部或外部命令」（用户截图里的那个错误窗口就是它）。
+- **不再自动排定重启**：宿主半边（`lib/index.js`）改动需要生效时先说明，由用户手动运行脚本或在用户明确同意后再排；浏览器半边（`client.js`）刷新页面即可。
+- 重启后 GUI 端口会变，用 `node tools/verify-wiring.mjs` 自动探测确认接壤 8/8。

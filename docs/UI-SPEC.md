@@ -395,6 +395,7 @@
 - 验收：client 394、真机 44、宿主 120、引擎 133、探针 13、路由 11 全绿。
 - **v2.3（图库布局密度）**：工具行加「小图 / 标准 / 大图」三段胶囊，密度记在 localStorage；图片一律 1:1 裁切（竖图不再把卡片撑高，网格行高统一），卡片 `align-self:start` + `min-width:0` 保证任意容器宽度下都不会退化成单列巨图；
 - 截图：`docs/ui-audit/layout-compact.png` / `layout-standard.png` / `layout-large.png`（`node tools/viewer-check.mjs --hold library --query "hold=library&density=large" --shot x.png`）。
+- **v2.28（图层控制条自洽）**：控制条 sticky 贴底（滚动也在），选中层后**右侧出现属性条**（叠加算法下拉 / 不透明度滑块+读数 / 上移 / 下移 / 蒙版加反转 / 单层编辑 / 删除，共 5 个迷你按钮），不用再去右栏；chip 底改 `--vig-surface-sunken`（浅色假图也看得出卡片）；真机断言：选中出属性条、删除后层消失；
 - **v2.27（图片处理·图层控制条）**：图层从右侧列表改成**画布下方横排控制条**（底图 + 各层 78px 缩略卡片 + 加层按钮，横向滚动）；每张卡：点击选中（`--vig-accent` 2px 环）、hover 出眼睛/×、**拖拽排序**（`psMoveLayerTo`）、双击进单层编辑；右栏图层列表默认折叠（头部 chevron 展开看叠加算法/不透明度）；**所有颜色/滤镜类改动默认新建图层**（旧层隐藏=已烘焙，历史可撤销），几何类（裁切/旋转等改尺寸）仍改写底图；截图 docs/ui-audit/ps-layerbar.png；
 - **v2.26（视频模型联动）**：`modelKindOf` 先看 `modelMeta.kind`、缺失按名字兜底（wan3.0-video-1080p / veo / sora / kling / seedance…）；选中视频模型自动切 `videos_generations` 协议并显示视频参数（16:9 / 720p / 4s），选回图片模型自动切回图片生成；真机断言（hold=chat&model=omni-flash）覆盖协议切换与参数区两段；
 - **v2.25（回到底部浮标）**：上翻历史（离底 >160px）时对话区右下角出现「⌄ 回到底部」胶囊（白底细线 + 毛玻璃 + 轻阴影，sticky 悬浮在滚动区底部）；有未读新消息时带 `--vig-accent` 数字徽标；点击平滑回底（480ms 守卫防止滚动途中按钮闪现）并自动收起；贴底即隐藏；

@@ -2255,11 +2255,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-root[data-compact="1"] .vig-ps-stage,
 .vig-root[data-compact="1"] .vig-ps-layers,
 .vig-root[data-compact="1"] .vig-ps-layerbar{grid-column:auto;grid-row:auto}
-.vig-ps-layerbar{grid-column:1 / -1;grid-row:2;display:flex;align-items:stretch;gap:8px;padding:10px 12px;
+.vig-ps-layerbar{grid-column:1 / -1;grid-row:2;position:sticky;bottom:8px;z-index:3;display:flex;align-items:stretch;gap:8px;padding:10px 12px;
 	border:1px solid var(--vig-line);border-radius:var(--vig-r-card);background:var(--vig-surface);
 	overflow-x:auto;overflow-y:hidden;min-height:84px;scrollbar-width:thin}
 .vig-ps-chip{position:relative;display:flex;flex-direction:column;gap:4px;width:78px;flex:none;padding:4px;
-	border:1px solid var(--vig-line);border-radius:var(--vig-r-tile);background:var(--vig-surface);cursor:pointer;
+	border:1px solid var(--vig-line);border-radius:var(--vig-r-tile);background:var(--vig-surface-sunken);cursor:pointer;
 	transition:border-color var(--vig-dur) var(--vig-ease),box-shadow var(--vig-dur) var(--vig-ease)}
 .vig-ps-chip:hover{border-color:var(--vig-line-strong)}
 .vig-ps-chip.is-on{border-color:var(--vig-accent);box-shadow:0 0 0 2px var(--vig-accent-soft)}
@@ -2280,6 +2280,13 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-ps-chip.is-add{width:auto;min-width:64px;align-items:center;justify-content:center;gap:6px;color:var(--vig-text-muted);
 	font-size:11px;border-style:dashed;flex-direction:row}
 .vig-ps-chip.is-add:hover{color:var(--vig-text);border-color:var(--vig-line-strong)}
+/* 选中图层的属性条：控制条自洽（叠加算法 / 不透明度 / 顺序 / 蒙版 / 编辑 / 删除） */
+.vig-ps-chipprops{display:flex;align-items:center;gap:10px;flex:none;margin-left:auto;padding-left:12px;border-left:1px solid var(--vig-line)}
+.vig-ps-chipprops-name{font-size:11px;color:var(--vig-text);max-width:96px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vig-ps-chipprops-row{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--vig-text-muted);white-space:nowrap}
+.vig-ps-chipprops-row select{height:24px;border:1px solid var(--vig-line);border-radius:var(--vig-r-pill);padding:0 8px;background:var(--vig-surface);font-size:11px;color:var(--vig-text)}
+.vig-ps-chipprops-row .vig-ps-layer-opacity{width:72px}
+.vig-ps-chipprops-val{font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--vig-text-muted);min-width:30px}
 /* 右栏图层列表默认收起：图层操作走底部控制条，展开才看叠加算法/不透明度等高级项 */
 .vig-ps-layers.is-fold .vig-ps-layer-row{display:none}
 `;
@@ -7835,6 +7842,9 @@ h(
 				const items = (layers || []).map((layer) => psLayerThumb(layer.canvas));
 				return { base, items };
 			}, [source, layers]);
+			// 控制条选中的图层（"" = 底图）：属性条（叠加算法 / 不透明度 / 顺序 / 蒙版 / 删除）跟着它走
+			const activeLayerIndex = (layers || []).findIndex((item) => item.id === activeLayerId);
+			const activeLayer = activeLayerIndex >= 0 ? layers[activeLayerIndex] : null;
 			// 参数面板浮窗的位置（拖过就记住）
 			const lastFloat = useRef(null);
 			const [floatPos, setFloatPos] = useState(() => {
@@ -9938,7 +9948,94 @@ h(
 								},
 								h(Icon, { name: "plus", size: 14 }),
 								h("span", null, t("ps.layer.addLayer"))
-							)
+							),
+							// 选中图层的属性（控制条自洽：不用再去右栏找）：叠加算法 / 不透明度 / 顺序 / 蒙版 / 删除
+							activeLayer
+								? h(
+										"div",
+										{ className: "vig-ps-chipprops" },
+										h("span", { className: "vig-ps-chipprops-name", title: activeLayer.name }, activeLayer.name),
+										h(
+											"label",
+											{ className: "vig-ps-chipprops-row", title: t("ps.layer.mode") },
+											h("span", null, t("ps.layer.mode")),
+											h(
+												"select",
+												{
+													className: "vig-ps-layer-mode",
+													value: activeLayer.mode || "normal",
+													onChange: (event) => setLayers((list) => list.map((item) => (item.id === activeLayer.id ? { ...item, mode: event.target.value } : item)))
+												},
+												PS_BLEND_MODES.map((mode) => h("option", { key: mode.id, value: mode.id }, t(mode.labelKey)))
+											)
+										),
+										h(
+											"label",
+											{ className: "vig-ps-chipprops-row", title: t("ps.layer.opacity") },
+											h("span", null, t("ps.layer.opacity")),
+											h("input", {
+												className: "vig-range vig-ps-layer-opacity",
+												type: "range",
+												min: 0,
+												max: 100,
+												step: 1,
+												value: Math.round((activeLayer.opacity ?? 1) * 100),
+												onChange: (event) => setLayers((list) => list.map((item) => (item.id === activeLayer.id ? { ...item, opacity: Number(event.target.value) / 100 } : item)))
+											}),
+											h("span", { className: "vig-ps-chipprops-val" }, `${Math.round((activeLayer.opacity ?? 1) * 100)}%`)
+										),
+										h(
+											"button",
+											{ className: "vig-ps-layer-mini", title: t("ps.layer.up"), onClick: () => setLayers((list) => psMoveLayer(list, activeLayerIndex, 1)) },
+											h(Icon, { name: "chevron", size: 11 })
+										),
+										h(
+											"button",
+											{ className: "vig-ps-layer-mini", title: t("ps.layer.down"), onClick: () => setLayers((list) => psMoveLayer(list, activeLayerIndex, -1)) },
+											h(Icon, { name: "chevronDown", size: 11 })
+										),
+										h(
+											"button",
+											{
+												className: `vig-ps-layer-mini${activeLayer.mask ? " is-on" : ""}`,
+												title: activeLayer.mask ? t("ps.layer.maskInvert") : t("ps.layer.maskAdd"),
+												onClick: () => {
+													if (!activeLayer.mask) {
+														const dims = psMaskDims(null, source?.canvas ?? activeLayer.canvas);
+														const alpha = psMaskAlpha(dims.w, dims.h, selection);
+														setLayers((list) => list.map((item) => (item.id === activeLayer.id ? { ...item, mask: { canvas: psMaskCanvas(dims.w, dims.h, alpha), alpha } } : item)));
+														return;
+													}
+													const dims = psMaskDims(activeLayer.mask, activeLayer.canvas);
+													const alpha = psInvertAlpha(activeLayer.mask.alpha);
+													setLayers((list) => list.map((item) => (item.id === activeLayer.id ? { ...item, mask: { canvas: psMaskCanvas(dims.w, dims.h, alpha), alpha } } : item)));
+												}
+											},
+											h(Icon, { name: activeLayer.mask ? "marquee" : "crop", size: 11 })
+										),
+										h(
+											"button",
+											{
+												className: "vig-ps-layer-mini",
+												title: t("ps.layer.edit"),
+												onClick: () => void enterLayer(activeLayer)
+											},
+											h(Icon, { name: "pen", size: 11 })
+										),
+										h(
+											"button",
+											{
+												className: "vig-ps-layer-mini is-danger",
+												title: t("ps.layer.remove"),
+												onClick: () => {
+													setLayers((list) => list.filter((item) => item.id !== activeLayer.id));
+													setActiveLayerId("");
+												}
+											},
+											h(Icon, { name: "trash", size: 11 })
+										)
+									)
+								: null
 						),
 						// 原来参数栏的位置：图层（叠加算法）。参数改成浮窗，压在画布上。
 						h(

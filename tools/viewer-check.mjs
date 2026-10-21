@@ -373,7 +373,8 @@ if (!new URLSearchParams(location.search).get("model")) {
 			await wait(600);
 		}
 		// 图片处理：&ps=load 先从「最近生成」点一张当底图，验证底部图层控制条
-		if (holdView === "ps" && new URLSearchParams(location.search).get("ps") === "load") {
+		const psMode = new URLSearchParams(location.search).get("ps");
+		if (holdView === "ps" && (psMode === "load" || psMode === "select")) {
 			const tile = await waitFor(() => host.querySelector(".vig-ps-recent-tile"), 5000);
 			if (tile) {
 				flushSync(() => tile.dispatchEvent(new MouseEvent("click", { bubbles: true })));
@@ -410,6 +411,33 @@ if (!new URLSearchParams(location.search).get("model")) {
 			);
 			const chips = host.querySelectorAll(".vig-ps-chip").length;
 			check("所有改动默认新图层：应用一次调整后控制条多一层", chips >= 3, JSON.stringify({ chips }));
+			// 选中刚生成的图层：属性条应出现（模式 / 不透明度 / 顺序 / 蒙版 / 编辑 / 删除）
+			const layerChip = host.querySelectorAll(".vig-ps-chip:not(.is-base):not(.is-add)")[0];
+			if (layerChip) {
+				flushSync(() => layerChip.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+				await wait(300);
+			}
+			// 截图用：把控制条滚进视口（stage 很高时它在下面）
+			if (psMode === "select") {
+				const barEl = host.querySelector(".vig-ps-layerbar");
+				if (barEl) {
+					flushSync(() => barEl.scrollIntoView({ block: "end" }));
+					await wait(300);
+				}
+			}
+			const props = host.querySelector(".vig-ps-chipprops");
+			check(
+				"图层可选中：点中后控制条出现属性条（模式/不透明度/顺序/蒙版/删除）",
+				Boolean(props) && Boolean(props.querySelector(".vig-ps-layer-mode")) && Boolean(props.querySelector(".vig-ps-layer-opacity")) && props.querySelectorAll(".vig-ps-layer-mini").length >= 4,
+				JSON.stringify({ props: Boolean(props), minis: props ? props.querySelectorAll(".vig-ps-layer-mini").length : 0 })
+			);
+			// 删除：点最后一个 danger 迷你按钮，图层应消失
+			const removeBtn = psMode === "load" && props ? props.querySelector(".vig-ps-layer-mini.is-danger") : null;
+			if (removeBtn) {
+				flushSync(() => removeBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+				await wait(300);
+				check("图层可删除：删掉后控制条不再有该层", host.querySelectorAll(".vig-ps-chip:not(.is-base):not(.is-add)").length === 0, JSON.stringify({ chips: host.querySelectorAll(".vig-ps-chip").length }));
+			}
 		}
 		// 图库布局密度：&density=compact|standard|large（截图/审计用）
 		const densityText = { compact: "小图", standard: "标准", large: "大图" }[new URLSearchParams(location.search).get("density")];

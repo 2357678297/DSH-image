@@ -3357,7 +3357,7 @@ check(
   check(
     "视频参数与图片配置分开：模型按 kind 过滤 + 比例/分辨率两段 + 视频张数固定 1",
     /const endpointKind = \(\(\) => \{/.test(SOURCE) &&
-      /const pickerModels = catalog\.models\.filter/.test(SOURCE) &&
+      /const pickerModels = usableModelsFor\(catalog, isVideoEndpoint\)/.test(SOURCE) &&
       /function videoSizeFor\(ratio, resolution\)/.test(SOURCE) &&
       /videoRatio: ratio, videoSize: videoSizeFor/.test(SOURCE) &&
       /videoResolution: resolution, videoSize: videoSizeFor/.test(SOURCE) &&

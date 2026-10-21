@@ -442,6 +442,8 @@ window.__ModuleLoader__.load({
 			"chat.pasted": "已粘贴为参考图",
 			"chat.refClear": "移除参考图",
 			"chat.refLimit": "参考图最多挂 4 张，先移掉一张",
+			"chat.modelInvalid": "当前模型不能生图（是对话/音频模型，或不在任何供应商目录里），先选一个图片模型",
+			"chat.modelSwitched": "当前模型不能生图，已自动切到 {model}",
 			"chat.toBottom": "回到底部",
 			"chat.expandTools": "展开更多参数",
 			"chat.collapseTools": "收起参数",
@@ -867,6 +869,8 @@ window.__ModuleLoader__.load({
 			"chat.pasted": "Pasted as the reference image",
 			"chat.refClear": "Remove reference",
 			"chat.refLimit": "Up to 4 reference images — remove one first",
+			"chat.modelInvalid": "Current model cannot generate images (chat/audio model or not in any provider catalog) — pick an image model first",
+			"chat.modelSwitched": "Current model cannot generate images — switched to {model}",
 			"chat.toBottom": "Jump to latest",
 			"chat.expandTools": "More options",
 			"chat.collapseTools": "Fewer options",
@@ -3564,12 +3568,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			   音频 / 向量 / 对话模型不进这个下拉（用户要求：视频参数与图片配置区分开）。
 			   分类以宿主给的 modelMeta.kind 为准（中转站目录里带的），没有元数据的按图片算。 */
 			const endpointKind = isVideoEndpoint ? "video" : "image";
-			const pickerModels = catalog.models.filter((id) => {
-				// 下拉里图片和视频模型都给（ModelPicker 自己按 kind 分组）：选中哪类就自动切到哪类协议，
-				// 协议只决定参数区/路由，**不再把另一类模型藏起来** —— 否则选了视频模型就切不回图片了。
-				const kind = (catalog.meta[id] || {}).kind || modelKindOf(id, providers) || "";
-				return !kind || kind === "image" || kind === "video";
-			});
+			const pickerModels = usableModelsFor(catalog, isVideoEndpoint);
 			/* 切到视频协议时，当前模型如果还是图片模型，自动换成该协议下的第一个可用模型
 			   （否则下拉里选不到、发出去也多半会报错）。*/
 			useEffect(() => {
@@ -4150,6 +4149,13 @@ h(
 				if (typeof kind === "string" && kind) return kind;
 			}
 			return "";
+		}
+		/** 当前协议可用的模型（图片/视频两组都给；音频/对话/向量不进生图下拉）。 */
+		function usableModelsFor(catalog, isVideoEndpoint) {
+			return (catalog?.models || []).filter((id) => {
+				const kind = (catalog?.meta?.[id] || {}).kind || "";
+				return !kind || kind === "image" || kind === "video";
+			});
 		}
 
 		/**
@@ -11124,6 +11130,14 @@ h(
 				generate: async () => {
 					const rawPrompt = draft.trim();
 					if (rawPrompt.length === 0) return;
+					/* 模型隔离：对话/音频/向量模型不能生图（上游会回 404「模型不存在」）——
+					   选错了就别发请求，这里直接把原因说清楚。 */
+					const modelKind = modelKindOf(config.defaultModel, providers);
+					const knownModel = (providers || []).some((provider) => (provider.models || []).includes(config.defaultModel));
+					if (!knownModel || ["chat", "audio", "embedding", "rerank"].includes(modelKind)) {
+						toast(t("chat.modelInvalid"), "err");
+						return;
+					}
 					setGenerating(true);
 					try {
 						/* 发送前把「还没有本站 URL」的参考图补一份留档：从图库 / 重绘 / 预设挂进来的
@@ -11712,6 +11726,25 @@ h(
 					}
 				}
 			};
+
+			/* 生图模型自愈：当前模型是对话/音频/向量模型，或不在任何供应商目录里时，
+			   上游会 404「模型不存在」—— 直接换成目录里第一个可生图的模型（图片/视频按协议挑）。 */
+			useEffect(() => {
+				if (!providers.length) return;
+				const all = providers.flatMap((provider) => provider.models || []);
+				if (all.length === 0) return;
+				const contentKind = modelKindOf(config.defaultModel, providers);
+				const usable = all.find((id) => {
+					const kind = modelKindOf(id, providers);
+					if (!kind) return !isVideoEndpoint;
+					return isVideoEndpoint ? kind === "video" : kind === "image";
+				});
+				const known = all.includes(config.defaultModel);
+				const wrong = !known || ["chat", "audio", "embedding", "rerank"].includes(contentKind);
+				if (!wrong || !usable || usable === config.defaultModel) return;
+				toast(t("chat.modelSwitched", { model: usable }), "err");
+				void actions.saveConfig({ defaultModel: usable, activeProviderId: providerIdForModel(providers, config, usable) || config.activeProviderId });
+			}, [config.defaultModel, providers, isVideoEndpoint]); // eslint-disable-line react-hooks/exhaustive-deps
 
 			/* 模型和协议自动对齐：选了视频模型就切到「视频生成」协议（参数区跟视频走），
 			   选了图片模型却停在视频协议时切回图片生成。只在两者真正冲突时写一次配置。 */

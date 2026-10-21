@@ -623,6 +623,17 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 		}
 	}
 	}
+	// 对话模型被当成生图模型（上游 404「模型不存在」）：打开后应自动切到可用图片模型
+	if (new URLSearchParams(location.search).get("model") === "grok-4.6") {
+		await wait(1400);
+		const switchPost = posts.filter((item) => item.path.startsWith("/config") && item.body && item.body.defaultModel).pop();
+		const shown = text(host.querySelector(".vig-pick-text") || host);
+		check(
+			"对话模型不能生图：自动切到可用图片模型（不会再发 404 的请求）",
+			Boolean(switchPost) && switchPost.body.defaultModel !== "grok-4.6" && !shown.includes("grok-4.6"),
+			JSON.stringify({ switched: switchPost?.body?.defaultModel ?? null, shown: shown.slice(0, 40) })
+		);
+	}
 	// 名称带 video 但 kind 为空：不能自动切视频协议（实测 wan3.0-video-1080p 上游是图片模型）
 	if (new URLSearchParams(location.search).get("model") === "wan3.0-video-1080p") {
 		await wait(1200);

@@ -396,6 +396,7 @@
 - **v2.3（图库布局密度）**：工具行加「小图 / 标准 / 大图」三段胶囊，密度记在 localStorage；图片一律 1:1 裁切（竖图不再把卡片撑高，网格行高统一），卡片 `align-self:start` + `min-width:0` 保证任意容器宽度下都不会退化成单列巨图；
 - 截图：`docs/ui-audit/layout-compact.png` / `layout-standard.png` / `layout-large.png`（`node tools/viewer-check.mjs --hold library --query "hold=library&density=large" --shot x.png`）。
 - **v2.30（更新通道两段式）**：第一次点更新 = 检查（check），查到 behind 后再点一次 = 拉取（`/update/apply`，`git pull --ff-only`，本地脏则拒绝并提示）+ 重启（`/update/restart` 调 ASCII 版 restart 脚本，15 秒后宿主重启）；
+- **v2.32（模型用途隔离）**：`usableModelsFor` 统一「能生图的模型」= kind 为空/图片/视频（对话、音频、向量、重排一律不进）；打开时若 `defaultModel` 是对话/音频模型或不在任何供应商目录 → **自动切到目录里第一个可生图模型**并提示；发送前再 guard 一次（选错就 toast 说明，不发注定 404 的请求）；真机断言：`grok-4.6`（对话模型）打开后自动切成 `grok-imagine-image`；
 - **v2.31（视频原生字段实测 + 不猜视频）**：宿主视频 body 同时带 `aspect_ratio` / `resolution` / `seconds` 与像素 `size`；实测 velapi `veo-3.1-flash` 返回 200 queued（原生字段被接受）；`wan3.0-video-1080p` 上游实为图片模型（400 不是视频模型），因此模型能力只认目录 `kind`，删除名字兜底，无 kind 的模型按图片处理（不自动切视频协议）；
 - **v2.29（模型下拉两类都给）**：之前按当前协议过滤会导致「选了视频模型后图片模型消失、切不回来」；改成下拉里图片+视频分组都给（音频/对话仍不列），选中哪类就自动切到哪类协议与参数区；真机断言更新为「图片与视频模型都能选，音频/对话不列」；
 - **v2.28（图层控制条自洽）**：控制条 sticky 贴底（滚动也在），选中层后**右侧出现属性条**（叠加算法下拉 / 不透明度滑块+读数 / 上移 / 下移 / 蒙版加反转 / 单层编辑 / 删除，共 5 个迷你按钮），不用再去右栏；chip 底改 `--vig-surface-sunken`（浅色假图也看得出卡片）；真机断言：选中出属性条、删除后层消失；

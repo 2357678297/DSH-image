@@ -11742,6 +11742,14 @@ h(
 				}
 			};
 
+			/* 模型与供应商对齐：模型属于哪条供应商链就切到哪条。
+			   历史配置可能是错配的（模型属于 grok、activeProvider 却停在 GPT），请求发到别家会 404「模型不存在」。 */
+			useEffect(() => {
+				if (!providers.length || !config.defaultModel) return;
+				const ownerId = providerIdForModel(providers, config, config.defaultModel);
+				if (ownerId && ownerId !== config.activeProviderId) void actions.saveConfig({ activeProviderId: ownerId });
+			}, [config.defaultModel, config.activeProviderId, providers]); // eslint-disable-line react-hooks/exhaustive-deps
+
 			/* 协议隔离：生图工作台的协议只该是「自动检测 / 图片生成 / 图片编辑 / 视频生成」。
 			   如果配置停在「OpenAI 对话 / Responses / Anthropic / Gemini / 重排 / 向量」这类聊天协议上
 			   （生图请求会被打到 /chat/completions，注定画不出图），自动纠正成图片生成。 */

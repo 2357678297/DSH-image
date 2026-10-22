@@ -1039,6 +1039,27 @@ mockProvider = await saveMockProvider({
     JSON.stringify({ status: say.status, body: say.body })
   );
 
+  /* 参考图：本站图片以 data URI 作为多模态消息传给对话模型 */
+  fs.mkdirSync(path.join(stateDir, "uploads"), { recursive: true });
+  const refPng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  fs.writeFileSync(path.join(stateDir, "uploads", "ref_test.png"), refPng);
+  const agentWithRef = await call("/chat/agent", {
+    method: "POST",
+    body: { message: "把 95% 改成 10%", references: ["/api/velapi-image-go/upload/ref_test.png"] }
+  });
+  const chatHits = mockHits.filter((hit) => hit.url.includes("/chat/completions"));
+  const multimodalUser = chatHits
+    .map((hit) => (Array.isArray(hit.body?.messages) ? hit.body.messages : []))
+    .flat()
+    .find((msg) => msg?.role === "user" && Array.isArray(msg.content));
+  const parts = Array.isArray(multimodalUser?.content) ? multimodalUser.content : [];
+  check(
+    "参考图传给对话模型：user 消息是多模态（text + image_url data URI）",
+    agentWithRef.status === 200 &&
+      parts.some((part) => part.type === "text" && String(part.text).includes("95%")) &&
+      parts.some((part) => part.type === "image_url" && String(part.image_url?.url || "").startsWith("data:image/png;base64,")),
+    JSON.stringify({ status: agentWithRef.status, parts: parts.map((part) => part.type) })
+  );
   /* 对话 agent：LLM 用 function calling 调 generate_image（mock 第一次回 tool_calls，第二次收尾） */
   const agent = await call("/chat/agent", { method: "POST", body: { message: "画一只戴眼镜的橘猫" } });
   check(

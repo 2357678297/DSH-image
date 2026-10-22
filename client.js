@@ -11239,7 +11239,14 @@ h(
 								.filter((item) => item.content.length > 0);
 							const payload = await call("/chat/agent", {
 								method: "POST",
-								body: { message: text, conversationId, chatModel: config.chatModel || "", history }
+								body: {
+									message: text,
+									conversationId,
+									chatModel: config.chatModel || "",
+									history,
+									// 参考图一起交给 agent：宿主把它读成 data URI，对话模型才「看」得到
+									references: (references || []).map((item) => ({ url: item.url || "", name: item.name || "" })).filter((item) => item.url)
+								}
 							});
 							const replyJob = {
 								id: `agent_${Date.now().toString(36)}`,

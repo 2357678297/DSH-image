@@ -400,6 +400,7 @@ window.__ModuleLoader__.load({
 			"chat.forceGenerate": "生成图片",
 			"chat.forceGenerateHint": "跳过对话，直接把这句话交给生图（agent 之外的手动入口）",
 			"chat.forceGenerate": "Generate image",
+			"chat.forceGenerateTooShort": "Prompt too short: write at least 5 characters describing the image, then press Generate image",
 			"chat.forceGenerateHint": "Skip the agent and generate an image from this prompt",
 			"chat.dialogNotReady": "Chat endpoint not ready: refresh the page (F5); restart DSH only if it still fails",
 			"chat.contextDesc": "只负责整理提示词与读取配置，不直接调用供应商出图。",
@@ -453,6 +454,7 @@ window.__ModuleLoader__.load({
 			"chat.refLimit": "参考图最多挂 4 张，先移掉一张",
 			"chat.modelInvalid": "当前模型不能生图（是对话/音频模型，或不在任何供应商目录里），先选一个图片模型",
 			"chat.queueFull": "发送太快了：这一句处理完再发下一句（最多排 6 条）",
+			"chat.forceGenerateTooShort": "提示词太短：至少写 5 个字符的画面描述，再点「生成图片」",
 			"chat.modelSwitched": "当前模型不能生图，已自动切到 {model}",
 			"chat.toBottom": "回到底部",
 			"chat.expandTools": "展开更多参数",
@@ -3652,7 +3654,13 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			};
 
 			const submit = (force = false) => {
-				if (draft.trim().length === 0) return;
+				const text = draft.trim();
+				if (text.length === 0) return;
+				// 「生成图片」前的硬校验：提示词太短上游会直接拒（prompt_too_short），先拦一下
+				if (force && text.length < 5) {
+					toast(t("chat.forceGenerateTooShort"), "err");
+					return;
+				}
 				void (force ? actions.forceGenerate() : actions.generate());
 			};
 
@@ -11370,11 +11378,19 @@ h(
 			};
 
 			/** 发送队列：串行化 agent/生图流程（避免对话端口与生图端口竞态）。 */
+			const queueWarnRef = useRef(0);
 			const enqueueSend = (rawPrompt, force = false) => {
+				if (String(rawPrompt || "").trim().length === 0) return null;
 				if (pendingSendsRef.current >= 6) {
-					toast(t("chat.queueFull"), "err");
+					// 连点保护：同一句话被连点时不刷屏，3 秒内只提示一次
+					if (Date.now() - queueWarnRef.current > 3000) {
+						queueWarnRef.current = Date.now();
+						toast(t("chat.queueFull"), "err");
+					}
 					return null;
 				}
+				// 入队即清空输入框：连点不会重复发送同一句（prompt 已经捕获进队列）
+				setDraft("");
 				const seq = ++sendSeqRef.current;
 				pendingSendsRef.current += 1;
 				setGenerating(true);

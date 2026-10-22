@@ -400,6 +400,8 @@ window.__ModuleLoader__.load({
 			"chat.contextTurns": "上下文轮数",
 			"chat.contextNoAuto": "限制上下文模型直接调供应商出图",
 			"chat.contextNoAutoHint": "开启后只按你的原话出图，它只做整理与分类。",
+			"chat.contextChatModel": "对话模型",
+			"chat.contextChatModelHint": "只用它把历史整理成提示词，不参与生图；生图模型在输入框那一行选。",
 			"chat.contextWired": "已读取：对话 {chat} · 生图 {image} · 尺寸 {size}",
 			"chat.contextAutoChat": "自动",
 			"chat.contextOnShort": "已开",
@@ -2199,6 +2201,7 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 .vig-ctx-val{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;min-width:18px;text-align:right}
 .vig-ctx-hot{flex-wrap:wrap}
 .vig-ctx-hint{flex-basis:100%;font-size:10.5px;color:var(--vig-text-faint);padding-left:22px}
+.vig-ctx-select{flex:1;min-width:0;height:26px;border:1px solid var(--vig-line);border-radius:var(--vig-r-pill);padding:0 8px;background:var(--vig-surface);font-size:11.5px;color:var(--vig-text)}
 /* ============================================================
    设计系统 v2.25 · 「回到底部」浮标（上翻历史时出现）
    ============================================================ */
@@ -3459,7 +3462,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function ChatView({ state, actions }) {
-			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint } = state;
+			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels } = state;
 			const [overLimit, setOverLimit] = useState(false);
 			// 上下文管理改成「对话式」：点 ✨ 打开一块设置浮层（自动整理 / 轮数 / 限制直接出图 / 已读取配置）
 			const [contextPanelOpen, setContextPanelOpen] = useState(false);
@@ -3889,6 +3892,28 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											}),
 											h("span", null, t("chat.contextNoAuto")),
 											h("span", { className: "vig-ctx-hint" }, t("chat.contextNoAutoHint"))
+										),
+										/* 对话模型只用于「把历史整理成提示词」，不是生图模型 ——
+										   它不出现在生图模型下拉里，而是在这里单独选（列表来自 /status 的 chatModels）。 */
+										h(
+											"div",
+											{ className: "vig-ctx-row" },
+											h("span", { className: "vig-ctx-label" }, t("chat.contextChatModel")),
+											h(
+												"select",
+												{
+													className: "vig-ctx-select",
+													value: config.chatModel || "",
+													title: t("chat.contextChatModelHint"),
+													onChange: (event) => void actions.saveConfig({ chatModel: event.target.value })
+												},
+												[
+													h("option", { key: "auto", value: "" }, t("chat.contextAutoChat")),
+													...(chatModels || []).map((item) =>
+														h("option", { key: item.id, value: item.id }, `${item.id}${item.providerName ? ` · ${item.providerName}` : ""}`)
+													)
+												]
+											)
 										),
 										h(
 											"div",

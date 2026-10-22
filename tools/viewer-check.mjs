@@ -703,6 +703,12 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			Boolean(host.querySelector(".vig-ctx-pop")) && host.querySelectorAll(".vig-ctx-row").length >= 3 && Boolean(host.querySelector(".vig-ctx-range")),
 			JSON.stringify({ pop: Boolean(host.querySelector(".vig-ctx-pop")), rows: host.querySelectorAll(".vig-ctx-row").length })
 		);
+		check(
+			"对话模型在上下文浮层里单独选（不混进生图模型下拉）",
+			Boolean(host.querySelector(".vig-ctx-select")) &&
+				Array.from(host.querySelectorAll(".vig-ctx-select option")).some((option) => String(option.value) === "mock-chat"),
+			JSON.stringify(Array.from(host.querySelectorAll(".vig-ctx-select option")).map((option) => String(option.value)))
+		);
 	}
 	if (new URLSearchParams(location.search).get("popover") === "model") {
 		const pickBtn = host.querySelector(".vig-tools .vig-pick");

@@ -73,6 +73,8 @@ window.__ModuleLoader__.load({
 		// 端点协议选择：宿主老版本还没有 config.defaultEndpoint 这个字段（重启后才吃到），
 		// 本地存一份，选择在刷新之间就不会丢。
 		const ENDPOINT_KEY = "dsh.velapi-image-go.endpoint";
+		// 「对话优先」：消息先当聊天处理（对话模型直接回答），只有明确出图指令才生图
+		const DIALOG_FIRST_KEY = "dsh.velapi-image-go.dialogfirst";
 
 		// 侧栏面板挂载时广播：停靠面板据此让位（避免同一个入口在窗口上出现两次）
 		const PANE_EVENT = "velapi-image-go:rightbar-pane";
@@ -395,7 +397,10 @@ window.__ModuleLoader__.load({
 			"chat.convMemory": "每个对话的记忆互相隔离：新建对话不带上一段上下文",
 			"chat.context": "上下文",
 			"chat.contextOn": "上下文管理：开 —— 每轮先由对话模型把本对话的历史整理成提示词",
-			"chat.contextPanel": "上下文管理 · 对话式",
+			"chat.contextPanel": "对话模型",
+			"chat.dialogDesc": "发消息先进这里：聊天就直接回答，要出图才生图。",
+			"chat.dialogFirst": "对话优先",
+			"chat.dialogFirstHint": "开：消息先当聊天处理（对话模型直接回答），只有明确出图指令才生图。",
 			"chat.contextDesc": "只负责整理提示词与读取配置，不直接调用供应商出图。",
 			"chat.contextAuto": "每轮自动整理提示词",
 			"chat.contextTurns": "上下文轮数",
@@ -3464,7 +3469,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function ChatView({ state, actions }) {
-			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels } = state;
+			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels, dialogFirst } = state;
 			const [overLimit, setOverLimit] = useState(false);
 			// 上下文管理改成「对话式」：点 ✨ 打开一块设置浮层（自动整理 / 轮数 / 限制直接出图 / 已读取配置）
 			const [contextPanelOpen, setContextPanelOpen] = useState(false);
@@ -3874,13 +3879,27 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											"div",
 											{ className: "vig-ctx-head" },
 											h("span", { className: "vig-ctx-title" }, t("chat.contextPanel")),
-											h("span", { className: "vig-ctx-note" }, t("chat.contextDesc"))
+											h("span", { className: "vig-ctx-note" }, t("chat.dialogDesc"))
 										),
 										h(
 											"label",
 											{ className: "vig-ctx-row" },
 											h("input", { type: "checkbox", className: "vig-ctx-check", checked: contextOn, onChange: () => actions.toggleContext() }),
 											h("span", null, t("chat.contextAuto"))
+										),
+										/* 对话优先：勾上后消息先当聊天处理（对话模型直接回答），明确出图指令才生图 */
+										h(
+											"label",
+											{ className: "vig-ctx-row vig-ctx-hot" },
+											h("input", {
+												type: "checkbox",
+												className: "vig-ctx-check",
+												checked: dialogFirst,
+												"data-dialog-first": "1",
+												onChange: () => actions.toggleDialogFirst()
+											}),
+											h("span", null, t("chat.dialogFirst")),
+											h("span", { className: "vig-ctx-hint" }, t("chat.dialogFirstHint"))
 										),
 										h(
 											"div",
@@ -10821,6 +10840,14 @@ h(
 			const [conversations, setConversations] = useState([]);
 			const [conversationId, setConversationId] = useState(() => window.localStorage.getItem(CONV_KEY) || "");
 			const [contextOn, setContextOn] = useState(() => window.localStorage.getItem(CONTEXT_KEY) !== "0");
+			// 对话优先（持久化）：勾上后消息先走聊天，出图需要明确指令
+			const [dialogFirst, setDialogFirst] = useState(() => {
+				try {
+					return window.localStorage.getItem(DIALOG_FIRST_KEY) === "1";
+				} catch (error) {
+					return false;
+				}
+			});
 
 			// 「限制上下文模型直接调供应商出图」：默认限制（true）；存在本地，generate 与面板共用
 			const [contextNoAutoImage, setContextNoAutoImage] = useState(() => {
@@ -11207,6 +11234,19 @@ h(
 										return;
 									}
 								}
+								/* 对话优先（勾选）：像聊天的消息即使上下文模型判成了出图，也让对话模型直接回答；
+								   挂了参考图说明真要改图，不拦。 */
+								if (dialogFirst && looksLikeChat(rawPrompt) && readyRefs.length === 0) {
+									try {
+										await replyWithChat(rawPrompt);
+										setGenerating(false);
+										return;
+									} catch (chatError) {
+										toast(String(chatError?.message ?? chatError), "err");
+										setGenerating(false);
+										return;
+									}
+								}
 								if (plan?.ok && plan.action === "reply" && plan.reply) {
 									// 用户这句话是在纠正/讨论，不是要出图：只回一句话，留在会话历史里
 									const msgPayload = await call("/chat/message", {
@@ -11371,6 +11411,16 @@ h(
 					}
 				},
 				toggleContext: () => setContextOn((value) => !value),
+				toggleDialogFirst: () =>
+					setDialogFirst((value) => {
+						const next = !value;
+						try {
+							window.localStorage.setItem(DIALOG_FIRST_KEY, next ? "1" : "0");
+						} catch (error) {
+							/* 隐私模式写不了就只活这次 */
+						}
+						return next;
+					}),
 
 				toggleContextNoAutoImage: () =>
 					setContextNoAutoImage((value) => {
@@ -11929,6 +11979,7 @@ h(
 				conversationId,
 				contextOn,
 				contextNoAutoImage,
+				dialogFirst,
 				isVideoEndpoint,
 				chatModels
 			};

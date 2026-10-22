@@ -3349,6 +3349,13 @@ check(
       /update\.clickAgain/.test(SOURCE)
   );
   check(
+    "对话优先：浮层里勾选（localStorage 持久化）+ 像聊天的消息走 /chat/say",
+    /data-dialog-first/.test(SOURCE) &&
+      /const DIALOG_FIRST_KEY = "dsh\.velapi-image-go\.dialogfirst"/.test(SOURCE) &&
+      /toggleDialogFirst/.test(SOURCE) &&
+      /if \(dialogFirst && looksLikeChat\(rawPrompt\) && readyRefs\.length === 0\)/.test(SOURCE)
+  );
+  check(
     "上下文管理接聊天：plan 判不出且像聊天时走 /chat/say（不硬生图，也没单独的聊天模式开关）",
     /function looksLikeChat\(text\)/.test(SOURCE) &&
       /const replyWithChat = async \(text\) => \{/.test(SOURCE) &&

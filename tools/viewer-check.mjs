@@ -703,6 +703,44 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			JSON.stringify({ scrollTop: Math.round(box?.scrollTop ?? -1), scrollHeight: Math.round(box?.scrollHeight ?? -1), clientHeight: Math.round(box?.clientHeight ?? -1) })
 		);
 	}
+	// 对话优先：&dialogfirst=1 勾上后，像聊天的消息即使 plan 判出图也走 /chat/say
+	if (new URLSearchParams(location.search).get("dialogfirst") === "1") {
+		const ctxToggle = host.querySelector("[data-context-toggle]");
+		if (ctxToggle) {
+			flushSync(() => ctxToggle.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			await wait(300);
+		}
+		const firstBox = host.querySelector("[data-dialog-first]");
+		if (firstBox) {
+			flushSync(() => firstBox.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			await wait(250);
+		}
+		if (ctxToggle) {
+			flushSync(() => ctxToggle.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			await wait(250);
+		}
+		const dfInput = host.querySelector(".vig-input");
+		if (dfInput) {
+			const dfSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+			flushSync(() => {
+				dfSetter.call(dfInput, "随便聊聊最近怎么样");
+				dfInput.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			await wait(250);
+			const dfSend = host.querySelector(".vig-send");
+			if (dfSend) {
+				flushSync(() => dfSend.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+				await wait(1600);
+			}
+		}
+		const dfChat = posts.filter((item) => item.path.startsWith("/chat/say")).pop();
+		const dfGen = posts.filter((item) => item.path.startsWith("/generate"));
+		check(
+			"对话优先：勾上后像聊天的消息走 /chat/say，不触发生图",
+			Boolean(dfChat) && dfGen.length === 0,
+			JSON.stringify({ chat: Boolean(dfChat), generate: dfGen.length })
+		);
+	}
 	// 竞态：&race=1 连发两条（不等第一条处理完）——plan 必须串行（并发峰值 1），且渲染顺序不乱
 	if (new URLSearchParams(location.search).get("race") === "1") {
 		const input = host.querySelector(".vig-input");

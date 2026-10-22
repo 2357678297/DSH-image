@@ -73,8 +73,7 @@ window.__ModuleLoader__.load({
 		// 端点协议选择：宿主老版本还没有 config.defaultEndpoint 这个字段（重启后才吃到），
 		// 本地存一份，选择在刷新之间就不会丢。
 		const ENDPOINT_KEY = "dsh.velapi-image-go.endpoint";
-		// 聊天模式：input 里的消息走对话模型回答（/chat/message），不触发生图
-		const CHAT_MODE_KEY = "dsh.velapi-image-go.chatmode";
+
 		// 侧栏面板挂载时广播：停靠面板据此让位（避免同一个入口在窗口上出现两次）
 		const PANE_EVENT = "velapi-image-go:rightbar-pane";
 		let rightbarPaneMounted = false;
@@ -402,8 +401,6 @@ window.__ModuleLoader__.load({
 			"chat.contextTurns": "上下文轮数",
 			"chat.contextNoAuto": "限制上下文模型直接调供应商出图",
 			"chat.contextNoAutoHint": "开启后只按你的原话出图，它只做整理与分类。",
-			"chat.chatModeOn": "聊天模式：开 —— 只和对话模型对话，不出图（点一下切回生图）",
-			"chat.chatModeOff": "聊天模式：关 —— 现在发出去的消息会生图；点开只聊天",
 			"chat.contextChatModel": "对话模型",
 			"chat.contextChatModelHint": "只用它把历史整理成提示词，不参与生图；生图模型在输入框那一行选。",
 			"chat.contextWired": "已读取：对话 {chat} · 生图 {image} · 尺寸 {size}",
@@ -3466,7 +3463,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function ChatView({ state, actions }) {
-			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels, chatMode } = state;
+			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels } = state;
 			const [overLimit, setOverLimit] = useState(false);
 			// 上下文管理改成「对话式」：点 ✨ 打开一块设置浮层（自动整理 / 轮数 / 限制直接出图 / 已读取配置）
 			const [contextPanelOpen, setContextPanelOpen] = useState(false);
@@ -3839,18 +3836,6 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					h(
 						"div",
 						{ className: `vig-tools${toolsOpen ? " is-open" : ""}` },
-						// 聊天模式开关：开 = 输入区的话交给对话模型回答（/chat/message），不出图
-						h(
-							"button",
-							{
-								className: `vig-tool${chatMode ? " is-on" : ""}`,
-								title: chatMode ? t("chat.chatModeOn") : t("chat.chatModeOff"),
-								"aria-pressed": chatMode ? "true" : "false",
-								"data-chat-mode": "1",
-								onClick: () => actions.toggleChatMode()
-							},
-							h(Icon, { name: "note", size: 14 })
-						),
 						// 上下文管理：点 ✨ 打开「对话式」设置浮层（不再是简单的一键开关）
 						h(
 							"div",
@@ -4205,6 +4190,16 @@ h(
 			}
 			return modelAbility(id);
 		}
+		/** 看起来像「聊天/提问」而不是出图指令（上下文模型失效时的兜底判断）。 */
+		function looksLikeChat(text) {
+			const value = String(text || "").trim();
+			if (!value) return false;
+			if (/[?？]|吗|呢|什么|谁|怎么|为什么|如何|是不是|对不对|帮我看看|解释|介绍|你好|在吗/.test(value)) return true;
+			// 很短又没有出图动词：多半是聊天
+			const drawVerb = /画|生成|出图|做一张|来一张|改|修|换|重绘|合成|加|去掉|删掉|调亮|调暗|裁剪|旋转|放大|缩小|风格/;
+			return value.length <= 12 && !drawVerb.test(value);
+		}
+
 		/** 当前协议可用的模型（图片/视频两组都给；音频/对话/向量不进生图下拉）。 */
 		function usableModelsFor(catalog) {
 			return (catalog?.models || []).filter((id) => {
@@ -10811,14 +10806,7 @@ h(
 			const [conversations, setConversations] = useState([]);
 			const [conversationId, setConversationId] = useState(() => window.localStorage.getItem(CONV_KEY) || "");
 			const [contextOn, setContextOn] = useState(() => window.localStorage.getItem(CONTEXT_KEY) !== "0");
-			// 聊天模式（持久化）：只和对话模型对话，不出图
-			const [chatMode, setChatMode] = useState(() => {
-				try {
-					return window.localStorage.getItem(CHAT_MODE_KEY) === "1";
-				} catch (error) {
-					return false;
-				}
-			});
+
 			// 「限制上下文模型直接调供应商出图」：默认限制（true）；存在本地，generate 与面板共用
 			const [contextNoAutoImage, setContextNoAutoImage] = useState(() => {
 				try {
@@ -11181,16 +11169,7 @@ h(
 					}
 				},
 				toggleContext: () => setContextOn((value) => !value),
-				toggleChatMode: () =>
-					setChatMode((value) => {
-						const next = !value;
-						try {
-							window.localStorage.setItem(CHAT_MODE_KEY, next ? "1" : "0");
-						} catch (error) {
-							/* 隐私模式写不了就只活这次 */
-						}
-						return next;
-					}),
+
 				toggleContextNoAutoImage: () =>
 					setContextNoAutoImage((value) => {
 						const next = !value;
@@ -11204,25 +11183,6 @@ h(
 				generate: async () => {
 					const rawPrompt = draft.trim();
 					if (rawPrompt.length === 0) return;
-					/* 聊天模式：这句话交给对话模型回答（/chat/message），不触碰生图链路。
-					   用户问「你是谁」这类问题时不该被强制打到 /images/generations。 */
-					if (chatMode) {
-						setGenerating(true);
-						try {
-							const payload = await call("/chat/say", {
-								method: "POST",
-								body: { message: rawPrompt, conversationId, chatModel: config.chatModel || "" }
-							});
-							const replyJob = { ...(payload.job || {}), userText: rawPrompt, images: [] };
-							setJobs((list) => [replyJob, ...list.filter((item) => item.id !== replyJob.id)]);
-							setDraft("");
-						} catch (error) {
-							toast(String(error?.message ?? error), "err");
-						} finally {
-							setGenerating(false);
-						}
-						return;
-					}
 					/* 模型隔离：对话/音频/向量模型不能生图（上游会回 404「模型不存在」）——
 					   选错了就别发请求，这里直接把原因说清楚。 */
 					const modelKind = modelKindOf(config.defaultModel, providers);
@@ -11257,6 +11217,17 @@ h(
 						let planNote = "";
 						/* 上下文管理（默认开）：把本会话最近几轮交给对话模型，整理出这一轮的提示词。
 						   只喂当前会话的 jobs —— 新对话没有历史，记忆天然隔离。 */
+						/* 聊天意图兜底：上下文模型没给出可用判断（不可用 / 解析失败）时，
+						   提问、闲聊这类消息直接交给对话模型回答，不硬打到生图端口。 */
+						const replyWithChat = async (text) => {
+							const payload = await call("/chat/say", {
+								method: "POST",
+								body: { message: text, conversationId, chatModel: config.chatModel || "" }
+							});
+							const replyJob = { ...(payload.job || {}), userText: text, images: [] };
+							setJobs((list) => [replyJob, ...list.filter((item) => item.id !== replyJob.id)]);
+							setDraft("");
+						};
 						if (contextOn) {
 							try {
 								const turns = Math.max(1, Number(config.contextTurns) || 6);
@@ -11284,6 +11255,18 @@ h(
 										history
 									}
 								});
+								/* 上下文模型没判出（不可用/解析失败）+ 这句话像聊天 → 交给对话模型回答，不生图。 */
+								if (!plan?.ok && looksLikeChat(rawPrompt)) {
+									try {
+										await replyWithChat(rawPrompt);
+										setGenerating(false);
+										return;
+									} catch (chatError) {
+										toast(String(chatError?.message ?? chatError), "err");
+										setGenerating(false);
+										return;
+									}
+								}
 								if (plan?.ok && plan.action === "reply" && plan.reply) {
 									// 用户这句话是在纠正/讨论，不是要出图：只回一句话，留在会话历史里
 									const msgPayload = await call("/chat/message", {
@@ -11313,6 +11296,18 @@ h(
 									else effectiveMode = "generate";
 								}
 							} catch (error) {
+								// 上下文模型连不上：聊天意图走对话模型兜底，其余才提示后继续生图
+								if (looksLikeChat(rawPrompt)) {
+									try {
+										await replyWithChat(rawPrompt);
+										setGenerating(false);
+										return;
+									} catch (chatError) {
+										toast(String(chatError?.message ?? chatError), "err");
+										setGenerating(false);
+										return;
+									}
+								}
 								toast(t("chat.planFailed"));
 							}
 						}
@@ -11891,7 +11886,6 @@ h(
 				conversationId,
 				contextOn,
 				contextNoAutoImage,
-				chatMode,
 				isVideoEndpoint,
 				chatModels
 			};

@@ -3349,6 +3349,14 @@ check(
       /update\.clickAgain/.test(SOURCE)
   );
   check(
+    "上下文管理接聊天：plan 判不出且像聊天时走 /chat/say（不硬生图，也没单独的聊天模式开关）",
+    /function looksLikeChat\(text\)/.test(SOURCE) &&
+      /const replyWithChat = async \(text\) => \{/.test(SOURCE) &&
+      /if \(!plan\?\.ok && looksLikeChat\(rawPrompt\)\)/.test(SOURCE) &&
+      /await call\("\/chat\/say", \{/.test(SOURCE) &&
+      !/data-chat-mode/.test(SOURCE)
+  );
+  check(
     "模型 kind 只认目录元数据（不再按名字猜视频：wan3.0-video-1080p 不会被误切视频协议）",
     /function modelKindOf\(id, providers\)/.test(SOURCE) &&
       !/VIDEO_NAME_HINT/.test(SOURCE) &&

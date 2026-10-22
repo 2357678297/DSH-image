@@ -192,6 +192,8 @@ window.fetch = async (url, init) => {
 		return json({ ok: true, removedJobs: 1, items: withConvCounts() });
 	}
 	if (pathname.startsWith("/chat/plan")) {
+		// 上下文模型失效场景：?planfail=1 让 /chat/plan 回 ok:false，验证聊天意图会走 /chat/say 兜底
+		if (new URLSearchParams(location.search).get("planfail") === "1") return json({ ok: false, code: "plan_failed", error: "mock plan failure" });
 		const userSaid = String(body?.message || "");
 		return userSaid.includes("乱搞")
 			? json({
@@ -690,13 +692,8 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			JSON.stringify({ scrollTop: Math.round(box?.scrollTop ?? -1), scrollHeight: Math.round(box?.scrollHeight ?? -1), clientHeight: Math.round(box?.clientHeight ?? -1) })
 		);
 	}
-	// 聊天模式：&chatmode=1 打开开关后发消息，应走 /chat/message 而不是 /generate
-	if (new URLSearchParams(location.search).get("chatmode") === "1") {
-		const chatToggle = host.querySelector("[data-chat-mode]");
-		if (chatToggle) {
-			flushSync(() => chatToggle.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-			await wait(300);
-		}
+	// 上下文管理接入聊天：&planfail=1（上下文模型失效）发「你是谁」→ 应走 /chat/say 回答，不生图
+	if (new URLSearchParams(location.search).get("planfail") === "1") {
 		const chatInput = host.querySelector(".vig-input");
 		if (chatInput) {
 			const inputSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
@@ -708,13 +705,13 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			const sendBtn = host.querySelector(".vig-send");
 			if (sendBtn) {
 				flushSync(() => sendBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-				await wait(900);
+				await wait(1200);
 			}
 		}
 		const chatMsgPost = posts.filter((item) => item.path.startsWith("/chat/say")).pop();
-		const generated = posts.filter((item) => item.path.startsWith("/generate")); 
+		const generated = posts.filter((item) => item.path.startsWith("/generate"));
 		check(
-			"聊天模式：消息走 /chat/say（对话模型回答），不触发 /images/generations",
+			"上下文模型失效时聊天意图走 /chat/say（不触发 /images/generations）",
 			Boolean(chatMsgPost) && generated.length === 0,
 			JSON.stringify({ chat: Boolean(chatMsgPost), generate: generated.length })
 		);

@@ -119,10 +119,12 @@ const providers = [
 		enabled: true,
 		keyMask: "sk-••••mQcp",
 		usesRuntimeKey: false,
-		models: ["grok-4.6", "grok-imagine-image", "omni-flash", "suno", "wan3.0-video-1080p"],
+		models: ["grok-4.6", "grok-4.7", "grok-imagine-image", "omni-flash", "suno", "wan3.0-video-1080p"],
 		// kind 来自中转站目录（image / video / audio / chat）：模型下拉按它过滤
 		modelMeta: {
 			"grok-4.6": { kind: "chat" },
+			// 真实情况：grok 目录不给 kind，grok-4.7（对话模型）只能靠能力关键词认出来
+			"grok-4.7": { kind: "" },
 			"grok-imagine-image": { kind: "image" },
 			"omni-flash": { kind: "video", label: "omni" },
 			suno: { kind: "audio" }
@@ -624,7 +626,7 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 	}
 	}
 	// 对话模型被当成生图模型（上游 404「模型不存在」）：打开后应自动切到可用图片模型
-	if (new URLSearchParams(location.search).get("model") === "grok-4.6") {
+	if (["grok-4.6", "grok-4.7"].includes(new URLSearchParams(location.search).get("model"))) {
 		await wait(1400);
 		const switchPost = posts.filter((item) => item.path.startsWith("/config") && item.body && item.body.defaultModel).pop();
 		const shown = text(host.querySelector(".vig-pick-text") || host);
@@ -669,6 +671,16 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			"刷新后停在最新一条：图片撑高也贴着底部",
 			Boolean(box) && box.scrollHeight - box.scrollTop - box.clientHeight < 40,
 			JSON.stringify({ scrollTop: Math.round(box?.scrollTop ?? -1), scrollHeight: Math.round(box?.scrollHeight ?? -1), clientHeight: Math.round(box?.clientHeight ?? -1) })
+		);
+	}
+	// 协议隔离：生图工作台的协议下拉只该有 自动检测 / 图片生成 / 图片编辑 / 视频生成
+	{
+		const endpointSelect = host.querySelector(".vig-tools-pop .vig-endpoint");
+		const labels = endpointSelect ? Array.from(endpointSelect.options).map((option) => text(option)) : [];
+		check(
+			"协议隔离：协议下拉只有自动/图片/视频（对话、Anthropic、Gemini、重排、向量都不列）",
+			labels.length > 0 && labels.every((label) => /自动|图片|视频/.test(label)) && !labels.some((label) => /对话|Anthropic|Gemini|重排|向量|Responses/.test(label)),
+			JSON.stringify(labels)
 		);
 	}
 	// 截图用：&popover=tools 展开工具面板 / &popover=model 打开模型下拉

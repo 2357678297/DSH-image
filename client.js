@@ -3568,7 +3568,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			   音频 / 向量 / 对话模型不进这个下拉（用户要求：视频参数与图片配置区分开）。
 			   分类以宿主给的 modelMeta.kind 为准（中转站目录里带的），没有元数据的按图片算。 */
 			const endpointKind = isVideoEndpoint ? "video" : "image";
-			const pickerModels = usableModelsFor(catalog, isVideoEndpoint);
+			const pickerModels = usableModelsFor(catalog);
 			/* 切到视频协议时，当前模型如果还是图片模型，自动换成该协议下的第一个可用模型
 			   （否则下拉里选不到、发出去也多半会报错）。*/
 			useEffect(() => {
@@ -4093,7 +4093,7 @@ h(
 								title: `${t("prov.endpoint")}：${protocolLabel(state.protocols, endpoint)}\n${t("prov.endpointHint")}`,
 								onChange: (event) => void actions.saveConfig({ defaultEndpoint: event.target.value })
 							},
-							protocolOptions(state.protocols).map((option) =>
+							protocolOptions((state.protocols || []).filter((item) => ["auto", "image", "video"].includes(item.kind))).map((option) =>
 								h("option", { key: option.id, value: option.id, title: option.label }, protocolShortLabel(option.id))
 							)
 						),
@@ -4140,21 +4140,36 @@ h(
 			return { models: [...ids], meta, owners };
 		}
 
-		/* 模型是出图还是出视频：**只认目录里的 kind**（中转站 image_family / video_family 带的）。
-		   不再按名字兜底 —— 实测踩过：wan3.0-video-1080p 名字带 video，但上游把它注册成图片模型，
-		   按名字猜成视频会直接 400「不是视频模型」。没有 kind 的模型按图片处理，视频协议由用户手动切。 */
+		/* 模型能干什么：先看目录 kind（权威），**没有元数据时按能力关键词判**。
+		   踩过的两个坑：① wan3.0-video-1080p 名字带 video 但上游当图片模型（所以 wan 不进视频词表）；
+		   ② grok 目录不给 kind，grok-4.7（对话）会被当成图片模型直接 404（所以要能认出对话模型）。
+		   关键词判断顺序：图片 → 视频 → 音频 → 对话；都不命中返回 ""（按图片显示，由用户自己切协议）。 */
+		const MODEL_ABILITY = [
+			["image", /(^|[-_.])(image|imagine|imagen|dall-?e|flux|banana|seedream|seededit|kolors|recraft|photo|paint)([-_.]|$)/i],
+			["video", /(^|[-_.])(video|veo|sora|kling|hailuo|seedance|vidu|runway|pika|t2v|i2v)([-_.]|$)/i],
+			["audio", /(^|[-_.])(suno|tts|whisper|audio|music|speech|voice)([-_.]|$)/i],
+			["chat", /claude|gpt-[0-9]|gpt-4|gpt-5|gemini|glm|qwen|kimi|deepseek|llama|grok|chat|reasoner|o[1-4](?:-|\.|$)/i]
+		];
+		function modelAbility(id) {
+			const text = String(id || "");
+			for (const [kind, pattern] of MODEL_ABILITY) {
+				if (pattern.test(text)) return kind;
+			}
+			return "";
+		}
 		function modelKindOf(id, providers) {
 			for (const provider of providers || []) {
 				const kind = provider?.modelMeta?.[id]?.kind;
 				if (typeof kind === "string" && kind) return kind;
 			}
-			return "";
+			return modelAbility(id);
 		}
 		/** 当前协议可用的模型（图片/视频两组都给；音频/对话/向量不进生图下拉）。 */
-		function usableModelsFor(catalog, isVideoEndpoint) {
+		function usableModelsFor(catalog) {
 			return (catalog?.models || []).filter((id) => {
-				const kind = (catalog?.meta?.[id] || {}).kind || "";
-				return !kind || kind === "image" || kind === "video";
+				const kind = (catalog?.meta?.[id] || {}).kind || modelAbility(id);
+				if (!kind) return true;
+				return kind === "image" || kind === "video";
 			});
 		}
 
@@ -11726,6 +11741,17 @@ h(
 					}
 				}
 			};
+
+			/* 协议隔离：生图工作台的协议只该是「自动检测 / 图片生成 / 图片编辑 / 视频生成」。
+			   如果配置停在「OpenAI 对话 / Responses / Anthropic / Gemini / 重排 / 向量」这类聊天协议上
+			   （生图请求会被打到 /chat/completions，注定画不出图），自动纠正成图片生成。 */
+			useEffect(() => {
+				if (!protocols.length) return;
+				const hit = protocols.find((item) => item.id === (config.defaultEndpoint || "auto"));
+				if (!hit) return;
+				if (["auto", "image", "video"].includes(hit.kind)) return;
+				void actions.saveConfig({ defaultEndpoint: "images_generations" });
+			}, [config.defaultEndpoint, protocols]); // eslint-disable-line react-hooks/exhaustive-deps
 
 			/* 生图模型自愈：当前模型是对话/音频/向量模型，或不在任何供应商目录里时，
 			   上游会 404「模型不存在」—— 直接换成目录里第一个可生图的模型（图片/视频按协议挑）。 */

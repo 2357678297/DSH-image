@@ -3424,7 +3424,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							)
 						)
 					: null,
-				h(
+				// 生成任务/失败卡（对话轮 reply 已经在上面的气泡里画过，不再套一层空壳）
+				job.kind === "reply"
+					? null
+					: h(
 					"article",
 					{ className: "vig-turn" },
 					h("div", { className: "vig-avatar" }, "AI"),

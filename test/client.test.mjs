@@ -3418,7 +3418,7 @@ check(
         html.includes("乱搞，S3 就是我发的参考图机器人") &&
         html.includes("抱歉，S3 指的是你参考图里那台扫地机器人") &&
         !html.includes("vig-shot") &&
-        (html.match(/class="vig-bubble"/g) || []).length === 2
+        (html.match(/class="vig-bubble"/g) || []).length === 1
       );
     })()
   );

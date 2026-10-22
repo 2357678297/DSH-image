@@ -126,7 +126,7 @@ const sendPrompt = async (text) => {
 	const area = host.querySelector("textarea.vig-input");
 	flushSync(() => setNative(area, text, window.HTMLTextAreaElement.prototype));
 	await wait(120);
-	const send = host.querySelector("button.vig-send");
+	const send = host.querySelector("[data-force-generate]");
 	flushSync(() => send.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 	// 等这一轮跑完（按钮上的转圈消失）再发下一次，不然按钮是 disabled 的
 	await waitFor(() => !host.querySelector(".vig-send .vig-spin"), 5000);

@@ -714,63 +714,53 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			JSON.stringify({ scrollTop: Math.round(box?.scrollTop ?? -1), scrollHeight: Math.round(box?.scrollHeight ?? -1), clientHeight: Math.round(box?.clientHeight ?? -1) })
 		);
 	}
-	// 显式模式切换：&mode=dialog 点「对话」后发消息 → 走 /chat/say，不生图
-	if (new URLSearchParams(location.search).get("mode") === "dialog") {
-		const dialogBtn = host.querySelector('[data-mode="dialog"]');
-		if (dialogBtn) {
-			flushSync(() => dialogBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-			await wait(300);
-		}
-		const modeInput = host.querySelector(".vig-input");
-		if (modeInput) {
-			const modeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+	// 生图作为工具：&agent=1 发送消息 → 走 /chat/agent（LLM 决定聊天还是调 generate_image）
+	if (new URLSearchParams(location.search).get("agent") === "1") {
+		const agentInput = host.querySelector(".vig-input");
+		if (agentInput) {
+			const agentSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
 			flushSync(() => {
-				modeSetter.call(modeInput, "你是谁");
-				modeInput.dispatchEvent(new Event("input", { bubbles: true }));
+				agentSetter.call(agentInput, "你是谁");
+				agentInput.dispatchEvent(new Event("input", { bubbles: true }));
 			});
 			await wait(250);
-			const modeSend = host.querySelector(".vig-send");
-			if (modeSend) {
-				flushSync(() => modeSend.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			const agentSend = host.querySelector(".vig-send");
+			if (agentSend) {
+				flushSync(() => agentSend.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 				await wait(1600);
 			}
 		}
-		const modeChat = posts.filter((item) => item.path.startsWith("/chat/agent")).pop();
-		const modeGen = posts.filter((item) => item.path.startsWith("/generate"));
+		const agentPost = posts.filter((item) => item.path.startsWith("/chat/agent")).pop();
+		const agentGen = posts.filter((item) => item.path.startsWith("/generate"));
 		check(
-			"模式切换「对话」：消息走 /chat/agent（LLM 决定是否调 generate_image 工具），不直接触发生图",
-			Boolean(modeChat) && modeGen.length === 0,
-			JSON.stringify({ chat: Boolean(modeChat), generate: modeGen.length })
+			"发送默认交给对话 agent（/chat/agent），不直接触发生图",
+			Boolean(agentPost) && agentGen.length === 0,
+			JSON.stringify({ agent: Boolean(agentPost), generate: agentGen.length })
 		);
 	}
-	// 显式模式切换：&mode=image 点「图片」后发消息 → 直接生图（默认不调 plan）
-	if (new URLSearchParams(location.search).get("mode") === "image") {
-		const imageBtn = host.querySelector('[data-mode="image"]');
-		if (imageBtn) {
-			flushSync(() => imageBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-			await wait(300);
-		}
-		const imgInput = host.querySelector(".vig-input");
-		if (imgInput) {
-			const imgSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+	// 生图作为工具：&force=1 点「生成图片」→ 跳过 agent，直接 /generate
+	if (new URLSearchParams(location.search).get("force") === "1") {
+		const forceInput = host.querySelector(".vig-input");
+		if (forceInput) {
+			const forceSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
 			flushSync(() => {
-				imgSetter.call(imgInput, "画一只柴犬");
-				imgInput.dispatchEvent(new Event("input", { bubbles: true }));
+				forceSetter.call(forceInput, "画一只柴犬");
+				forceInput.dispatchEvent(new Event("input", { bubbles: true }));
 			});
 			await wait(250);
-			const imgSend = host.querySelector(".vig-send");
-			if (imgSend) {
-				flushSync(() => imgSend.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			const forceBtn = host.querySelector("[data-force-generate]");
+			if (forceBtn) {
+				flushSync(() => forceBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 				await wait(1200);
 			}
 		}
-		const imgGen = posts.filter((item) => item.path.startsWith("/generate")).pop();
-		const imgPlan = posts.filter((item) => item.path.startsWith("/chat/plan"));
-		const imgChat = posts.filter((item) => item.path.startsWith("/chat/say"));
+		const forceGen = posts.filter((item) => item.path.startsWith("/generate")).pop();
+		const forceAgent = posts.filter((item) => item.path.startsWith("/chat/agent"));
+		const forcePlan = posts.filter((item) => item.path.startsWith("/chat/plan"));
 		check(
-			"模式切换「图片」：直接 /generate（默认不调 plan、不调 /chat/say）",
-			Boolean(imgGen) && imgPlan.length === 0 && imgChat.length === 0,
-			JSON.stringify({ generate: Boolean(imgGen), plan: imgPlan.length, chat: imgChat.length })
+			"「生成图片」按钮：跳过 agent 直接 /generate",
+			Boolean(forceGen) && forceAgent.length === 0 && forcePlan.length === 0,
+			JSON.stringify({ generate: Boolean(forceGen), agent: forceAgent.length, plan: forcePlan.length })
 		);
 	}
 	// 竞态：&race=1 连发两条（不等第一条处理完）——plan 必须串行（并发峰值 1），且渲染顺序不乱
@@ -1245,7 +1235,7 @@ check(
 	await wait(200);
 	let sendReady2 = false;
 	for (let round = 0; round < 25; round += 1) {
-		const candidate = host.querySelector("button.vig-send");
+		const candidate = host.querySelector("[data-force-generate]");
 		if (candidate && !candidate.disabled) {
 			sendReady2 = true;
 			break;
@@ -1253,7 +1243,7 @@ check(
 		await wait(200);
 	}
 	const genBeforeMulti = posts.filter((item) => item.path.startsWith("/generate")).length;
-	flushSync(() => host.querySelector("button.vig-send").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+	flushSync(() => host.querySelector("[data-force-generate]").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 	await wait(1500);
 	const multiPost = posts.filter((item) => item.path.startsWith("/generate")).slice(genBeforeMulti).pop();
 	check(
@@ -1319,28 +1309,17 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 	await wait(200);
 	// 「优化提示词」是按需勾选的：先打开，否则 /chat/plan 不会被调用
 	const ctxToggleForPlan = host.querySelector("[data-context-toggle]");
-	if (ctxToggleForPlan) {
-		flushSync(() => ctxToggleForPlan.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-		await wait(300);
-		const autoBox = host.querySelector("[data-context-auto]");
-		if (autoBox && !autoBox.checked) flushSync(() => autoBox.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-		await wait(200);
-		flushSync(() => ctxToggleForPlan.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-		await wait(250);
-	}
+	// 默认发送 = 对话 agent：纠正/聊天不触发生图
 	const genBeforeReply = posts.filter((item) => item.path.startsWith("/generate")).length;
-	flushSync(() => host.querySelector("button.vig-send").dispatchEvent(new MouseEvent("click", { bubbles: true })));
-	await wait(900);
+	flushSync(() => host.querySelector(".vig-send").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+	await wait(1600);
 	const genAfterReply = posts.filter((item) => item.path.startsWith("/generate")).length;
-	const msgPost = posts.filter((item) => item.path.startsWith("/chat/message")).pop();
-	const replyTextShown = Array.from(host.querySelectorAll(".vig-text")).some((node) => node.textContent.includes("扫地机器人"));
+	const agentPost = posts.filter((item) => item.path.startsWith("/chat/agent")).pop();
+	const replyTextShown = Array.from(host.querySelectorAll(".vig-text")).some((node) => node.textContent.includes("对话助手"));
 	check(
-		"纠正不出图：没有再打 /generate，一句话回进会话历史",
-		genAfterReply === genBeforeReply && Boolean(msgPost) && String(msgPost.body.reply || "").includes("S3") && replyTextShown,
-		JSON.stringify({
-			gen: genBeforeReply + " → " + genAfterReply,
-			msg: msgPost ? msgPost.body.reply.slice(0, 20) : null
-		})
+		"纠正/聊天不触发生图：默认发送交给对话 agent，回复进会话",
+		genAfterReply === genBeforeReply && Boolean(agentPost) && replyTextShown,
+		JSON.stringify({ gen: genBeforeReply + " → " + genAfterReply, agent: Boolean(agentPost) })
 	);
 }
 
@@ -1376,7 +1355,7 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 		// 上一条重试任务可能还在轮询：等发送按钮恢复可用再点
 		let sendReady = false;
 		for (let round = 0; round < 25; round += 1) {
-			const candidate = host.querySelector("button.vig-send");
+			const candidate = host.querySelector("[data-force-generate]");
 			if (candidate && !candidate.disabled) {
 				sendReady = true;
 				break;
@@ -1384,7 +1363,7 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 			await wait(200);
 		}
 		const genBefore2 = posts.filter((item) => item.path.startsWith("/generate")).length;
-		flushSync(() => host.querySelector("button.vig-send").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		flushSync(() => host.querySelector("[data-force-generate]").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await wait(900);
 		const lastEditPost = posts.filter((item) => item.path.startsWith("/generate")).slice(genBefore2).pop();
 		const sentImage = lastEditPost?.body?.image;
@@ -1462,7 +1441,7 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 		area.dispatchEvent(new Event("input", { bubbles: true }));
 	});
 	await wait(200);
-	flushSync(() => host.querySelector("button.vig-send").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+	flushSync(() => host.querySelector("[data-force-generate]").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 	await wait(900);
 	const planPost = posts.filter((item) => item.path.startsWith("/chat/plan")).pop();
 	const genPost = posts.filter((item) => item.path.startsWith("/generate")).pop();

@@ -3349,13 +3349,15 @@ check(
       /update\.clickAgain/.test(SOURCE)
   );
   check(
-    "显式模式切换：图片 / 对话（持久化，对话模式直接走 /chat/say 不生图）",
-    /data-mode": "image"/.test(SOURCE) &&
-      /data-mode": "dialog"/.test(SOURCE) &&
-      /const MODE_KEY = "dsh\.velapi-image-go\.mode"/.test(SOURCE) &&
-      /if \(sendMode === "dialog"\) \{/.test(SOURCE) &&
+    "生图作为工具：发送默认走 /chat/agent（LLM 调 generate_image），另有「生成图片」强制入口",
+    /call\("\/chat\/agent"/.test(SOURCE) &&
       /await replyWithChat\(rawPrompt\)/.test(SOURCE) &&
-      /chat\.dialogNotReady/.test(SOURCE)
+      /forceGenerate: async \(\) => \{/.test(SOURCE) &&
+      /data-force-generate/.test(SOURCE) &&
+      /enqueueSend\(rawPrompt, true\)/.test(SOURCE) &&
+      /chat\.dialogNotReady/.test(SOURCE) &&
+      !/vig-mode-switch/.test(SOURCE) &&
+      !/sendMode/.test(SOURCE)
   );
   check(
     "上下文管理接聊天：plan 判不出且像聊天时走 /chat/say（不硬生图，也没单独的聊天模式开关）",
@@ -3423,7 +3425,7 @@ check(
   check(
     "发送串行化：对话端口与生图端口不并发（sendChain 队列 + clientSeq 排序）",
     /const sendChainRef = useRef\(Promise\.resolve\(\)\)/.test(SOURCE) &&
-      /const runGenerateFlow = async \(rawPrompt, seq\) => \{/.test(SOURCE) &&
+      /const runGenerateFlow = async \(rawPrompt, seq, force = false\) => \{/.test(SOURCE) &&
       /pendingSendsRef\.current >= 6/.test(SOURCE) &&
       /clientSeq: seq/.test(SOURCE) &&
       /Number\.isFinite\(Number\(job\.clientSeq\)\)/.test(SOURCE)

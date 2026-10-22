@@ -404,7 +404,7 @@ window.__ModuleLoader__.load({
 			"chat.modeDialog": "对话",
 			"chat.modeImageHint": "图片模式：发消息就生图（勾了优化提示词会先让对话模型整理提示词）",
 			"chat.modeDialogHint": "对话模式：发消息交给对话模型回答，不出图",
-			"chat.dialogNotReady": "对话端点未就绪：DSH 需要重启一次才能用「对话」模式",
+			"chat.dialogNotReady": "对话端点未就绪：先刷新页面（F5）重试；仍不行再重启 DSH",
 			"chat.contextDesc": "只负责整理提示词与读取配置，不直接调用供应商出图。",
 			"chat.contextAuto": "优化提示词",
 			"chat.contextTurns": "上下文轮数",

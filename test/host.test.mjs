@@ -1002,7 +1002,7 @@ mockProvider = await saveMockProvider({
   check(
     "POST /chat/say：聊天模式真的问对话模型，落一条 reply job（不触发生图）",
     say.status === 200 && say.body?.ok === true && say.body?.job?.kind === "reply" && String(say.body?.job?.reply || "").length > 0,
-    JSON.stringify({ status: say.status, kind: say.body?.job?.kind ?? null, replyLen: String(say.body?.job?.reply || "").length })
+    JSON.stringify({ status: say.status, body: say.body })
   );
   const editPlan = await call("/chat/plan", { method: "POST", body: { message: "在上一张基础上再柔和点", draft: "在上一张基础上再柔和点", model: "mock-image" } });
   check(

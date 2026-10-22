@@ -1285,6 +1285,17 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 		area2.dispatchEvent(new Event("input", { bubbles: true }));
 	});
 	await wait(200);
+	// 「优化提示词」是按需勾选的：先打开，否则 /chat/plan 不会被调用
+	const ctxToggleForPlan = host.querySelector("[data-context-toggle]");
+	if (ctxToggleForPlan) {
+		flushSync(() => ctxToggleForPlan.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await wait(300);
+		const autoBox = host.querySelector("[data-context-auto]");
+		if (autoBox && !autoBox.checked) flushSync(() => autoBox.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await wait(200);
+		flushSync(() => ctxToggleForPlan.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await wait(250);
+	}
 	const genBeforeReply = posts.filter((item) => item.path.startsWith("/generate")).length;
 	flushSync(() => host.querySelector("button.vig-send").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 	await wait(900);
@@ -1401,6 +1412,17 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 		JSON.stringify(newConvPost ? newConvPost.body : null)
 	);
 	// 上下文管理：一句话 → 先 /chat/plan（新会话 history 为空），再按改写后的提示词 /generate
+	// 「优化提示词」是按需勾选的：先打开，否则 /chat/plan 不会被调用
+	const ctxToggleForPlan = host.querySelector("[data-context-toggle]");
+	if (ctxToggleForPlan) {
+		flushSync(() => ctxToggleForPlan.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await wait(300);
+		const autoBox = host.querySelector("[data-context-auto]");
+		if (autoBox && !autoBox.checked) flushSync(() => autoBox.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await wait(200);
+		flushSync(() => ctxToggleForPlan.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await wait(250);
+	}
 	const area = host.querySelector("textarea.vig-input");
 	const areaSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
 	flushSync(() => {

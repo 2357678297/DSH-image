@@ -402,7 +402,7 @@ window.__ModuleLoader__.load({
 			"chat.dialogFirst": "对话优先",
 			"chat.dialogFirstHint": "开：消息先当聊天处理（对话模型直接回答），只有明确出图指令才生图。",
 			"chat.contextDesc": "只负责整理提示词与读取配置，不直接调用供应商出图。",
-			"chat.contextAuto": "每轮自动整理提示词",
+			"chat.contextAuto": "优化提示词",
 			"chat.contextTurns": "上下文轮数",
 			"chat.contextNoAuto": "限制上下文模型直接调供应商出图",
 			"chat.contextNoAutoHint": "开启后只按你的原话出图，它只做整理与分类。",
@@ -833,7 +833,7 @@ window.__ModuleLoader__.load({
 			"chat.contextOn": "Context manager: on — a chat model rewrites this conversation's history into the prompt each turn",
 			"chat.contextPanel": "Context manager · conversational",
 			"chat.contextDesc": "Only rewrites prompts and reads config — never calls a provider to draw images.",
-			"chat.contextAuto": "Rewrite the prompt each turn",
+			"chat.contextAuto": "Optimize prompt",
 			"chat.contextTurns": "Context turns",
 			"chat.contextNoAuto": "Stop the context model from calling a provider directly",
 			"chat.contextNoAutoHint": "When on, only your own words trigger generation — it just tidies up.",
@@ -3884,7 +3884,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										h(
 											"label",
 											{ className: "vig-ctx-row" },
-											h("input", { type: "checkbox", className: "vig-ctx-check", checked: contextOn, onChange: () => actions.toggleContext() }),
+											h("input", { type: "checkbox", className: "vig-ctx-check", checked: contextOn, "data-context-auto": "1", onChange: () => actions.toggleContext() }),
 											h("span", null, t("chat.contextAuto"))
 										),
 										/* 对话优先：勾上后消息先当聊天处理（对话模型直接回答），明确出图指令才生图 */
@@ -10839,7 +10839,8 @@ h(
 			// 对话（会话）：每个会话独立历史（新对话不继承记忆）；上下文管理默认开
 			const [conversations, setConversations] = useState([]);
 			const [conversationId, setConversationId] = useState(() => window.localStorage.getItem(CONV_KEY) || "");
-			const [contextOn, setContextOn] = useState(() => window.localStorage.getItem(CONTEXT_KEY) !== "0");
+			// 「优化提示词」按需勾选：默认关（不勾就按原话直接生图，不额外调用对话模型）
+			const [contextOn, setContextOn] = useState(() => window.localStorage.getItem(CONTEXT_KEY) === "1");
 			// 对话优先（持久化）：勾上后消息先走聊天，出图需要明确指令
 			const [dialogFirst, setDialogFirst] = useState(() => {
 				try {
@@ -11195,6 +11196,18 @@ h(
 							setJobs((list) => [replyJob, ...list.filter((item) => item.id !== replyJob.id)]);
 							setDraft("");
 						};
+						/* 对话优先（勾选）：聊天意图直接交给对话模型，不走优化提示词那一套。 */
+						if (dialogFirst && looksLikeChat(rawPrompt) && readyRefs.length === 0) {
+							try {
+								await replyWithChat(rawPrompt);
+								setGenerating(false);
+								return;
+							} catch (chatError) {
+								toast(String(chatError?.message ?? chatError), "err");
+								setGenerating(false);
+								return;
+							}
+						}
 						if (contextOn) {
 							try {
 								const turns = Math.max(1, Number(config.contextTurns) || 6);

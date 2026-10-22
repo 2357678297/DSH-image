@@ -3166,7 +3166,7 @@ check(
   check(
     "生成 / 重试都按模型挑供应商（重试不照抄老任务里那条错的 providerId）",
     /providerId: providerIdForModel\(providers, config\),/.test(SOURCE) &&
-      /providerId: providerIdForModel\(providers, config, job\.model\) \|\| job\.providerId \|\| config\.activeProviderId,/.test(SOURCE) &&
+      /providerId: providerIdForModel\(providers, config, retryModel\) \|\| job\.providerId \|\| config\.activeProviderId,/.test(SOURCE) &&
       // 检查器里那个「当前供应商」下拉也跟模型走，不然选完模型它还显示上一条
       /value: config\.activeProviderId \|\| providerIdForModel\(providers, config\) \|\| "",/.test(SOURCE)
   );

@@ -249,6 +249,23 @@ window.fetch = async (url, init) => {
 	}
 	if (pathname.startsWith("/upload")) return json({ ok: true, item: { url: "/api/velapi-image-go/upload/up_1.png" } });
 	if (pathname.startsWith("/job/delete")) return json({ ok: true, removed: (body?.ids || []).length });
+	if (pathname.startsWith("/chat/say")) {
+		return json({
+			ok: true,
+			job: {
+				id: "msg_say_1",
+				kind: "reply",
+				status: "succeeded",
+				mode: "chat",
+				prompt: body?.message ?? "",
+				userText: body?.message ?? "",
+				reply: "我是对话助手（mock）：你问的是「" + (body?.message ?? "") + "」",
+				model: body?.chatModel ?? "mock-chat",
+				images: [],
+				createdAt: new Date().toISOString()
+			}
+		});
+	}
 	if (pathname.startsWith("/chat/message")) {
 		return json({
 			ok: true,
@@ -671,6 +688,35 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			"刷新后停在最新一条：图片撑高也贴着底部",
 			Boolean(box) && box.scrollHeight - box.scrollTop - box.clientHeight < 40,
 			JSON.stringify({ scrollTop: Math.round(box?.scrollTop ?? -1), scrollHeight: Math.round(box?.scrollHeight ?? -1), clientHeight: Math.round(box?.clientHeight ?? -1) })
+		);
+	}
+	// 聊天模式：&chatmode=1 打开开关后发消息，应走 /chat/message 而不是 /generate
+	if (new URLSearchParams(location.search).get("chatmode") === "1") {
+		const chatToggle = host.querySelector("[data-chat-mode]");
+		if (chatToggle) {
+			flushSync(() => chatToggle.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			await wait(300);
+		}
+		const chatInput = host.querySelector(".vig-input");
+		if (chatInput) {
+			const inputSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+			flushSync(() => {
+				inputSetter.call(chatInput, "你是谁");
+				chatInput.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			await wait(250);
+			const sendBtn = host.querySelector(".vig-send");
+			if (sendBtn) {
+				flushSync(() => sendBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+				await wait(900);
+			}
+		}
+		const chatMsgPost = posts.filter((item) => item.path.startsWith("/chat/say")).pop();
+		const generated = posts.filter((item) => item.path.startsWith("/generate")); 
+		check(
+			"聊天模式：消息走 /chat/say（对话模型回答），不触发 /images/generations",
+			Boolean(chatMsgPost) && generated.length === 0,
+			JSON.stringify({ chat: Boolean(chatMsgPost), generate: generated.length })
 		);
 	}
 	// 协议隔离：生图工作台的协议下拉只该有 自动检测 / 图片生成 / 图片编辑 / 视频生成

@@ -73,6 +73,8 @@ window.__ModuleLoader__.load({
 		// 端点协议选择：宿主老版本还没有 config.defaultEndpoint 这个字段（重启后才吃到），
 		// 本地存一份，选择在刷新之间就不会丢。
 		const ENDPOINT_KEY = "dsh.velapi-image-go.endpoint";
+		// 聊天模式：input 里的消息走对话模型回答（/chat/message），不触发生图
+		const CHAT_MODE_KEY = "dsh.velapi-image-go.chatmode";
 		// 侧栏面板挂载时广播：停靠面板据此让位（避免同一个入口在窗口上出现两次）
 		const PANE_EVENT = "velapi-image-go:rightbar-pane";
 		let rightbarPaneMounted = false;
@@ -400,6 +402,8 @@ window.__ModuleLoader__.load({
 			"chat.contextTurns": "上下文轮数",
 			"chat.contextNoAuto": "限制上下文模型直接调供应商出图",
 			"chat.contextNoAutoHint": "开启后只按你的原话出图，它只做整理与分类。",
+			"chat.chatModeOn": "聊天模式：开 —— 只和对话模型对话，不出图（点一下切回生图）",
+			"chat.chatModeOff": "聊天模式：关 —— 现在发出去的消息会生图；点开只聊天",
 			"chat.contextChatModel": "对话模型",
 			"chat.contextChatModelHint": "只用它把历史整理成提示词，不参与生图；生图模型在输入框那一行选。",
 			"chat.contextWired": "已读取：对话 {chat} · 生图 {image} · 尺寸 {size}",
@@ -3462,7 +3466,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function ChatView({ state, actions }) {
-			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels } = state;
+			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels, chatMode } = state;
 			const [overLimit, setOverLimit] = useState(false);
 			// 上下文管理改成「对话式」：点 ✨ 打开一块设置浮层（自动整理 / 轮数 / 限制直接出图 / 已读取配置）
 			const [contextPanelOpen, setContextPanelOpen] = useState(false);
@@ -3835,6 +3839,18 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					h(
 						"div",
 						{ className: `vig-tools${toolsOpen ? " is-open" : ""}` },
+						// 聊天模式开关：开 = 输入区的话交给对话模型回答（/chat/message），不出图
+						h(
+							"button",
+							{
+								className: `vig-tool${chatMode ? " is-on" : ""}`,
+								title: chatMode ? t("chat.chatModeOn") : t("chat.chatModeOff"),
+								"aria-pressed": chatMode ? "true" : "false",
+								"data-chat-mode": "1",
+								onClick: () => actions.toggleChatMode()
+							},
+							h(Icon, { name: "note", size: 14 })
+						),
 						// 上下文管理：点 ✨ 打开「对话式」设置浮层（不再是简单的一键开关）
 						h(
 							"div",
@@ -10795,6 +10811,14 @@ h(
 			const [conversations, setConversations] = useState([]);
 			const [conversationId, setConversationId] = useState(() => window.localStorage.getItem(CONV_KEY) || "");
 			const [contextOn, setContextOn] = useState(() => window.localStorage.getItem(CONTEXT_KEY) !== "0");
+			// 聊天模式（持久化）：只和对话模型对话，不出图
+			const [chatMode, setChatMode] = useState(() => {
+				try {
+					return window.localStorage.getItem(CHAT_MODE_KEY) === "1";
+				} catch (error) {
+					return false;
+				}
+			});
 			// 「限制上下文模型直接调供应商出图」：默认限制（true）；存在本地，generate 与面板共用
 			const [contextNoAutoImage, setContextNoAutoImage] = useState(() => {
 				try {
@@ -11157,6 +11181,16 @@ h(
 					}
 				},
 				toggleContext: () => setContextOn((value) => !value),
+				toggleChatMode: () =>
+					setChatMode((value) => {
+						const next = !value;
+						try {
+							window.localStorage.setItem(CHAT_MODE_KEY, next ? "1" : "0");
+						} catch (error) {
+							/* 隐私模式写不了就只活这次 */
+						}
+						return next;
+					}),
 				toggleContextNoAutoImage: () =>
 					setContextNoAutoImage((value) => {
 						const next = !value;
@@ -11170,6 +11204,25 @@ h(
 				generate: async () => {
 					const rawPrompt = draft.trim();
 					if (rawPrompt.length === 0) return;
+					/* 聊天模式：这句话交给对话模型回答（/chat/message），不触碰生图链路。
+					   用户问「你是谁」这类问题时不该被强制打到 /images/generations。 */
+					if (chatMode) {
+						setGenerating(true);
+						try {
+							const payload = await call("/chat/say", {
+								method: "POST",
+								body: { message: rawPrompt, conversationId, chatModel: config.chatModel || "" }
+							});
+							const replyJob = { ...(payload.job || {}), userText: rawPrompt, images: [] };
+							setJobs((list) => [replyJob, ...list.filter((item) => item.id !== replyJob.id)]);
+							setDraft("");
+						} catch (error) {
+							toast(String(error?.message ?? error), "err");
+						} finally {
+							setGenerating(false);
+						}
+						return;
+					}
 					/* 模型隔离：对话/音频/向量模型不能生图（上游会回 404「模型不存在」）——
 					   选错了就别发请求，这里直接把原因说清楚。 */
 					const modelKind = modelKindOf(config.defaultModel, providers);
@@ -11364,13 +11417,16 @@ h(
 					if (prompt.length === 0 || generating) return;
 					setGenerating(true);
 					try {
+						/* 重试也要过模型隔离：老任务若记的是对话模型（修隔离之前误发的），
+						   用当前生图模型重试，否则会把 grok-4.7 再打到 /images/generations。 */
+						const retryModel = modelKindOf(job.model, providers) === "chat" ? config.defaultModel : job.model || config.defaultModel;
 						const payload = await call("/generate", {
 							method: "POST",
 							body: {
 								prompt,
-								model: job.model || config.defaultModel,
+								model: retryModel,
 								// 重试也要按模型挑供应商：老任务记的 providerId 可能正是当初打错的那条
-								providerId: providerIdForModel(providers, config, job.model) || job.providerId || config.activeProviderId,
+								providerId: providerIdForModel(providers, config, retryModel) || job.providerId || config.activeProviderId,
 								size: job.size || config.defaultSize,
 								quality: job.quality || config.defaultQuality,
 								n: job.count || config.defaultCount,
@@ -11835,6 +11891,7 @@ h(
 				conversationId,
 				contextOn,
 				contextNoAutoImage,
+				chatMode,
 				isVideoEndpoint,
 				chatModels
 			};

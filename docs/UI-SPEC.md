@@ -396,6 +396,7 @@
 - **v2.3（图库布局密度）**：工具行加「小图 / 标准 / 大图」三段胶囊，密度记在 localStorage；图片一律 1:1 裁切（竖图不再把卡片撑高，网格行高统一），卡片 `align-self:start` + `min-width:0` 保证任意容器宽度下都不会退化成单列巨图；
 - 截图：`docs/ui-audit/layout-compact.png` / `layout-standard.png` / `layout-large.png`（`node tools/viewer-check.mjs --hold library --query "hold=library&density=large" --shot x.png`）。
 - **v2.30（更新通道两段式）**：第一次点更新 = 检查（check），查到 behind 后再点一次 = 拉取（`/update/apply`，`git pull --ff-only`，本地脏则拒绝并提示）+ 重启（`/update/restart` 调 ASCII 版 restart 脚本，15 秒后宿主重启）；
+- **v2.36（聊天模式 + 重试隔离）**：输入区左侧新增聊天模式开关（`data-chat-mode`，黑色高亮=开）——开时消息走宿主新端点 `POST /chat/say`（真的问对话模型，落 reply job，不触发 `/generate`）；关时照常生图。对话模型在 ✨ 浮层里选。重试也会把「历史里记着对话模型」的任务改用当前生图模型重试（否则会再把 grok-4.7 打到 /images/generations 报 400）；host 134 含 /chat/say 用例、真机断言「走 /chat/say 且 /generate=0」；
 - **v2.35（对话模型入口）**：对话模型不混进生图下拉，而是在「上下文管理 · 对话式」浮层里单独一项「对话模型」（选项来自 `/status` 的 `chatModels`，默认「自动」）；写的是同一个 `config.chatModel`，供应商管理页的下拉照旧可用；真机断言：浮层里 `.vig-ctx-select` 含 mock-chat；
 - **v2.34（模型↔供应商对齐）**：模型属于哪条供应商链就自动把 `activeProviderId` 切过去（历史错配会让请求发到别家 → 404「模型不存在」）；实测：`/generate` gpt-image-2.5-c + images_generations 真实出图成功（job succeeded、图库落 1 张）；
 - **v2.33（彻底隔离对话模型 / 聊天协议）**：`modelAbility` 关键词兜底（image→video→audio→chat，不含 `wan` 避免误判；`grok-*` 无 kind 也能认出是对话模型）；生图下拉只留图片/视频；**协议下拉只留 自动检测/图片生成/图片编辑/视频生成**（对话/Anthropic/Gemini/Responses/重排/向量全部不列），配置若停在聊天协议上自动纠正为图片生成；真机断言：`grok-4.7`（kind 空）自动切 `grok-imagine-image`，协议下拉 4 项；

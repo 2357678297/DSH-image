@@ -997,6 +997,13 @@ mockProvider = await saveMockProvider({
       replyJob.body.job.images.length === 0,
     JSON.stringify(replyJob.body?.job ? { kind: replyJob.body.job.kind } : null)
   );
+  /* 聊天模式：/chat/say 真的问一次对话模型（mock 上游对 chat 请求回一段文本），落成 reply job */
+  const say = await call("/chat/say", { method: "POST", body: { message: "你是谁", conversationId: "conv_default" } });
+  check(
+    "POST /chat/say：聊天模式真的问对话模型，落一条 reply job（不触发生图）",
+    say.status === 200 && say.body?.ok === true && say.body?.job?.kind === "reply" && String(say.body?.job?.reply || "").length > 0,
+    JSON.stringify({ status: say.status, kind: say.body?.job?.kind ?? null, replyLen: String(say.body?.job?.reply || "").length })
+  );
   const editPlan = await call("/chat/plan", { method: "POST", body: { message: "在上一张基础上再柔和点", draft: "在上一张基础上再柔和点", model: "mock-image" } });
   check(
     "要求在上一张基础上改：plan 判成 action=edit，referenceUrl 可空（客户端用本会话最近一张结果图）",

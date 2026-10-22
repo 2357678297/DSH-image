@@ -3999,20 +3999,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								: null
 						),
 						
-						h(ModelPicker, {
-							value: config.defaultModel,
-							models: pickerModels,
-							meta: catalog.meta,
-							hints: catalog.owners,
-							// 选模型顺手把「当前供应商」切到模型所属那条：两条链各管各的模型，
-							// 不切的话界面显示的还是上一条，请求也会跟着上一条跑（踩过 503）。
-							onChange: (id) => {
-								const ownerId = providerIdForModel(providers, config, id);
-								void actions.saveConfig(ownerId && ownerId !== config.activeProviderId ? { defaultModel: id, activeProviderId: ownerId } : { defaultModel: id });
-							},
-							drop: "up",
-							title: isVideoEndpoint ? t("chat.videoSize") : t("chat.model")
-						}),
+						// 工具展开器：一块悬浮面板收纳全部次要参数（上传 / 图库 / 信息卡 / 张数 / 协议 / 计数）
+						h(
+							"div",
+							{ className: `vig-tools-pop${toolsOpen ? " is-open" : ""}`, ref: toolsBoxRef },
 						// 尺寸：视频协议按「比例 / 分辨率」两段分开选（像素 size 由两者组合），图片协议走图片尺寸
 						isVideoEndpoint
 							? [
@@ -4072,11 +4062,21 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										h("option", { key: option.value, value: option.value, title: sizeOptionTitle(option) }, sizeOptionLabel(option))
 									)
 								),
-						// 工具展开器：一块悬浮面板收纳全部次要参数（上传 / 图库 / 信息卡 / 张数 / 协议 / 计数）
-						h(
-							"div",
-							{ className: `vig-tools-pop${toolsOpen ? " is-open" : ""}`, ref: toolsBoxRef },
-h(
+						h(ModelPicker, {
+							value: config.defaultModel,
+							models: pickerModels,
+							meta: catalog.meta,
+							hints: catalog.owners,
+							// 选模型顺手把「当前供应商」切到模型所属那条：两条链各管各的模型，
+							// 不切的话界面显示的还是上一条，请求也会跟着上一条跑（踩过 503）。
+							onChange: (id) => {
+								const ownerId = providerIdForModel(providers, config, id);
+								void actions.saveConfig(ownerId && ownerId !== config.activeProviderId ? { defaultModel: id, activeProviderId: ownerId } : { defaultModel: id });
+							},
+							drop: "up",
+							title: isVideoEndpoint ? t("chat.videoSize") : t("chat.model")
+						}),
+							h(
 							"button",
 							{ className: "vig-tool", title: t("panel.upload"), onClick: actions.pickFile },
 							h(Icon, { name: "plus" })

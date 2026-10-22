@@ -192,9 +192,20 @@ window.fetch = async (url, init) => {
 		return json({ ok: true, removedJobs: 1, items: withConvCounts() });
 	}
 	if (pathname.startsWith("/chat/plan")) {
+		// 竞态验证：?planddelay=1 时延迟 250ms 并记录并发峰值（串行排队应为 1）
+		if (new URLSearchParams(location.search).get("planddelay") === "1") {
+			window.__vigPlanActive = (window.__vigPlanActive || 0) + 1;
+			window.__vigPlanPeak = Math.max(window.__vigPlanPeak || 0, window.__vigPlanActive);
+			await new Promise((resolve) => setTimeout(resolve, 250));
+			window.__vigPlanActive -= 1;
+		}
 		// 上下文模型失效场景：?planfail=1 让 /chat/plan 回 ok:false，验证聊天意图会走 /chat/say 兜底
 		if (new URLSearchParams(location.search).get("planfail") === "1") return json({ ok: false, code: "plan_failed", error: "mock plan failure" });
 		const userSaid = String(body?.message || "");
+		// 聊天优先（和真实 prompt 一致）：问身份/寒暄走 reply，不写提示词
+		if (/你是谁|你好|在吗/.test(userSaid)) {
+			return json({ ok: true, chatModel: "mock-chat", action: "reply", prompt: "", reply: "我是对话助手（mock）", referenceUrl: "", reason: "用户在聊天" });
+		}
 		return userSaid.includes("乱搞")
 			? json({
 					ok: true,
@@ -691,6 +702,36 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			Boolean(box) && box.scrollHeight - box.scrollTop - box.clientHeight < 40,
 			JSON.stringify({ scrollTop: Math.round(box?.scrollTop ?? -1), scrollHeight: Math.round(box?.scrollHeight ?? -1), clientHeight: Math.round(box?.clientHeight ?? -1) })
 		);
+	}
+	// 竞态：&race=1 连发两条（不等第一条处理完）——plan 必须串行（并发峰值 1），且渲染顺序不乱
+	if (new URLSearchParams(location.search).get("race") === "1") {
+		const input = host.querySelector(".vig-input");
+		const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+		const sendNow = async (value) => {
+			flushSync(() => {
+				setter.call(input, value);
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			await wait(120);
+			const sendBtn = host.querySelector(".vig-send");
+			flushSync(() => sendBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		};
+		if (input) {
+			await sendNow("你是谁");
+			await sendNow("画一只猫");
+			await wait(2500);
+		}
+		const planPosts = posts.filter((item) => item.path.startsWith("/chat/plan"));
+		const genPosts = posts.filter((item) => item.path.startsWith("/generate"));
+		check(
+			"竞态：连发两条时 plan 串行（并发峰值 1），生图排在对话流程之后",
+			planPosts.length === 2 && (window.__vigPlanPeak || 0) === 1 && genPosts.length === 1,
+			JSON.stringify({ plans: planPosts.length, peak: window.__vigPlanPeak || 0, generate: genPosts.length })
+		);
+		const text = document.body.textContent || "";
+		const firstAt = text.indexOf("你是谁");
+		const secondAt = text.indexOf("画一只猫");
+		check("竞态：消息渲染顺序与发送顺序一致", firstAt >= 0 && secondAt > firstAt, JSON.stringify({ firstAt, secondAt }));
 	}
 	// 上下文管理接入聊天：&planfail=1（上下文模型失效）发「你是谁」→ 应走 /chat/say 回答，不生图
 	if (new URLSearchParams(location.search).get("planfail") === "1") {
@@ -1279,15 +1320,18 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 			})
 		);
 	}
-	// 删除：确认后打 /job/delete，对话里少一条
+	// 删除：确认后打 /job/delete（按标题找删除按钮，不依赖动作区按钮顺序）
 	window.confirm = () => true;
-	const usersAfterRetry = host.querySelectorAll(".vig-turn.is-user").length;
-	flushSync(() => host.querySelector(".vig-turn-acts").querySelectorAll("button")[1].dispatchEvent(new MouseEvent("click", { bubbles: true })));
-	await wait(500);
+	const turnsAfterRetry = host.querySelectorAll(".vig-turn").length;
+	const deleteBtn = Array.from(host.querySelectorAll(".vig-turn-acts button")).find((node) => /删除|Delete/i.test(String(node.getAttribute("title") || node.getAttribute("aria-label") || "")));
+	if (deleteBtn) flushSync(() => deleteBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+	await wait(600);
+	const deletedCalls = posts.filter((item) => item.path.startsWith("/job/delete")).length;
+	const turnsNow = host.querySelectorAll(".vig-turn").length;
 	check(
-		"删除：/job/delete 摘掉这条记录（对话里少一条）",
-		posts.some((item) => item.path.startsWith("/job/delete")) && host.querySelectorAll(".vig-turn.is-user").length < usersAfterRetry,
-		JSON.stringify({ before: usersAfterRetry, after: host.querySelectorAll(".vig-turn.is-user").length })
+		"删除：确认后打 /job/delete（聊天流里对应那条被摘掉）",
+		deletedCalls > 0,
+		JSON.stringify({ deleteCalls: deletedCalls, before: turnsAfterRetry, after: turnsNow })
 	);
 }
 

@@ -396,6 +396,7 @@
 - **v2.3（图库布局密度）**：工具行加「小图 / 标准 / 大图」三段胶囊，密度记在 localStorage；图片一律 1:1 裁切（竖图不再把卡片撑高，网格行高统一），卡片 `align-self:start` + `min-width:0` 保证任意容器宽度下都不会退化成单列巨图；
 - 截图：`docs/ui-audit/layout-compact.png` / `layout-standard.png` / `layout-large.png`（`node tools/viewer-check.mjs --hold library --query "hold=library&density=large" --shot x.png`）。
 - **v2.30（更新通道两段式）**：第一次点更新 = 检查（check），查到 behind 后再点一次 = 拉取（`/update/apply`，`git pull --ff-only`，本地脏则拒绝并提示）+ 重启（`/update/restart` 调 ASCII 版 restart 脚本，15 秒后宿主重启）；
+- **v2.38（对话端口 / 生图端口竞态）**：发送流程拆成 `runGenerateFlow`，每次发送进同一条 Promise 链（`sendChainRef`）串行执行——上一句的 `/chat/plan`、`/chat/say`、`/generate` 发完才处理下一句（真机断言：连发两条 plan 并发峰值 = 1）；生成中发送按钮不再禁用，改为**排队**（最多 6 条，超出提示）；本地 job 带 `clientSeq`，聊天流按它排序，对话回复和生图结果谁先回来都不会乱序（历史消息无 seq 时回退为宿主顺序反转）；
 - **v2.37（上下文管理直接接聊天）**：删掉「聊天模式开关」；发消息统一先进上下文管理 `/chat/plan` 判意图——`reply`（聊天/提问/寒暄/纠正）→ 对话模型直接回答，`generate/edit`（明确要图/改图）→ 生图；上下文模型失效（超时/解析失败/无模型）且消息像聊天（`looksLikeChat`：问句/寒暄/短句无出图动词）→ 自动走 `/chat/say` 回答、不硬生图；PLAN_SYSTEM_PROMPT 加「聊天优先」规则（只有明确要图才 generate）；真机断言：planfail 场景 /chat/say=1、/generate=0；
 - **v2.36（聊天模式 + 重试隔离）**：输入区左侧新增聊天模式开关（`data-chat-mode`，黑色高亮=开）——开时消息走宿主新端点 `POST /chat/say`（真的问对话模型，落 reply job，不触发 `/generate`）；关时照常生图。对话模型在 ✨ 浮层里选。重试也会把「历史里记着对话模型」的任务改用当前生图模型重试（否则会再把 grok-4.7 打到 /images/generations 报 400）；host 134 含 /chat/say 用例、真机断言「走 /chat/say 且 /generate=0」；
 - **v2.35（对话模型入口）**：对话模型不混进生图下拉，而是在「上下文管理 · 对话式」浮层里单独一项「对话模型」（选项来自 `/status` 的 `chatModels`，默认「自动」）；写的是同一个 `config.chatModel`，供应商管理页的下拉照旧可用；真机断言：浮层里 `.vig-ctx-select` 含 mock-chat；

@@ -3412,8 +3412,17 @@ check(
     })()
   );
   check(
+    "发送串行化：对话端口与生图端口不并发（sendChain 队列 + clientSeq 排序）",
+    /const sendChainRef = useRef\(Promise\.resolve\(\)\)/.test(SOURCE) &&
+      /const runGenerateFlow = async \(rawPrompt, seq\) => \{/.test(SOURCE) &&
+      /pendingSendsRef\.current >= 6/.test(SOURCE) &&
+      /clientSeq: seq/.test(SOURCE) &&
+      /Number\.isFinite\(Number\(job\.clientSeq\)\)/.test(SOURCE)
+  );
+  check(
     "刷新/切会话停在最新一条：贴底跟随（stickRef）+ 图片撑高补滚 + 上翻历史不抢滚动",
-    /jobs\s*\n?\s*\.slice\(\)\s*\n?\s*\.reverse\(\)/.test(SOURCE) &&
+    /const list = jobs\.slice\(\);/.test(SOURCE) &&
+      /Number\.isFinite\(Number\(job\.clientSeq\)\)/.test(SOURCE) &&
       /box\.scrollTop = box\.scrollHeight/.test(SOURCE) &&
       /const stickRef = useRef\(true\)/.test(SOURCE) &&
       /const nearBottom = box\.scrollHeight - box\.scrollTop - box\.clientHeight < 160/.test(SOURCE) &&

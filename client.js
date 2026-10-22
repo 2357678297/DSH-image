@@ -446,6 +446,7 @@ window.__ModuleLoader__.load({
 			"chat.refClear": "移除参考图",
 			"chat.refLimit": "参考图最多挂 4 张，先移掉一张",
 			"chat.modelInvalid": "当前模型不能生图（是对话/音频模型，或不在任何供应商目录里），先选一个图片模型",
+			"chat.queueFull": "发送太快了：这一句处理完再发下一句（最多排 6 条）",
 			"chat.modelSwitched": "当前模型不能生图，已自动切到 {model}",
 			"chat.toBottom": "回到底部",
 			"chat.expandTools": "展开更多参数",
@@ -3675,10 +3676,24 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				}
 			};
 
-			/* 宿主 /jobs 是「新的在前」，聊天流要按时间正序显示：老的在上、新的在下 */
-			const thread = jobs
-				.slice()
-				.reverse()
+			/* 宿主 /jobs 是「新的在前」，聊天流却要按时间正序显示：老的在上、新的在下。
+			   竞态兜底：本地发送的 job 带 clientSeq（发送顺序），有 seq 的按 seq 排、排在历史消息之后；
+			   全是历史消息（刷新后从 /jobs 拉回来、没有 seq）时直接反转成宿主顺序的逆序。 */
+			const thread = (() => {
+				const list = jobs.slice();
+				const hasSeq = list.some((job) => Number.isFinite(Number(job.clientSeq)));
+				if (!hasSeq) return list.reverse();
+				return list.sort((left, right) => {
+					const leftSeq = Number(left.clientSeq);
+					const rightSeq = Number(right.clientSeq);
+					const leftOk = Number.isFinite(leftSeq);
+					const rightOk = Number.isFinite(rightSeq);
+					if (leftOk && rightOk) return leftSeq - rightSeq;
+					if (leftOk) return 1;
+					if (rightOk) return -1;
+					return 0;
+				});
+			})()
 				.map((job) =>
 					h(JobTurn, {
 						key: job.id,
@@ -4140,7 +4155,7 @@ h(
 						),
 						h(
 							"button",
-							{ className: "vig-send", disabled: state.generating || draft.trim().length === 0, onClick: submit, title: t("chat.send") },
+							{ className: "vig-send", disabled: draft.trim().length === 0, onClick: submit, title: t("chat.send") },
 							state.generating ? h("span", { className: "vig-spin", style: { borderTopColor: "#fff", borderColor: "rgba(255,255,255,.35)" } }) : h(Icon, { name: "send", size: 16 })
 						)
 					)
@@ -11099,6 +11114,193 @@ h(
 				[toast]
 			);
 
+			/* ------------------------------------------------------------ *
+			 * 发送串行化（竞态）
+			 * 对话端口（/chat/plan、/chat/say）和生图端口（/generate）如果并发，
+			 * 两条消息的 plan 与生成会交错、回复顺序也会乱。所以每次发送进同一条 Promise 链，
+			 * 前一句的 plan/生图请求发完才处理下一句；本地 job 带 clientSeq，渲染按它排序。
+			 * ------------------------------------------------------------ */
+			const sendChainRef = useRef(Promise.resolve());
+			const pendingSendsRef = useRef(0);
+			const sendSeqRef = useRef(0);
+			const runGenerateFlow = async (rawPrompt, seq) => {
+					/* 模型隔离：对话/音频/向量模型不能生图（上游会回 404「模型不存在」）——
+					   选错了就别发请求，这里直接把原因说清楚。 */
+					const modelKind = modelKindOf(config.defaultModel, providers);
+					const knownModel = (providers || []).some((provider) => (provider.models || []).includes(config.defaultModel));
+					if (!knownModel || ["chat", "audio", "embedding", "rerank"].includes(modelKind)) {
+						toast(t("chat.modelInvalid"), "err");
+						return;
+					}
+					try {
+						/* 发送前把「还没有本站 URL」的参考图补一份留档：从图库 / 重绘 / 预设挂进来的
+						   chip 不走 /upload，没有 URL 的话 referenceUrls 会少一张 —— 发出去变成单图，
+						   缩略图 / 重试 / 编辑也会丢图。补传失败就退回纯字节（images[]）继续发。 */
+						const readyRefs = [];
+						for (const item of references) {
+							let entry = item;
+							if (!item.url && typeof item.dataUrl === "string" && item.dataUrl.startsWith("data:")) {
+								const url = await uploadRefData(item.name, item.dataUrl);
+								entry = { ...item, url };
+								if (url) setReferences((current) => current.map((ref) => (ref.dataUrl === item.dataUrl && !ref.url ? { ...ref, url } : ref)));
+							}
+							readyRefs.push(entry);
+						}
+						// 挂了参考图 + 协议是「图片编辑」：参考图必须真的带上（mode: edit + image），
+						// 以前只按 editMode 判断，选了编辑协议却没点「用这张重绘」时会只发文字，
+						// 上游回 400 image file or image_url is required。宿主那边如果没有字节
+						// 也会从 referenceUrl 读回一份，所以这里给足任意一种即可。
+						const wantsEdit = readyRefs.length > 0 && (editMode || (config.defaultEndpoint || "auto") === "images_edits");
+						let effectivePrompt = rawPrompt;
+						let effectiveMode = wantsEdit ? "edit" : "generate";
+						let effectiveReferenceUrls = readyRefs.map((item) => item.url || "").filter(Boolean);
+						let planNote = "";
+						/* 上下文管理（默认开）：把本会话最近几轮交给对话模型，整理出这一轮的提示词。
+						   只喂当前会话的 jobs —— 新对话没有历史，记忆天然隔离。 */
+						/* 聊天意图兜底：上下文模型没给出可用判断（不可用 / 解析失败）时，
+						   提问、闲聊这类消息直接交给对话模型回答，不硬打到生图端口。 */
+						const replyWithChat = async (text) => {
+							const payload = await call("/chat/say", {
+								method: "POST",
+								body: { message: text, conversationId, chatModel: config.chatModel || "" }
+							});
+							const replyJob = { ...(payload.job || {}), userText: text, images: [], clientSeq: seq };
+							setJobs((list) => [replyJob, ...list.filter((item) => item.id !== replyJob.id)]);
+							setDraft("");
+						};
+						if (contextOn) {
+							try {
+								const turns = Math.max(1, Number(config.contextTurns) || 6);
+								const history = jobs
+									.slice(0, turns)
+									.reverse()
+									.map((job) => ({
+										user: job.userText || job.prompt || "",
+										prompt: job.prompt || "",
+										model: job.model || "",
+										images: (job.images || []).map((image) => image.url)
+									}));
+								const plan = await call("/chat/plan", {
+									method: "POST",
+									body: {
+										message: rawPrompt,
+										draft: rawPrompt,
+										referenceUrl: readyRefs[0]?.url || "",
+										referenceUrls: readyRefs.map((item) => item.url || "").filter(Boolean),
+										model: config.defaultModel,
+										size: isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
+										chatModel: config.chatModel || "",
+										// 「限制上下文模型直接调供应商出图」：开启时让它只整理/分类，不许自动切编辑
+										noAutoImage: contextNoAutoImage,
+										history
+									}
+								});
+								/* 上下文模型没判出（不可用/解析失败）+ 这句话像聊天 → 交给对话模型回答，不生图。 */
+								if (!plan?.ok && looksLikeChat(rawPrompt)) {
+									try {
+										await replyWithChat(rawPrompt);
+										setGenerating(false);
+										return;
+									} catch (chatError) {
+										toast(String(chatError?.message ?? chatError), "err");
+										setGenerating(false);
+										return;
+									}
+								}
+								if (plan?.ok && plan.action === "reply" && plan.reply) {
+									// 用户这句话是在纠正/讨论，不是要出图：只回一句话，留在会话历史里
+									const msgPayload = await call("/chat/message", {
+										method: "POST",
+										body: { message: rawPrompt, reply: plan.reply, conversationId, chatModel: plan.chatModel || "" }
+									});
+									const replyJob = { ...(msgPayload.job || {}), userText: rawPrompt, images: [], clientSeq: seq };
+									setJobs((list) => [replyJob, ...list.filter((item) => item.id !== replyJob.id)]);
+									setDraft("");
+									setGenerating(false);
+									return;
+								}
+								if (plan?.ok && plan.prompt) {
+									effectivePrompt = plan.prompt;
+									planNote = plan.prompt;
+									// 限制开启时忽略「自动切编辑」：只按用户原话与已挂参考图走
+									if (!contextNoAutoImage && plan.mode === "edit" && plan.referenceUrl) {
+										effectiveMode = "edit";
+										if (!effectiveReferenceUrls.includes(plan.referenceUrl)) effectiveReferenceUrls = [plan.referenceUrl, ...effectiveReferenceUrls];
+									}
+								}
+								// edit 但没有可用参考图：退回重新生成，不硬发一条空编辑
+								if (effectiveMode === "edit" && effectiveReferenceUrls.length === 0) {
+									const lastWithImage = jobs.find((item) => Array.isArray(item.images) && item.images.length > 0);
+									const fallbackUrl = lastWithImage?.images?.[0]?.url || "";
+									if (fallbackUrl) effectiveReferenceUrls = [fallbackUrl];
+									else effectiveMode = "generate";
+								}
+							} catch (error) {
+								// 上下文模型连不上：聊天意图走对话模型兜底，其余才提示后继续生图
+								if (looksLikeChat(rawPrompt)) {
+									try {
+										await replyWithChat(rawPrompt);
+										setGenerating(false);
+										return;
+									} catch (chatError) {
+										toast(String(chatError?.message ?? chatError), "err");
+										setGenerating(false);
+										return;
+									}
+								}
+								toast(t("chat.planFailed"));
+							}
+						}
+						const sendImages =
+							// 只有真 data URI（data: 开头）才当字节发；恢复出来的参考图 dataUrl 可能先是
+							// 本站 URL 字符串（只为缩略图），把它当 image 发出去会被宿主解出几十字节的假图
+							effectiveMode === "edit"
+								? readyRefs
+										.map((item) => (typeof item.dataUrl === "string" && item.dataUrl.startsWith("data:") ? item.dataUrl : null))
+										.filter(Boolean)
+										.slice(0, 4)
+								: [];
+						const payload = await call("/generate", {
+							method: "POST",
+							body: {
+								prompt: effectivePrompt,
+								// 气泡里显示的是用户原话；改写后的提示词单独留痕（planNote）
+								userText: rawPrompt,
+								planNote,
+								conversationId,
+								model: config.defaultModel,
+								// 模型属于谁就发给谁（宿主也会按模型再校正一遍，这里先把话说清楚）
+								providerId: providerIdForModel(providers, config),
+								// 视频协议用独立的视频尺寸与时长；张数固定 1（视频一次一条）
+								size: isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
+								quality: config.defaultQuality,
+								n: isVideoEndpoint ? 1 : config.defaultCount,
+								seconds: isVideoEndpoint ? config.videoSeconds || "4" : "",
+								endpoint: config.defaultEndpoint || "auto",
+								referenceUrl: effectiveReferenceUrls[0] || "",
+								referenceUrls: effectiveReferenceUrls,
+								mode: effectiveMode,
+								image: sendImages[0],
+								images: sendImages,
+								// 过程留痕：这条任务是从工作台点出来的，宿主按 source 区分界面 / 工具 / 外部 API
+								source: "ui"
+							}
+						});
+						const job = { ...payload.job, images: [], clientSeq: seq };
+						setJobs((list) => [job, ...list.filter((item) => item.id !== job.id)]);
+						setPending(payload.queue ?? 1);
+						setDraft("");
+						// 对话标题可能刚被这段提示词命名（宿主会改），刷新一下会话列表
+						void call("/conversations")
+							.then((list) => setConversations(list.items || []))
+							.catch(() => {});
+						watchJob(job.id);
+					} catch (error) {
+						setGenerating(false);
+						toast(String(error?.message ?? error), "err");
+					}
+			};
+
 			const actions = {
 				toast,
 				reload,
@@ -11183,181 +11385,22 @@ h(
 				generate: async () => {
 					const rawPrompt = draft.trim();
 					if (rawPrompt.length === 0) return;
-					/* 模型隔离：对话/音频/向量模型不能生图（上游会回 404「模型不存在」）——
-					   选错了就别发请求，这里直接把原因说清楚。 */
-					const modelKind = modelKindOf(config.defaultModel, providers);
-					const knownModel = (providers || []).some((provider) => (provider.models || []).includes(config.defaultModel));
-					if (!knownModel || ["chat", "audio", "embedding", "rerank"].includes(modelKind)) {
-						toast(t("chat.modelInvalid"), "err");
+					/* 发送串行化：上一句的 plan/生图流程没走完就排队，避免对话端口与生图端口竞态。 */
+					if (pendingSendsRef.current >= 6) {
+						toast(t("chat.queueFull"), "err");
 						return;
 					}
+					const seq = ++sendSeqRef.current;
+					pendingSendsRef.current += 1;
 					setGenerating(true);
+					const runSend = () => runGenerateFlow(rawPrompt, seq);
+					const run = sendChainRef.current.then(runSend, runSend);
+					sendChainRef.current = run.catch(() => {});
 					try {
-						/* 发送前把「还没有本站 URL」的参考图补一份留档：从图库 / 重绘 / 预设挂进来的
-						   chip 不走 /upload，没有 URL 的话 referenceUrls 会少一张 —— 发出去变成单图，
-						   缩略图 / 重试 / 编辑也会丢图。补传失败就退回纯字节（images[]）继续发。 */
-						const readyRefs = [];
-						for (const item of references) {
-							let entry = item;
-							if (!item.url && typeof item.dataUrl === "string" && item.dataUrl.startsWith("data:")) {
-								const url = await uploadRefData(item.name, item.dataUrl);
-								entry = { ...item, url };
-								if (url) setReferences((current) => current.map((ref) => (ref.dataUrl === item.dataUrl && !ref.url ? { ...ref, url } : ref)));
-							}
-							readyRefs.push(entry);
-						}
-						// 挂了参考图 + 协议是「图片编辑」：参考图必须真的带上（mode: edit + image），
-						// 以前只按 editMode 判断，选了编辑协议却没点「用这张重绘」时会只发文字，
-						// 上游回 400 image file or image_url is required。宿主那边如果没有字节
-						// 也会从 referenceUrl 读回一份，所以这里给足任意一种即可。
-						const wantsEdit = readyRefs.length > 0 && (editMode || (config.defaultEndpoint || "auto") === "images_edits");
-						let effectivePrompt = rawPrompt;
-						let effectiveMode = wantsEdit ? "edit" : "generate";
-						let effectiveReferenceUrls = readyRefs.map((item) => item.url || "").filter(Boolean);
-						let planNote = "";
-						/* 上下文管理（默认开）：把本会话最近几轮交给对话模型，整理出这一轮的提示词。
-						   只喂当前会话的 jobs —— 新对话没有历史，记忆天然隔离。 */
-						/* 聊天意图兜底：上下文模型没给出可用判断（不可用 / 解析失败）时，
-						   提问、闲聊这类消息直接交给对话模型回答，不硬打到生图端口。 */
-						const replyWithChat = async (text) => {
-							const payload = await call("/chat/say", {
-								method: "POST",
-								body: { message: text, conversationId, chatModel: config.chatModel || "" }
-							});
-							const replyJob = { ...(payload.job || {}), userText: text, images: [] };
-							setJobs((list) => [replyJob, ...list.filter((item) => item.id !== replyJob.id)]);
-							setDraft("");
-						};
-						if (contextOn) {
-							try {
-								const turns = Math.max(1, Number(config.contextTurns) || 6);
-								const history = jobs
-									.slice(0, turns)
-									.reverse()
-									.map((job) => ({
-										user: job.userText || job.prompt || "",
-										prompt: job.prompt || "",
-										model: job.model || "",
-										images: (job.images || []).map((image) => image.url)
-									}));
-								const plan = await call("/chat/plan", {
-									method: "POST",
-									body: {
-										message: rawPrompt,
-										draft: rawPrompt,
-										referenceUrl: readyRefs[0]?.url || "",
-										referenceUrls: readyRefs.map((item) => item.url || "").filter(Boolean),
-										model: config.defaultModel,
-										size: isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
-										chatModel: config.chatModel || "",
-										// 「限制上下文模型直接调供应商出图」：开启时让它只整理/分类，不许自动切编辑
-										noAutoImage: contextNoAutoImage,
-										history
-									}
-								});
-								/* 上下文模型没判出（不可用/解析失败）+ 这句话像聊天 → 交给对话模型回答，不生图。 */
-								if (!plan?.ok && looksLikeChat(rawPrompt)) {
-									try {
-										await replyWithChat(rawPrompt);
-										setGenerating(false);
-										return;
-									} catch (chatError) {
-										toast(String(chatError?.message ?? chatError), "err");
-										setGenerating(false);
-										return;
-									}
-								}
-								if (plan?.ok && plan.action === "reply" && plan.reply) {
-									// 用户这句话是在纠正/讨论，不是要出图：只回一句话，留在会话历史里
-									const msgPayload = await call("/chat/message", {
-										method: "POST",
-										body: { message: rawPrompt, reply: plan.reply, conversationId, chatModel: plan.chatModel || "" }
-									});
-									const replyJob = { ...(msgPayload.job || {}), userText: rawPrompt, images: [] };
-									setJobs((list) => [replyJob, ...list.filter((item) => item.id !== replyJob.id)]);
-									setDraft("");
-									setGenerating(false);
-									return;
-								}
-								if (plan?.ok && plan.prompt) {
-									effectivePrompt = plan.prompt;
-									planNote = plan.prompt;
-									// 限制开启时忽略「自动切编辑」：只按用户原话与已挂参考图走
-									if (!contextNoAutoImage && plan.mode === "edit" && plan.referenceUrl) {
-										effectiveMode = "edit";
-										if (!effectiveReferenceUrls.includes(plan.referenceUrl)) effectiveReferenceUrls = [plan.referenceUrl, ...effectiveReferenceUrls];
-									}
-								}
-								// edit 但没有可用参考图：退回重新生成，不硬发一条空编辑
-								if (effectiveMode === "edit" && effectiveReferenceUrls.length === 0) {
-									const lastWithImage = jobs.find((item) => Array.isArray(item.images) && item.images.length > 0);
-									const fallbackUrl = lastWithImage?.images?.[0]?.url || "";
-									if (fallbackUrl) effectiveReferenceUrls = [fallbackUrl];
-									else effectiveMode = "generate";
-								}
-							} catch (error) {
-								// 上下文模型连不上：聊天意图走对话模型兜底，其余才提示后继续生图
-								if (looksLikeChat(rawPrompt)) {
-									try {
-										await replyWithChat(rawPrompt);
-										setGenerating(false);
-										return;
-									} catch (chatError) {
-										toast(String(chatError?.message ?? chatError), "err");
-										setGenerating(false);
-										return;
-									}
-								}
-								toast(t("chat.planFailed"));
-							}
-						}
-						const sendImages =
-							// 只有真 data URI（data: 开头）才当字节发；恢复出来的参考图 dataUrl 可能先是
-							// 本站 URL 字符串（只为缩略图），把它当 image 发出去会被宿主解出几十字节的假图
-							effectiveMode === "edit"
-								? readyRefs
-										.map((item) => (typeof item.dataUrl === "string" && item.dataUrl.startsWith("data:") ? item.dataUrl : null))
-										.filter(Boolean)
-										.slice(0, 4)
-								: [];
-						const payload = await call("/generate", {
-							method: "POST",
-							body: {
-								prompt: effectivePrompt,
-								// 气泡里显示的是用户原话；改写后的提示词单独留痕（planNote）
-								userText: rawPrompt,
-								planNote,
-								conversationId,
-								model: config.defaultModel,
-								// 模型属于谁就发给谁（宿主也会按模型再校正一遍，这里先把话说清楚）
-								providerId: providerIdForModel(providers, config),
-								// 视频协议用独立的视频尺寸与时长；张数固定 1（视频一次一条）
-								size: isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
-								quality: config.defaultQuality,
-								n: isVideoEndpoint ? 1 : config.defaultCount,
-								seconds: isVideoEndpoint ? config.videoSeconds || "4" : "",
-								endpoint: config.defaultEndpoint || "auto",
-								referenceUrl: effectiveReferenceUrls[0] || "",
-								referenceUrls: effectiveReferenceUrls,
-								mode: effectiveMode,
-								image: sendImages[0],
-								images: sendImages,
-								// 过程留痕：这条任务是从工作台点出来的，宿主按 source 区分界面 / 工具 / 外部 API
-								source: "ui"
-							}
-						});
-						const job = { ...payload.job, images: [] };
-						setJobs((list) => [job, ...list.filter((item) => item.id !== job.id)]);
-						setPending(payload.queue ?? 1);
-						setDraft("");
-						// 对话标题可能刚被这段提示词命名（宿主会改），刷新一下会话列表
-						void call("/conversations")
-							.then((list) => setConversations(list.items || []))
-							.catch(() => {});
-						watchJob(job.id);
-					} catch (error) {
-						setGenerating(false);
-						toast(String(error?.message ?? error), "err");
+						return await run;
+					} finally {
+						pendingSendsRef.current = Math.max(0, pendingSendsRef.current - 1);
+						if (pendingSendsRef.current === 0) setGenerating(false);
 					}
 				},
 				/** 局部改图：框选/画笔产出的 mask（白=重画）+ 一句指令 → 图生图局部重画。 */

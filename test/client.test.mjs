@@ -3349,11 +3349,13 @@ check(
       /update\.clickAgain/.test(SOURCE)
   );
   check(
-    "对话优先：浮层里勾选（localStorage 持久化）+ 像聊天的消息走 /chat/say",
-    /data-dialog-first/.test(SOURCE) &&
-      /const DIALOG_FIRST_KEY = "dsh\.velapi-image-go\.dialogfirst"/.test(SOURCE) &&
-      /toggleDialogFirst/.test(SOURCE) &&
-      /if \(dialogFirst && looksLikeChat\(rawPrompt\) && readyRefs\.length === 0\)/.test(SOURCE)
+    "显式模式切换：图片 / 对话（持久化，对话模式直接走 /chat/say 不生图）",
+    /data-mode": "image"/.test(SOURCE) &&
+      /data-mode": "dialog"/.test(SOURCE) &&
+      /const MODE_KEY = "dsh\.velapi-image-go\.mode"/.test(SOURCE) &&
+      /if \(sendMode === "dialog"\) \{/.test(SOURCE) &&
+      /await replyWithChat\(rawPrompt\)/.test(SOURCE) &&
+      /chat\.dialogNotReady/.test(SOURCE)
   );
   check(
     "上下文管理接聊天：plan 判不出且像聊天时走 /chat/say（不硬生图，也没单独的聊天模式开关）",

@@ -703,42 +703,63 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			JSON.stringify({ scrollTop: Math.round(box?.scrollTop ?? -1), scrollHeight: Math.round(box?.scrollHeight ?? -1), clientHeight: Math.round(box?.clientHeight ?? -1) })
 		);
 	}
-	// 对话优先：&dialogfirst=1 勾上后，像聊天的消息即使 plan 判出图也走 /chat/say
-	if (new URLSearchParams(location.search).get("dialogfirst") === "1") {
-		const ctxToggle = host.querySelector("[data-context-toggle]");
-		if (ctxToggle) {
-			flushSync(() => ctxToggle.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+	// 显式模式切换：&mode=dialog 点「对话」后发消息 → 走 /chat/say，不生图
+	if (new URLSearchParams(location.search).get("mode") === "dialog") {
+		const dialogBtn = host.querySelector('[data-mode="dialog"]');
+		if (dialogBtn) {
+			flushSync(() => dialogBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 			await wait(300);
 		}
-		const firstBox = host.querySelector("[data-dialog-first]");
-		if (firstBox) {
-			flushSync(() => firstBox.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-			await wait(250);
-		}
-		if (ctxToggle) {
-			flushSync(() => ctxToggle.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-			await wait(250);
-		}
-		const dfInput = host.querySelector(".vig-input");
-		if (dfInput) {
-			const dfSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+		const modeInput = host.querySelector(".vig-input");
+		if (modeInput) {
+			const modeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
 			flushSync(() => {
-				dfSetter.call(dfInput, "随便聊聊最近怎么样");
-				dfInput.dispatchEvent(new Event("input", { bubbles: true }));
+				modeSetter.call(modeInput, "你是谁");
+				modeInput.dispatchEvent(new Event("input", { bubbles: true }));
 			});
 			await wait(250);
-			const dfSend = host.querySelector(".vig-send");
-			if (dfSend) {
-				flushSync(() => dfSend.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			const modeSend = host.querySelector(".vig-send");
+			if (modeSend) {
+				flushSync(() => modeSend.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 				await wait(1600);
 			}
 		}
-		const dfChat = posts.filter((item) => item.path.startsWith("/chat/say")).pop();
-		const dfGen = posts.filter((item) => item.path.startsWith("/generate"));
+		const modeChat = posts.filter((item) => item.path.startsWith("/chat/say")).pop();
+		const modeGen = posts.filter((item) => item.path.startsWith("/generate"));
 		check(
-			"对话优先：勾上后像聊天的消息走 /chat/say，不触发生图",
-			Boolean(dfChat) && dfGen.length === 0,
-			JSON.stringify({ chat: Boolean(dfChat), generate: dfGen.length })
+			"模式切换「对话」：消息走 /chat/say，不触发生图",
+			Boolean(modeChat) && modeGen.length === 0,
+			JSON.stringify({ chat: Boolean(modeChat), generate: modeGen.length })
+		);
+	}
+	// 显式模式切换：&mode=image 点「图片」后发消息 → 直接生图（默认不调 plan）
+	if (new URLSearchParams(location.search).get("mode") === "image") {
+		const imageBtn = host.querySelector('[data-mode="image"]');
+		if (imageBtn) {
+			flushSync(() => imageBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			await wait(300);
+		}
+		const imgInput = host.querySelector(".vig-input");
+		if (imgInput) {
+			const imgSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+			flushSync(() => {
+				imgSetter.call(imgInput, "画一只柴犬");
+				imgInput.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			await wait(250);
+			const imgSend = host.querySelector(".vig-send");
+			if (imgSend) {
+				flushSync(() => imgSend.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+				await wait(1200);
+			}
+		}
+		const imgGen = posts.filter((item) => item.path.startsWith("/generate")).pop();
+		const imgPlan = posts.filter((item) => item.path.startsWith("/chat/plan"));
+		const imgChat = posts.filter((item) => item.path.startsWith("/chat/say"));
+		check(
+			"模式切换「图片」：直接 /generate（默认不调 plan、不调 /chat/say）",
+			Boolean(imgGen) && imgPlan.length === 0 && imgChat.length === 0,
+			JSON.stringify({ generate: Boolean(imgGen), plan: imgPlan.length, chat: imgChat.length })
 		);
 	}
 	// 竞态：&race=1 连发两条（不等第一条处理完）——plan 必须串行（并发峰值 1），且渲染顺序不乱

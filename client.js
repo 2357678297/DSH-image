@@ -73,8 +73,8 @@ window.__ModuleLoader__.load({
 		// 端点协议选择：宿主老版本还没有 config.defaultEndpoint 这个字段（重启后才吃到），
 		// 本地存一份，选择在刷新之间就不会丢。
 		const ENDPOINT_KEY = "dsh.velapi-image-go.endpoint";
-		// 「对话优先」：消息先当聊天处理（对话模型直接回答），只有明确出图指令才生图
-		const DIALOG_FIRST_KEY = "dsh.velapi-image-go.dialogfirst";
+		// 显式模式：image = 发消息就生图；dialog = 发消息交给对话模型回答（用户要的「模式切换」）
+		const MODE_KEY = "dsh.velapi-image-go.mode";
 
 		// 侧栏面板挂载时广播：停靠面板据此让位（避免同一个入口在窗口上出现两次）
 		const PANE_EVENT = "velapi-image-go:rightbar-pane";
@@ -399,8 +399,12 @@ window.__ModuleLoader__.load({
 			"chat.contextOn": "上下文管理：开 —— 每轮先由对话模型把本对话的历史整理成提示词",
 			"chat.contextPanel": "对话模型",
 			"chat.dialogDesc": "发消息先进这里：聊天就直接回答，要出图才生图。",
-			"chat.dialogFirst": "对话优先",
-			"chat.dialogFirstHint": "开：消息先当聊天处理（对话模型直接回答），只有明确出图指令才生图。",
+			"chat.modeLabel": "发送模式",
+			"chat.modeImage": "图片",
+			"chat.modeDialog": "对话",
+			"chat.modeImageHint": "图片模式：发消息就生图（勾了优化提示词会先让对话模型整理提示词）",
+			"chat.modeDialogHint": "对话模式：发消息交给对话模型回答，不出图",
+			"chat.dialogNotReady": "对话端点未就绪：DSH 需要重启一次才能用「对话」模式",
 			"chat.contextDesc": "只负责整理提示词与读取配置，不直接调用供应商出图。",
 			"chat.contextAuto": "优化提示词",
 			"chat.contextTurns": "上下文轮数",
@@ -2209,6 +2213,12 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 .vig-ctx-hot{flex-wrap:wrap}
 .vig-ctx-hint{flex-basis:100%;font-size:10.5px;color:var(--vig-text-faint);padding-left:22px}
 .vig-ctx-select{flex:1;min-width:0;height:26px;border:1px solid var(--vig-line);border-radius:var(--vig-r-pill);padding:0 8px;background:var(--vig-surface);font-size:11.5px;color:var(--vig-text)}
+/* 模式切换（图片 / 对话） */
+.vig-mode-switch{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:var(--vig-r-pill);background:var(--vig-surface-sunken);flex:none}
+.vig-mode-btn{height:24px;padding:0 10px;border-radius:var(--vig-r-pill);border:0;background:transparent;color:var(--vig-text-muted);
+	font-size:11px;font-weight:500;cursor:pointer;transition:background-color var(--vig-dur) var(--vig-ease),color var(--vig-dur) var(--vig-ease)}
+.vig-mode-btn:hover{color:var(--vig-text)}
+.vig-mode-btn.is-on{background:var(--vig-surface);color:var(--vig-text);box-shadow:var(--vig-shadow-soft)}
 /* ============================================================
    设计系统 v2.25 · 「回到底部」浮标（上翻历史时出现）
    ============================================================ */
@@ -3469,7 +3479,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function ChatView({ state, actions }) {
-			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels, dialogFirst } = state;
+			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels, sendMode } = state;
 			const [overLimit, setOverLimit] = useState(false);
 			// 上下文管理改成「对话式」：点 ✨ 打开一块设置浮层（自动整理 / 轮数 / 限制直接出图 / 已读取配置）
 			const [contextPanelOpen, setContextPanelOpen] = useState(false);
@@ -3856,6 +3866,33 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					h(
 						"div",
 						{ className: `vig-tools${toolsOpen ? " is-open" : ""}` },
+						// 模式切换（用户要的显式开关）：图片 = 发消息就生图；对话 = 发消息交给对话模型
+						h(
+							"div",
+							{ className: "vig-mode-switch", role: "group", "aria-label": t("chat.modeLabel") },
+							h(
+								"button",
+								{
+									className: `vig-mode-btn${sendMode === "image" ? " is-on" : ""}`,
+									"aria-pressed": sendMode === "image" ? "true" : "false",
+									"data-mode": "image",
+									title: t("chat.modeImageHint"),
+									onClick: () => actions.setSendMode("image")
+								},
+								t("chat.modeImage")
+							),
+							h(
+								"button",
+								{
+									className: `vig-mode-btn${sendMode === "dialog" ? " is-on" : ""}`,
+									"aria-pressed": sendMode === "dialog" ? "true" : "false",
+									"data-mode": "dialog",
+									title: t("chat.modeDialogHint"),
+									onClick: () => actions.setSendMode("dialog")
+								},
+								t("chat.modeDialog")
+							)
+						),
 						// 上下文管理：点 ✨ 打开「对话式」设置浮层（不再是简单的一键开关）
 						h(
 							"div",
@@ -3888,19 +3925,6 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											h("span", null, t("chat.contextAuto"))
 										),
 										/* 对话优先：勾上后消息先当聊天处理（对话模型直接回答），明确出图指令才生图 */
-										h(
-											"label",
-											{ className: "vig-ctx-row vig-ctx-hot" },
-											h("input", {
-												type: "checkbox",
-												className: "vig-ctx-check",
-												checked: dialogFirst,
-												"data-dialog-first": "1",
-												onChange: () => actions.toggleDialogFirst()
-											}),
-											h("span", null, t("chat.dialogFirst")),
-											h("span", { className: "vig-ctx-hint" }, t("chat.dialogFirstHint"))
-										),
 										h(
 											"div",
 											{ className: "vig-ctx-row" },
@@ -10841,12 +10865,12 @@ h(
 			const [conversationId, setConversationId] = useState(() => window.localStorage.getItem(CONV_KEY) || "");
 			// 「优化提示词」按需勾选：默认关（不勾就按原话直接生图，不额外调用对话模型）
 			const [contextOn, setContextOn] = useState(() => window.localStorage.getItem(CONTEXT_KEY) === "1");
-			// 对话优先（持久化）：勾上后消息先走聊天，出图需要明确指令
-			const [dialogFirst, setDialogFirst] = useState(() => {
+			// 发送模式（持久化）：image / dialog
+			const [sendMode, setSendModeState] = useState(() => {
 				try {
-					return window.localStorage.getItem(DIALOG_FIRST_KEY) === "1";
+					return window.localStorage.getItem(MODE_KEY) === "dialog" ? "dialog" : "image";
 				} catch (error) {
-					return false;
+					return "image";
 				}
 			});
 
@@ -11197,17 +11221,19 @@ h(
 							setDraft("");
 						};
 						/* 对话优先（勾选）：聊天意图直接交给对话模型，不走优化提示词那一套。 */
-						if (dialogFirst && looksLikeChat(rawPrompt) && readyRefs.length === 0) {
+						/* 对话模式：这句话直接交给对话模型回答（不碰生图链路）。宿主没重启（没有 /chat/say）时给明确提示。 */
+						if (sendMode === "dialog") {
+							setGenerating(true);
 							try {
 								await replyWithChat(rawPrompt);
-								setGenerating(false);
-								return;
 							} catch (chatError) {
-								toast(String(chatError?.message ?? chatError), "err");
+								toast(t("chat.dialogNotReady"), "err");
+							} finally {
 								setGenerating(false);
-								return;
 							}
+							return;
 						}
+
 						if (contextOn) {
 							try {
 								const turns = Math.max(1, Number(config.contextTurns) || 6);
@@ -11249,17 +11275,6 @@ h(
 								}
 								/* 对话优先（勾选）：像聊天的消息即使上下文模型判成了出图，也让对话模型直接回答；
 								   挂了参考图说明真要改图，不拦。 */
-								if (dialogFirst && looksLikeChat(rawPrompt) && readyRefs.length === 0) {
-									try {
-										await replyWithChat(rawPrompt);
-										setGenerating(false);
-										return;
-									} catch (chatError) {
-										toast(String(chatError?.message ?? chatError), "err");
-										setGenerating(false);
-										return;
-									}
-								}
 								if (plan?.ok && plan.action === "reply" && plan.reply) {
 									// 用户这句话是在纠正/讨论，不是要出图：只回一句话，留在会话历史里
 									const msgPayload = await call("/chat/message", {
@@ -11424,16 +11439,15 @@ h(
 					}
 				},
 				toggleContext: () => setContextOn((value) => !value),
-				toggleDialogFirst: () =>
-					setDialogFirst((value) => {
-						const next = !value;
-						try {
-							window.localStorage.setItem(DIALOG_FIRST_KEY, next ? "1" : "0");
-						} catch (error) {
-							/* 隐私模式写不了就只活这次 */
-						}
-						return next;
-					}),
+				setSendMode: (mode) => {
+					const next = mode === "dialog" ? "dialog" : "image";
+					setSendModeState(next);
+					try {
+						window.localStorage.setItem(MODE_KEY, next);
+					} catch (error) {
+						/* 隐私模式写不了就只活这次 */
+					}
+				},
 
 				toggleContextNoAutoImage: () =>
 					setContextNoAutoImage((value) => {
@@ -11992,7 +12006,7 @@ h(
 				conversationId,
 				contextOn,
 				contextNoAutoImage,
-				dialogFirst,
+				sendMode,
 				isVideoEndpoint,
 				chatModels
 			};

@@ -143,6 +143,25 @@ ChatView
 
 ---
 
+## 三·5、已落地：生图作为工具（LLM function calling）
+
+**这是当前的方向（取代「双动作」临时方案）**：
+
+- 宿主新增 `POST /chat/agent`：把用户消息交给对话模型，并声明 `GENERATE_IMAGE_TOOL`（OpenAI function calling 格式，参数 `prompt / size / count / reason`）；
+- 模型自己决定：闲聊/提问 → 直接文本回复；要图 → 返回 `tool_calls`；
+- 宿主执行工具（复用同一 job 队列，最长等 320s），把结果作为 `role:"tool"` 回填，再让模型收尾一句人话；
+- 返回 `{ ok, reply, images, toolCalls, chatModel }`；客户端把 `images` 直接挂在这条 assistant 消息上；
+- 上游模型不支持 tools 时退化为纯聊天，用户仍可切「图片」档强制生成；
+- 实测：`grok-4.6` 支持 function calling（返回 tool_calls），`deepseek-flash` 可用；`claude-sonnet-5-5` 在该上游无渠道。
+
+**对话窗口的两种动作（保留显式兜底）**
+| 档位 | 行为 |
+|---|---|
+| 对话 | 发消息 → `/chat/agent`：LLM 决定聊天还是调 `generate_image` 工具 |
+| 图片 | 发消息 → 直接 `/generate`（可勾「优化提示词」先整理提示词） |
+
+**后续（第 5 步）**：把「图片/对话」档位也去掉，只留 agent；需要强制出图时用输入框上的「生成图片」按钮直接调用工具。
+
 ## 四、迁移计划（4 步，每步可独立回滚）
 
 > 原则：先建新视图层，再切动作，最后删旧逻辑——不在旧结构上继续打补丁。

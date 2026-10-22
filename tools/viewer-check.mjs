@@ -262,6 +262,17 @@ window.fetch = async (url, init) => {
 	}
 	if (pathname.startsWith("/upload")) return json({ ok: true, item: { url: "/api/velapi-image-go/upload/up_1.png" } });
 	if (pathname.startsWith("/job/delete")) return json({ ok: true, removed: (body?.ids || []).length });
+	if (pathname.startsWith("/chat/agent")) {
+		const said = String(body?.message || "");
+		const wantImage = /画|生成一张|出图/.test(said);
+		return json({
+			ok: true,
+			reply: wantImage ? "图已经生成好了（mock）。" : "我是对话助手（mock）：你问的是「" + said + "」",
+			images: wantImage ? [{ url: "/api/velapi-image-go/asset/mock_agent_1.png", width: 1024, height: 1024 }] : [],
+			toolCalls: wantImage ? [{ name: "generate_image" }] : [],
+			chatModel: "mock-chat"
+		});
+	}
 	if (pathname.startsWith("/chat/say")) {
 		return json({
 			ok: true,
@@ -724,10 +735,10 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 				await wait(1600);
 			}
 		}
-		const modeChat = posts.filter((item) => item.path.startsWith("/chat/say")).pop();
+		const modeChat = posts.filter((item) => item.path.startsWith("/chat/agent")).pop();
 		const modeGen = posts.filter((item) => item.path.startsWith("/generate"));
 		check(
-			"模式切换「对话」：消息走 /chat/say，不触发生图",
+			"模式切换「对话」：消息走 /chat/agent（LLM 决定是否调 generate_image 工具），不直接触发生图",
 			Boolean(modeChat) && modeGen.length === 0,
 			JSON.stringify({ chat: Boolean(modeChat), generate: modeGen.length })
 		);

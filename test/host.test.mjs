@@ -372,7 +372,41 @@ const mockServer = http.createServer((request, response) => {
     const body = isModels
       ? JSON.stringify({ data: [{ id: "mock-image" }, { id: "mock-model-b" }, { id: "mock-bad" }] })
       : isChat
-        ? JSON.stringify(chatPlan)
+        ? JSON.stringify(
+            (() => {
+              const chatMessages = Array.isArray(payload?.messages) ? payload.messages : [];
+              const hasToolResult = chatMessages.some((item) => item?.role === "tool");
+              if (Array.isArray(payload?.tools) && payload.tools.length > 0 && !hasToolResult) {
+                // 第一轮：模型决定调 generate_image 工具
+                return {
+                  choices: [
+                    {
+                      index: 0,
+                      finish_reason: "tool_calls",
+                      message: {
+                        role: "assistant",
+                        content: "",
+                        tool_calls: [
+                          {
+                            id: "call_mock_1",
+                            type: "function",
+                            function: {
+                              name: "generate_image",
+                              arguments: JSON.stringify({ prompt: "一只戴眼镜的橘猫，柔和顶光", count: 1 })
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                };
+              }
+              // 第二轮（带 tool 结果）：模型用一句话收尾
+              return hasToolResult
+                ? { choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: "图我没能生成出来（上游 502），可以稍后重试。" } }] }
+                : chatPlan;
+            })()
+          )
         : video
           ? JSON.stringify({ id: "vid_1", status: "processing", data: [{ url: "https://cdn.example.com/v.mp4" }] })
           : provenanceOk
@@ -1003,6 +1037,19 @@ mockProvider = await saveMockProvider({
     "POST /chat/say：聊天模式真的问对话模型，落一条 reply job（不触发生图）",
     say.status === 200 && say.body?.ok === true && say.body?.job?.kind === "reply" && String(say.body?.job?.reply || "").length > 0,
     JSON.stringify({ status: say.status, body: say.body })
+  );
+
+  /* 对话 agent：LLM 用 function calling 调 generate_image（mock 第一次回 tool_calls，第二次收尾） */
+  const agent = await call("/chat/agent", { method: "POST", body: { message: "画一只戴眼镜的橘猫" } });
+  check(
+    "对话 agent：LLM 识别为「要图」→ 调 generate_image 工具 → 结果回填后给收尾回复",
+    agent.status === 200 &&
+      agent.body?.ok === true &&
+      Array.isArray(agent.body?.toolCalls) &&
+      agent.body.toolCalls.length === 1 &&
+      agent.body.toolCalls[0]?.name === "generate_image" &&
+      String(agent.body?.reply || "").length > 0,
+    JSON.stringify({ status: agent.status, body: agent.body })
   );
   const editPlan = await call("/chat/plan", { method: "POST", body: { message: "在上一张基础上再柔和点", draft: "在上一张基础上再柔和点", model: "mock-image" } });
   check(

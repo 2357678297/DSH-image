@@ -11211,12 +11211,43 @@ h(
 						   只喂当前会话的 jobs —— 新对话没有历史，记忆天然隔离。 */
 						/* 聊天意图兜底：上下文模型没给出可用判断（不可用 / 解析失败）时，
 						   提问、闲聊这类消息直接交给对话模型回答，不硬打到生图端口。 */
+						/* 对话 agent：把话交给 LLM，由它决定聊天还是调用 generate_image 工具（生图 = 工具）。
+						   返回的 images 是工具产物，直接挂在这条 assistant 消息上。 */
 						const replyWithChat = async (text) => {
-							const payload = await call("/chat/say", {
+							const history = jobs
+								.slice(0, Math.max(2, Number(config.contextTurns) || 6))
+								.reverse()
+								.map((job) => ({
+									role: job.kind === "reply" ? "assistant" : "user",
+									content: String(job.reply || job.userText || job.prompt || "").slice(0, 1200)
+								}))
+								.filter((item) => item.content.length > 0);
+							const payload = await call("/chat/agent", {
 								method: "POST",
-								body: { message: text, conversationId, chatModel: config.chatModel || "" }
+								body: { message: text, conversationId, chatModel: config.chatModel || "", history }
 							});
-							const replyJob = { ...(payload.job || {}), userText: text, images: [], clientSeq: seq };
+							const replyJob = {
+								id: `agent_${Date.now().toString(36)}`,
+								kind: "reply",
+								status: "succeeded",
+								mode: "chat",
+								prompt: text,
+								userText: text,
+								reply: String(payload?.reply || ""),
+								images: Array.isArray(payload?.images) ? payload.images.map((image) => ({ url: image.url, width: image.width, height: image.height })) : [],
+								model: payload?.chatModel || config.chatModel || "",
+								protocol: "agent",
+								size: "",
+								quality: "",
+								count: 0,
+								referenceUrl: "",
+								source: "ui",
+								conversationId,
+								createdAt: new Date().toISOString(),
+								error: "",
+								errorCode: "",
+								clientSeq: seq
+							};
 							setJobs((list) => [replyJob, ...list.filter((item) => item.id !== replyJob.id)]);
 							setDraft("");
 						};

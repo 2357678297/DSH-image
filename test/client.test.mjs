@@ -3362,7 +3362,7 @@ check(
     /function looksLikeChat\(text\)/.test(SOURCE) &&
       /const replyWithChat = async \(text\) => \{/.test(SOURCE) &&
       /if \(!plan\?\.ok && looksLikeChat\(rawPrompt\)\)/.test(SOURCE) &&
-      /await call\("\/chat\/say", \{/.test(SOURCE) &&
+      /await call\("\/chat\/agent", \{/.test(SOURCE) &&
       !/data-chat-mode/.test(SOURCE)
   );
   check(

@@ -454,6 +454,7 @@ window.__ModuleLoader__.load({
 			"chat.refLimit": "参考图最多挂 4 张，先移掉一张",
 			"chat.modelInvalid": "当前模型不能生图（是对话/音频模型，或不在任何供应商目录里），先选一个图片模型",
 			"chat.queueFull": "发送太快了：这一句处理完再发下一句（最多排 6 条）",
+			"chat.thinking": "思考中…",
 			"chat.forceGenerateTooShort": "提示词太短：至少写 5 个字符的画面描述，再点「生成图片」",
 			"chat.modelSwitched": "当前模型不能生图，已自动切到 {model}",
 			"chat.toBottom": "回到底部",
@@ -2212,6 +2213,13 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 .vig-ctx-hot{flex-wrap:wrap}
 .vig-ctx-hint{flex-basis:100%;font-size:10.5px;color:var(--vig-text-faint);padding-left:22px}
 .vig-ctx-select{flex:1;min-width:0;height:26px;border:1px solid var(--vig-line);border-radius:var(--vig-r-pill);padding:0 8px;background:var(--vig-surface);font-size:11.5px;color:var(--vig-text)}
+/* 进行中：三点跳动（用户发送后立刻看得见「在跑」，agent/生图都可能几十秒） */
+.vig-typing{display:inline-flex;align-items:center;gap:4px;height:22px}
+.vig-typing span{width:5px;height:5px;border-radius:50%;background:var(--vig-text-faint);animation:vig-typing 1.2s infinite ease-in-out}
+.vig-typing span:nth-child(2){animation-delay:.15s}
+.vig-typing span:nth-child(3){animation-delay:.3s}
+@keyframes vig-typing{0%,60%,100%{opacity:.35;transform:translateY(0)}30%{opacity:1;transform:translateY(-2px)}}
+@media (prefers-reduced-motion:reduce){.vig-typing span{animation:none;opacity:.6}}
 /* ============================================================
    设计系统 v2.25 · 「回到底部」浮标（上翻历史时出现）
    ============================================================ */
@@ -3318,6 +3326,34 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const prompt = typeof job.prompt === "string" ? job.prompt.trim() : "";
 			// 气泡里显示用户原话（对话模型改写后的提示词单独留一行，见下面 planNote）
 			const displayPrompt = String(job.userText || job.prompt || "").trim();
+			/* 进行中占位（用户消息 + 「思考中」气泡）：agent / 生图都可能跑几十秒，
+			   没有这个占位用户会以为界面没反应。 */
+			if (job.kind === "pending") {
+				const meText = String(job.userText || job.prompt || "").trim();
+				return h(
+					react.Fragment,
+					null,
+					meText
+						? h(
+								"article",
+								{ className: "vig-turn is-user" },
+								h("div", { className: "vig-bubble is-user" }, h("div", { className: "vig-me" }, meText)),
+								h("div", { className: "vig-avatar", title: t("chat.me") }, t("chat.meShort"))
+							)
+						: null,
+					h(
+						"article",
+						{ className: "vig-turn", "data-pending": "1" },
+						h("div", { className: "vig-avatar" }, "AI"),
+						h(
+							"div",
+							{ className: "vig-bubble" },
+							h("div", { className: "vig-who" }, `${t("chat.assistant")} · ${t("chat.thinking")}`),
+							h("div", { className: "vig-typing" }, h("span", null), h("span", null), h("span", null))
+						)
+					)
+				);
+			}
 			// 过程留痕：这条任务是界面点出来的、对话里工具调的，还是外部程序打进来的。
 			// 老记录没有 source —— 宁可不显示，也不瞎猜一个。
 			const sourceLabel =
@@ -11153,14 +11189,12 @@ h(
 			const pendingSendsRef = useRef(0);
 			const sendSeqRef = useRef(0);
 			const runGenerateFlow = async (rawPrompt, seq, force = false) => {
-					/* 模型隔离：对话/音频/向量模型不能生图（上游会回 404「模型不存在」）——
-					   选错了就别发请求，这里直接把原因说清楚。 */
-					const modelKind = modelKindOf(config.defaultModel, providers);
-					const knownModel = (providers || []).some((provider) => (provider.models || []).includes(config.defaultModel));
-					if (!knownModel || ["chat", "audio", "embedding", "rerank"].includes(modelKind)) {
-						toast(t("chat.modelInvalid"), "err");
-						return;
-					}
+					/* 进行中占位：agent / 生图都可能跑几十秒，先把「用户消息 + 思考中」画出来 */
+					const pendingId = `pending_${seq}`;
+					setJobs((list) => [
+						{ id: pendingId, kind: "pending", status: "running", prompt: rawPrompt, userText: rawPrompt, images: [], model: "", size: "", clientSeq: seq, createdAt: new Date().toISOString() },
+						...list.filter((item) => item.id !== pendingId)
+					]);
 					try {
 						/* 发送前把「还没有本站 URL」的参考图补一份留档：从图库 / 重绘 / 预设挂进来的
 						   chip 不走 /upload，没有 URL 的话 referenceUrls 会少一张 —— 发出去变成单图，
@@ -11241,6 +11275,14 @@ h(
 							}
 							return;
 						}
+					/* 模型隔离：对话/音频/向量模型不能生图（上游会回 404「模型不存在」）——
+					   选错了就别发请求，这里直接把原因说清楚。 */
+					const modelKind = modelKindOf(config.defaultModel, providers);
+					const knownModel = (providers || []).some((provider) => (provider.models || []).includes(config.defaultModel));
+					if (!knownModel || ["chat", "audio", "embedding", "rerank"].includes(modelKind)) {
+						toast(t("chat.modelInvalid"), "err");
+						return;
+					}
 
 						if (contextOn) {
 							try {
@@ -11399,6 +11441,7 @@ h(
 				sendChainRef.current = run.catch(() => {});
 				return run.finally(() => {
 					pendingSendsRef.current = Math.max(0, pendingSendsRef.current - 1);
+					setJobs((list) => list.filter((item) => item.kind !== "pending"));
 					if (pendingSendsRef.current === 0) setGenerating(false);
 				});
 			};

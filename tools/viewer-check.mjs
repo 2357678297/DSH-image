@@ -263,6 +263,8 @@ window.fetch = async (url, init) => {
 	if (pathname.startsWith("/upload")) return json({ ok: true, item: { url: "/api/velapi-image-go/upload/up_1.png" } });
 	if (pathname.startsWith("/job/delete")) return json({ ok: true, removed: (body?.ids || []).length });
 	if (pathname.startsWith("/chat/agent")) {
+		// 模拟真实延迟：让「思考中」占位有时间被断言到
+		await new Promise((resolve) => setTimeout(resolve, 300));
 		const said = String(body?.message || "");
 		const wantImage = /画|生成一张|出图/.test(said);
 		return json({
@@ -716,6 +718,8 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 	}
 	// 生图作为工具：&agent=1 发送消息 → 走 /chat/agent（LLM 决定聊天还是调 generate_image）
 	if (new URLSearchParams(location.search).get("agent") === "1") {
+		let pendingShown = false;
+		let pendingGone = false;
 		const agentInput = host.querySelector(".vig-input");
 		if (agentInput) {
 			const agentSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
@@ -727,11 +731,19 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			const agentSend = host.querySelector(".vig-send");
 			if (agentSend) {
 				flushSync(() => agentSend.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-				await wait(1600);
+				await wait(150);
+				pendingShown = Boolean(host.querySelector("[data-pending]"));
+				await wait(1500);
+				pendingGone = !host.querySelector("[data-pending]");
 			}
 		}
 		const agentPost = posts.filter((item) => item.path.startsWith("/chat/agent")).pop();
 		const agentGen = posts.filter((item) => item.path.startsWith("/generate"));
+		check(
+			"发送后立即显示「思考中」占位（在跑，不是没反应），完成后消失",
+			pendingShown && pendingGone,
+			JSON.stringify({ shown: pendingShown, gone: pendingGone })
+		);
 		check(
 			"发送默认交给对话 agent（/chat/agent），不直接触发生图",
 			Boolean(agentPost) && agentGen.length === 0,

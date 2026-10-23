@@ -3360,6 +3360,16 @@ check(
       !/sendMode/.test(SOURCE)
   );
   check(
+    "上下文显示参考图：消息带 referenceUrls（气泡旁缩略图）",
+    /referenceUrls: \(references \|\| \[\]\)/.test(SOURCE) &&
+      /className: "vig-me-ref"/.test(SOURCE) &&
+      /job\.referenceUrls/.test(SOURCE)
+  );
+  check(
+    "参考图交给对话模型：/chat/agent 请求里带 references",
+    /references: \(references \|\| \[\]\)/.test(SOURCE) && /call\("\/chat\/agent"/.test(SOURCE)
+  );
+  check(
     "上下文管理接聊天：plan 判不出且像聊天时走 /chat/say（不硬生图，也没单独的聊天模式开关）",
     /function looksLikeChat\(text\)/.test(SOURCE) &&
       /const replyWithChat = async \(text\) => \{/.test(SOURCE) &&

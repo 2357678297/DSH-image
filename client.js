@@ -11196,7 +11196,7 @@ h(
 					/* 进行中占位：agent / 生图都可能跑几十秒，先把「用户消息 + 思考中」画出来 */
 					const pendingId = `pending_${seq}`;
 					setJobs((list) => [
-						{ id: pendingId, kind: "pending", status: "running", prompt: rawPrompt, userText: rawPrompt, images: [], model: "", size: "", clientSeq: seq, createdAt: new Date().toISOString() },
+						{ id: pendingId, kind: "pending", status: "running", prompt: rawPrompt, userText: rawPrompt, images: [], referenceUrls: (references || []).map((item) => item.url || "").filter(Boolean), model: "", size: "", clientSeq: seq, createdAt: new Date().toISOString() },
 						...list.filter((item) => item.id !== pendingId)
 					]);
 					try {
@@ -11258,6 +11258,8 @@ h(
 								reply: String(payload?.reply || "").trim() || t("chat.emptyReply"),
 								images: Array.isArray(payload?.images) ? payload.images.map((image) => ({ url: image.url, width: image.width, height: image.height })) : [],
 								model: payload?.chatModel || config.chatModel || "",
+								// 上下文显示：把「我发出去时挂的参考图」记在这条消息上（气泡旁缩略图）
+								referenceUrls: (references || []).map((item) => item.url || "").filter(Boolean),
 								protocol: "agent",
 								size: "",
 								quality: "",

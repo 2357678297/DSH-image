@@ -1060,6 +1060,24 @@ mockProvider = await saveMockProvider({
       parts.some((part) => part.type === "image_url" && String(part.image_url?.url || "").startsWith("data:image/png;base64,")),
     JSON.stringify({ status: agentWithRef.status, parts: parts.map((part) => part.type) })
   );
+
+  /* 改图/出图类消息：tool_choice=required（防模型只回文字不出图）；寒暄不传 tools */
+  await call("/chat/agent", { method: "POST", body: { message: "橙色改成灰色其他地方不要动" } });
+  const requiredHit = mockHits.filter((hit) => hit.url.includes("/chat/completions") && hit.body?.tool_choice === "required").pop();
+  check(
+    "改图消息：tool_choice=required（模型必须调 generate_image，不能只回文字）",
+    Boolean(requiredHit),
+    JSON.stringify({ toolChoice: requiredHit?.body?.tool_choice ?? null })
+  );
+  await call("/chat/agent", { method: "POST", body: { message: "你好" } });
+  const chitChatHit = mockHits
+    .filter((hit) => hit.url.includes("/chat/completions") && !Array.isArray(hit.body?.tools))
+    .pop();
+  check(
+    "寒暄消息：不传 tools（纯聊天，不会被当出图）",
+    Boolean(chitChatHit),
+    JSON.stringify({ tools: chitChatHit?.body?.tools ?? null })
+  );
   /* 对话 agent：LLM 用 function calling 调 generate_image（mock 第一次回 tool_calls，第二次收尾） */
   const agent = await call("/chat/agent", { method: "POST", body: { message: "画一只戴眼镜的橘猫" } });
   check(

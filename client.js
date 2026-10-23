@@ -3847,6 +3847,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										"data-conv": item.id,
 										onClick: () => void actions.switchConversation(item.id)
 									},
+									`${item.title || t("chat.untitledConv")}${item.count ? ` · ${item.count}` : ""}`
 								)
 							)
 						),

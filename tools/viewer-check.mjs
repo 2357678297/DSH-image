@@ -1388,8 +1388,8 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 
 /* ---- 5d. 对话（会话）：切换 / 新建 / 删除；上下文管理 ---- */
 {
-	const convSelect = host.querySelector("select.vig-conv-sel");
-	const convOptions = convSelect ? Array.from(convSelect.options).map((node) => text(node)) : [];
+	const convTabs = Array.from(host.querySelectorAll(".vig-conv-tab"));
+	const convOptions = convTabs.map((node) => text(node));
 	check(
 		"对话切换：头部下拉列出各个会话（默认对话 / 旧对话）",
 		convOptions.length >= 2 && convOptions.some((label) => label.includes("默认对话")) && convOptions.some((label) => label.includes("旧对话")),
@@ -1398,8 +1398,8 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 	// 会话隔离：切到空会话 → 消息清空
 	const selectSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;
 	flushSync(() => {
-		selectSetter.call(convSelect, "conv_old");
-		convSelect.dispatchEvent(new Event("change", { bubbles: true }));
+		const convOldTab = host.querySelector('[data-conv="conv_old"]');
+		if (convOldTab) flushSync(() => convOldTab.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 	});
 	await wait(400);
 	check("切到另一个会话：只显示它自己的历史（这里是空的）", host.querySelectorAll(".vig-turn.is-user").length === 0, String(host.querySelectorAll(".vig-turn.is-user").length));
@@ -1449,7 +1449,7 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 	await wait(500);
 	check(
 		"删除对话：POST /conversations/delete，界面回落到还剩下的会话",
-		posts.some((item) => item.path.startsWith("/conversations/delete")) && host.querySelectorAll(".vig-conv-sel option").length >= 1,
+		posts.some((item) => item.path.startsWith("/conversations/delete")) && host.querySelectorAll(".vig-conv-tab").length >= 1,
 		JSON.stringify(posts.map((item) => item.path).filter((path2) => path2.startsWith("/conversations")).slice(-3))
 	);
 }

@@ -430,6 +430,7 @@ function writeConvSetting(id, settings) {
 			"chat.confirmDeleteConv": "删除这个对话和它的全部记录？（图库里的图不受影响）",
 			"chat.deletedConv": "已删除这个对话",
 			"chat.convList": "切换对话",
+			"chat.untitledConv": "未命名",
 			"chat.convMemory": "每个对话的记忆互相隔离：新建对话不带上一段上下文",
 			"chat.context": "上下文",
 			"chat.contextOn": "上下文管理：开 —— 每轮先由对话模型把本对话的历史整理成提示词",
@@ -871,6 +872,7 @@ function writeConvSetting(id, settings) {
 			"chat.confirmDeleteConv": "Delete this conversation and all its entries? (Library images are untouched)",
 			"chat.deletedConv": "Conversation deleted",
 			"chat.convList": "Switch conversation",
+			"chat.untitledConv": "Untitled",
 			"chat.convMemory": "Each conversation keeps its own memory; a new conversation starts empty",
 			"chat.context": "Context",
 			"chat.contextOn": "Context manager: on — a chat model rewrites this conversation's history into the prompt each turn",
@@ -1313,10 +1315,16 @@ body[data-ds-dark-theme] .vig-mark{background:var(--vig-accent);color:var(--vig-
 .vig-tool.is-on{background:var(--vig-accent-soft);color:var(--vig-accent)}
 /* 对话（会话）切换：标题右边一条；窄了就缩左栏的下拉宽度 */
 .vig-conv{display:flex;align-items:center;gap:2px;min-width:0;max-width:250px}
-.vig-conv-sel{max-width:170px;height:26px;font-size:12px;padding:0 6px;flex:none}
+/* 会话列表：一排直观按钮（横向可滚），当前会话深色高亮 */
+.vig-conv-tabs{display:flex;align-items:center;gap:6px;overflow-x:auto;overflow-y:hidden;max-width:min(56vw,720px);padding:1px;scrollbar-width:none;flex:none}
+.vig-conv-tabs::-webkit-scrollbar{display:none}
+.vig-conv-tab{flex:none;height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--vig-line);background:var(--vig-surface);color:var(--vig-text-muted);font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;transition:background-color var(--vig-dur) var(--vig-ease),color var(--vig-dur) var(--vig-ease),border-color var(--vig-dur) var(--vig-ease)}
+.vig-conv-tab:hover{color:var(--vig-text);border-color:var(--vig-line-strong)}
+.vig-conv-tab.is-active{background:var(--vig-ink,#0b0b0c);color:#fff;border-color:transparent}
+.vig-root[data-compact="1"] .vig-conv-tabs{max-width:min(40vw,420px)}
 .vig-conv .vig-icon-btn{width:24px;height:24px}
 .vig-root[data-compact="1"] .vig-conv{max-width:190px}
-.vig-root[data-compact="1"] .vig-conv-sel{max-width:118px}
+.vig-root[data-compact="1"] .vig-conv-tab{max-width:140px;padding:0 9px}
 /* 信息卡快捷选择：一级浮层列卡片，点一张直接插进输入框；二级「管理」才跳信息管理页 */
 .vig-note-pick{position:relative;display:inline-flex}
 .vig-note-pop{position:absolute;left:0;bottom:calc(100% + 8px);z-index:30;width:min(300px,78vw);max-height:320px;overflow:auto;
@@ -3823,15 +3831,24 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					h(
 						"div",
 						{ className: "vig-conv", title: t("chat.convMemory") },
+						/* 会话列表：直接铺成一排可点的按钮（不再用下拉展开） */
 						h(
-							"select",
-							{
-								className: "vig-sel vig-conv-sel",
-								value: conversationId || "",
-								title: t("chat.convList"),
-								onChange: (event) => void actions.switchConversation(event.target.value)
-							},
-							(conversations || []).map((item) => h("option", { key: item.id, value: item.id }, `${item.title}${item.count ? ` · ${item.count}` : ""}`))
+							"div",
+							{ className: "vig-conv-tabs", role: "tablist", "aria-label": t("chat.convList") },
+							(conversations || []).map((item) =>
+								h(
+									"button",
+									{
+										key: item.id,
+										className: `vig-conv-tab${item.id === conversationId ? " is-active" : ""}`,
+										role: "tab",
+										"aria-selected": item.id === conversationId ? "true" : "false",
+										title: item.title || "",
+										"data-conv": item.id,
+										onClick: () => void actions.switchConversation(item.id)
+									},
+								)
+							)
 						),
 						h(
 							"button",

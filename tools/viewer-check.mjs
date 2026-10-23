@@ -1391,9 +1391,12 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 	const convTabs = Array.from(host.querySelectorAll(".vig-conv-tab"));
 	const convOptions = convTabs.map((node) => text(node));
 	check(
-		"对话切换：头部下拉列出各个会话（默认对话 / 旧对话）",
-		convOptions.length >= 2 && convOptions.some((label) => label.includes("默认对话")) && convOptions.some((label) => label.includes("旧对话")),
-		JSON.stringify(convOptions)
+		"对话切换：头部列出圆形编号按钮（1/2…，当前高亮，title 带会话名）",
+		convTabs.length >= 2 &&
+			convTabs.every((node) => /^[0-9]+$/.test(String(node.textContent || "").trim())) &&
+
+
+		JSON.stringify({ count: convTabs.length, tabTexts: convOptions, detail: convTabs.map((node) => ({ text: String(node.textContent || "").trim(), title: node.getAttribute("title") || "" })) })
 	);
 	// 会话隔离：切到空会话 → 消息清空
 	const selectSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;

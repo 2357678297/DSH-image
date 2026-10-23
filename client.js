@@ -1316,15 +1316,15 @@ body[data-ds-dark-theme] .vig-mark{background:var(--vig-accent);color:var(--vig-
 /* 对话（会话）切换：标题右边一条；窄了就缩左栏的下拉宽度 */
 .vig-conv{display:flex;align-items:center;gap:2px;min-width:0;max-width:250px}
 /* 会话列表：一排直观按钮（横向可滚），当前会话深色高亮 */
-.vig-conv-tabs{display:flex;align-items:center;gap:6px;overflow-x:auto;overflow-y:hidden;max-width:min(52vw,640px);padding:1px;scrollbar-width:none;flex:0 1 auto;min-width:0}
+.vig-conv-tabs{display:flex;align-items:center;gap:6px;overflow-x:auto;overflow-y:hidden;max-width:min(40vw,480px);padding:1px;scrollbar-width:none;flex:0 1 auto;min-width:0}
 .vig-conv-tabs::-webkit-scrollbar{display:none}
-.vig-conv-tab{flex:none;height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--vig-line);background:var(--vig-surface);color:var(--vig-text-muted);font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;transition:background-color var(--vig-dur) var(--vig-ease),color var(--vig-dur) var(--vig-ease),border-color var(--vig-dur) var(--vig-ease)}
+.vig-conv-tab{flex:none;width:28px;height:28px;padding:0;border-radius:50%;border:1px solid var(--vig-line);background:var(--vig-surface);color:var(--vig-text-muted);font-size:12px;font-weight:600;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:background-color var(--vig-dur) var(--vig-ease),color var(--vig-dur) var(--vig-ease),border-color var(--vig-dur) var(--vig-ease)}
 .vig-conv-tab:hover{color:var(--vig-text);border-color:var(--vig-line-strong)}
 .vig-conv-tab.is-active{background:var(--vig-ink,#0b0b0c);color:#fff;border-color:transparent}
 .vig-root[data-compact="1"] .vig-conv-tabs{max-width:min(34vw,360px)}
 .vig-conv .vig-icon-btn{width:24px;height:24px}
 .vig-root[data-compact="1"] .vig-conv{max-width:190px}
-.vig-root[data-compact="1"] .vig-conv-tab{max-width:140px;padding:0 9px}
+.vig-root[data-compact="1"] .vig-conv-tab{width:26px;height:26px}
 /* 信息卡快捷选择：一级浮层列卡片，点一张直接插进输入框；二级「管理」才跳信息管理页 */
 .vig-note-pick{position:relative;display:inline-flex}
 .vig-note-pop{position:absolute;left:0;bottom:calc(100% + 8px);z-index:30;width:min(300px,78vw);max-height:320px;overflow:auto;
@@ -3835,7 +3835,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						h(
 							"div",
 							{ className: "vig-conv-tabs", role: "tablist", "aria-label": t("chat.convList") },
-							(conversations || []).map((item) =>
+							(conversations || []).map((item, index) =>
 								h(
 									"button",
 									{
@@ -3843,11 +3843,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										className: `vig-conv-tab${item.id === conversationId ? " is-active" : ""}`,
 										role: "tab",
 										"aria-selected": item.id === conversationId ? "true" : "false",
-										title: item.title || "",
+										title: `${item.title || t("chat.untitledConv")}${item.count ? ` · ${item.count}` : ""}`,
 										"data-conv": item.id,
 										onClick: () => void actions.switchConversation(item.id)
 									},
-									`${item.title || t("chat.untitledConv")}${item.count ? ` · ${item.count}` : ""}`
+									String(index + 1)
 								)
 							)
 						),

@@ -3329,6 +3329,16 @@ check(
       /job\.referenceUrls/.test(SOURCE)
   );
   check(
+    "会话隔离：每个会话独立记住生图配置（localStorage），切会话恢复",
+    /CONV_SETTINGS_KEY/.test(SOURCE) &&
+      /readConvSettings\(\)\[conversationId\]/.test(SOURCE) &&
+      /pickConfigFields/.test(SOURCE)
+  );
+  check(
+    "会话隔离：轮询任务按 conversationId 过滤（别的会话不会串进来）",
+    /job\.conversationId !== conversationIdRef\.current/.test(SOURCE)
+  );
+  check(
     "模型 kind 只认目录元数据（不再按名字猜视频：wan3.0-video-1080p 不会被误切视频协议）",
     /function modelKindOf\(id, providers\)/.test(SOURCE) &&
       !/VIDEO_NAME_HINT/.test(SOURCE) &&

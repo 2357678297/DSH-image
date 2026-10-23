@@ -70,6 +70,44 @@ window.__ModuleLoader__.load({
 		const CONTEXT_KEY = "dsh.velapi-image-go.context";
 		// 当前在哪个对话里（会话 id）；每个会话的历史互相隔离
 		const CONV_KEY = "dsh.velapi-image-go.conv";
+// 会话级生图配置：每个会话独立记住模型/尺寸/质量/数量/协议/视频参数
+const CONV_SETTINGS_KEY = "dsh.velapi-image-go.conv-settings";
+const CONV_CONFIG_FIELDS = [
+  "defaultModel",
+  "defaultSize",
+  "defaultQuality",
+  "defaultCount",
+  "defaultEndpoint",
+  "videoSize",
+  "videoRatio",
+  "videoResolution",
+  "videoSeconds"
+];
+function pickConfigFields(config) {
+  const out = {};
+  for (const key of CONV_CONFIG_FIELDS) {
+    if (config && config[key] !== undefined) out[key] = config[key];
+  }
+  return out;
+}
+function readConvSettings() {
+  try {
+    return JSON.parse(window.localStorage.getItem(CONV_SETTINGS_KEY) || "{}") || {};
+  } catch (error) {
+    return {};
+  }
+}
+function writeConvSetting(id, settings) {
+  if (!id) return;
+  try {
+    const all = readConvSettings();
+    all[id] = settings;
+    window.localStorage.setItem(CONV_SETTINGS_KEY, JSON.stringify(all));
+  } catch (error) {
+    /* 隐私模式写不了就只活这次 */
+  }
+}
+
 		// 端点协议选择：宿主老版本还没有 config.defaultEndpoint 这个字段（重启后才吃到），
 		// 本地存一份，选择在刷新之间就不会丢。
 		const ENDPOINT_KEY = "dsh.velapi-image-go.endpoint";
@@ -11015,6 +11053,22 @@ h(
 				}
 			};
 			const [jobs, setJobs] = useState([]);
+			/* 会话隔离：切换会话时恢复该会话自己的生图配置；新会话回落到最初默认，不继承上一个会话。 */
+			const conversationIdRef = useRef(conversationId);
+			useEffect(() => {
+				conversationIdRef.current = conversationId;
+			}, [conversationId]);
+			const initialConfigRef = useRef(null);
+			useEffect(() => {
+				if (initialConfigRef.current === null && config?.defaultModel) initialConfigRef.current = pickConfigFields(config);
+			}, [config]);
+			useEffect(() => {
+				if (!conversationId) return;
+				const snapshot = pickConfigFields(config);
+				if (!snapshot.defaultModel) return;
+				writeConvSetting(conversationId, snapshot);
+			}, [conversationId, config.defaultModel, config.defaultSize, config.defaultQuality, config.defaultCount, config.defaultEndpoint, config.videoSize, config.videoRatio, config.videoResolution, config.videoSeconds]);
+
 			const [pending, setPending] = useState(0);
 			const [draft, setDraft] = useState("");
 			const [references, setReferences] = useState([]);
@@ -11156,6 +11210,11 @@ h(
 						try {
 							const payload = await call(`/job?id=${encodeURIComponent(jobId)}`);
 							const job = payload.job;
+							/* 会话隔离：任务属于别的会话 → 本会话不更新、不再轮询（避免切窗口后历史串混） */
+							if (job?.conversationId && conversationIdRef.current && job.conversationId !== conversationIdRef.current) {
+								timers.current.delete(jobId);
+								return;
+							}
 							setJobs((list) => list.map((item) => (item.id === job.id ? job : item)));
 							if (job.status === "queued" || job.status === "running") {
 								// 宿主那边有 300s 超时兜着，正常不会走到这里；走到就是它没消息了
@@ -11997,6 +12056,16 @@ h(
 							: view === "ps"
 								? h(PsView, { state, actions, initialUrl: psImage, onConsumeInitialUrl: actions.clearPsImage })
 								: h(ProvidersView, { state, actions });
+
+			/* 会话隔离：switchConversation / newConversation 之后，把该会话自己的配置恢复回来。 */
+			useEffect(() => {
+				if (!conversationId) return;
+				const stored = readConvSettings()[conversationId] || initialConfigRef.current;
+				if (!stored) return;
+				const current = pickConfigFields(config);
+				if (JSON.stringify(stored) === JSON.stringify(current)) return;
+				void actions.saveConfig(stored);
+			}, [conversationId]);
 
 			return h(
 				"div",

@@ -1403,6 +1403,7 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 	});
 	await wait(400);
 	check("切到另一个会话：只显示它自己的历史（这里是空的）", host.querySelectorAll(".vig-turn.is-user").length === 0, String(host.querySelectorAll(".vig-turn.is-user").length));
+	check("切会话：恢复该会话自己的生图配置（POST /config）", posts.filter((item) => item.path === "/config").length > 0, JSON.stringify({ configCalls: posts.filter((item) => item.path === "/config").length }));
 	// 新建对话
 	const newBtn = host.querySelector('.vig-conv .vig-icon-btn[title="新建对话"]');
 	flushSync(() => newBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));

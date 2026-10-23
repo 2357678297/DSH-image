@@ -3049,7 +3049,7 @@ check(
 
   check(
     "挂了参考图 + 选「图片编辑」协议：生成请求带 mode:edit 和参考图字节（别只发文字被 400）",
-    /const wantsEdit = readyRefs\.length > 0 && \(editMode \|\| \(config\.defaultEndpoint \|\| "auto"\) === "images_edits"\)/.test(SOURCE) &&
+    /const wantsEdit = readyRefs\.length > 0;/.test(SOURCE) &&
       /let effectiveMode = wantsEdit \? "edit" : "generate"/.test(SOURCE) &&
       /image: sendImages\[0\]/.test(SOURCE) &&
       /images: sendImages/.test(SOURCE) &&
@@ -3062,27 +3062,8 @@ check(
       /let effectiveReferenceUrls = readyRefs\.map\(\(item\) => item\.url \|\| ""\)\.filter\(Boolean\)/.test(SOURCE)
   );
   check(
-    "对话上下文管理：生成前先 POST /chat/plan，把本会话历史交出去，改写结果进 planNote（userText 保留原话）",
-    /await call\("\/chat\/plan", \{/.test(SOURCE) &&
-      /const history = jobs[\s\S]{0,240}\.reverse\(\)/.test(SOURCE) &&
-      /if \(plan\?\.ok && plan\.prompt\)/.test(SOURCE) &&
-      /planNote = plan\.prompt/.test(SOURCE) &&
-      /plan\.mode === "edit" && plan\.referenceUrl/.test(SOURCE) &&
-      /userText: rawPrompt/.test(SOURCE) &&
-      /planNote,/.test(SOURCE) &&
-      /if \(contextOn\) \{/.test(SOURCE) &&
-      /contextOn \? " is-on" : ""/.test(SOURCE) &&
-      /"data-context-toggle": "1"/.test(SOURCE) && /contextPanelOpen \? "true" : "false"/.test(SOURCE)
-  );
-  check(
-    "上下文管理改成对话式：点 ✨ 打开设置浮层（自动整理 / 轮数 / 限制直接出图 / 已读配置）",
-    /className: "vig-ctx-pop"/.test(SOURCE) &&
-      /"data-context-toggle": "1"/.test(SOURCE) &&
-      /actions\.toggleContext\(\)/.test(SOURCE) &&
-      /contextNoAutoImage/.test(SOURCE) &&
-      /noAutoImage: contextNoAutoImage/.test(SOURCE) &&
-      /chat\.contextWired/.test(SOURCE) &&
-      /!contextNoAutoImage && plan\.mode === "edit"/.test(SOURCE)
+    "✨ 浮层 UI 保留（逻辑回退：上下文管理不再参与发送流程）",
+    /data-context-toggle/.test(SOURCE) && /vig-ctx-pop/.test(SOURCE) && /vig-ctx-title/.test(SOURCE)
   );
   check(
     "对话（会话）：新建 / 切换 / 重命名 / 删除都接宿主 /conversations，生成与重试带 conversationId",
@@ -3094,13 +3075,6 @@ check(
       /conversationId: job\.conversationId \|\| conversationId/.test(SOURCE) &&
       /className: "vig-conv", title: t\("chat\.convMemory"\)/.test(SOURCE) &&
       /!window\.confirm\(t\("chat\.confirmDeleteConv"\)\)/.test(SOURCE)
-  );
-  check(
-    "会话记忆隔离：计划历史只取当前会话的 jobs（新对话 history 为空），气泡显示原话、改写单独一行",
-    /const history = jobs\s*\n?\s*\.slice\(0, turns\)/.test(SOURCE) &&
-      /job\.userText \|\| job\.prompt \|\| ""/.test(SOURCE) &&
-      /job\.planNote && job\.planNote !== displayPrompt/.test(SOURCE) &&
-      /t\("chat\.planRewrite"\)/.test(SOURCE)
   );
   check(
     "带着参考图发出去的消息：缩略图跟着我那条走（宿主只存 URL）",
@@ -3320,12 +3294,6 @@ check(
       /onEdit: actions\.editJob/.test(SOURCE)
   );
   check(
-    "上下文模型判「纠正」：不出图，一句话回进会话历史（根治「越改越错」）",
-    /if \(plan\?\.ok && plan\.action === "reply" && plan\.reply\)/.test(SOURCE) &&
-      /call\("\/chat\/message", \{[\s\S]{0,80}reply: plan\.reply, conversationId,/.test(SOURCE) &&
-      /setGenerating\(false\);[\s\S]{0,40}return;/.test(SOURCE)
-  );
-  check(
     "参考图字节只认真 data URI：URL 字符串不再当 image 发（37 字节假图根治），多张一起发",
     /typeof item\.dataUrl === "string" && item\.dataUrl\.startsWith\("data:"\) \? item\.dataUrl : null/.test(SOURCE) &&
       /images: sendImages/.test(SOURCE) &&
@@ -3349,33 +3317,16 @@ check(
       /update\.clickAgain/.test(SOURCE)
   );
   check(
-    "生图作为工具：发送默认走 /chat/agent（LLM 调 generate_image），另有「生成图片」强制入口",
-    /call\("\/chat\/agent"/.test(SOURCE) &&
-      /await replyWithChat\(rawPrompt\)/.test(SOURCE) &&
-      /forceGenerate: async \(\) => \{/.test(SOURCE) &&
-      /data-force-generate/.test(SOURCE) &&
-      /enqueueSend\(rawPrompt, true\)/.test(SOURCE) &&
-      /chat\.dialogNotReady/.test(SOURCE) &&
-      !/vig-mode-switch/.test(SOURCE) &&
-      !/sendMode/.test(SOURCE)
+    "发送 = 直接生图（逻辑回退：不再走对话 agent / 上下文判定）",
+    /return enqueueSend\(rawPrompt, true\)/.test(SOURCE) &&
+      !/call\("\/chat\/agent"/.test(SOURCE) &&
+      !/const replyWithChat = async/.test(SOURCE)
   );
   check(
     "上下文显示参考图：消息带 referenceUrls（气泡旁缩略图）",
     /referenceUrls: \(references \|\| \[\]\)/.test(SOURCE) &&
       /className: "vig-me-ref"/.test(SOURCE) &&
       /job\.referenceUrls/.test(SOURCE)
-  );
-  check(
-    "参考图交给对话模型：/chat/agent 请求里带 references",
-    /references: \(references \|\| \[\]\)/.test(SOURCE) && /call\("\/chat\/agent"/.test(SOURCE)
-  );
-  check(
-    "上下文管理接聊天：plan 判不出且像聊天时走 /chat/say（不硬生图，也没单独的聊天模式开关）",
-    /function looksLikeChat\(text\)/.test(SOURCE) &&
-      /const replyWithChat = async \(text\) => \{/.test(SOURCE) &&
-      /if \(!plan\?\.ok && looksLikeChat\(rawPrompt\)\)/.test(SOURCE) &&
-      /await call\("\/chat\/agent", \{/.test(SOURCE) &&
-      !/data-chat-mode/.test(SOURCE)
   );
   check(
     "模型 kind 只认目录元数据（不再按名字猜视频：wan3.0-video-1080p 不会被误切视频协议）",

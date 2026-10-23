@@ -10882,7 +10882,18 @@ h(
 		}
 
 		/* 渲染兜底：插件重载或渲染异常时不再整块白屏，给出可恢复的一屏错误提示。 */
-		class PluginBoundary extends react.Component {
+		// 有些最小 React 环境（测试用 mock）没有 Component：降级成一个普通类，避免模块加载就崩
+		const BoundaryBase =
+			typeof react.Component === "function"
+				? react.Component
+				: class {
+						constructor(props) {
+							this.props = props;
+							this.state = null;
+						}
+						setState() {}
+				  };
+		class PluginBoundary extends BoundaryBase {
 			constructor(props) {
 				super(props);
 				this.state = { error: null };
@@ -11248,7 +11259,8 @@ h(
 						// 以前只按 editMode 判断，选了编辑协议却没点「用这张重绘」时会只发文字，
 						// 上游回 400 image file or image_url is required。宿主那边如果没有字节
 						// 也会从 referenceUrl 读回一份，所以这里给足任意一种即可。
-						const wantsEdit = readyRefs.length > 0 && (editMode || (config.defaultEndpoint || "auto") === "images_edits");
+						// 挂了参考图就走图生图/编辑（生成接口不收参考图；以前只有开了「用这张重绘」或选了 edits 协议才带图）
+						const wantsEdit = readyRefs.length > 0;
 						let effectivePrompt = rawPrompt;
 						let effectiveMode = wantsEdit ? "edit" : "generate";
 						let effectiveReferenceUrls = readyRefs.map((item) => item.url || "").filter(Boolean);
@@ -11259,66 +11271,7 @@ h(
 						   提问、闲聊这类消息直接交给对话模型回答，不硬打到生图端口。 */
 						/* 对话 agent：把话交给 LLM，由它决定聊天还是调用 generate_image 工具（生图 = 工具）。
 						   返回的 images 是工具产物，直接挂在这条 assistant 消息上。 */
-						const replyWithChat = async (text) => {
-							const history = jobs
-								.slice(0, Math.max(2, Number(config.contextTurns) || 6))
-								.reverse()
-								.map((job) => ({
-									role: job.kind === "reply" ? "assistant" : "user",
-									content: String(job.reply || job.userText || job.prompt || "").slice(0, 1200)
-								}))
-								.filter((item) => item.content.length > 0);
-							const payload = await call("/chat/agent", {
-								method: "POST",
-								body: {
-									message: text,
-									conversationId,
-									chatModel: config.chatModel || "",
-									history,
-									// 参考图一起交给 agent：宿主把它读成 data URI，对话模型才「看」得到
-									references: (references || []).map((item) => ({ url: item.url || "", name: item.name || "" })).filter((item) => item.url)
-								}
-							});
-							const replyJob = {
-								id: `agent_${Date.now().toString(36)}`,
-								kind: "reply",
-								status: "succeeded",
-								mode: "chat",
-								prompt: text,
-								userText: text,
-								reply: String(payload?.reply || "").trim() || t("chat.emptyReply"),
-								images: Array.isArray(payload?.images) ? payload.images.map((image) => ({ url: image.url, width: image.width, height: image.height })) : [],
-								model: payload?.chatModel || config.chatModel || "",
-								// 上下文显示：把「我发出去时挂的参考图」记在这条消息上（气泡旁缩略图）
-								referenceUrls: (references || []).map((item) => item.url || "").filter(Boolean),
-								protocol: "agent",
-								size: "",
-								quality: "",
-								count: 0,
-								referenceUrl: "",
-								source: "ui",
-								conversationId,
-								createdAt: new Date().toISOString(),
-								error: "",
-								errorCode: "",
-								clientSeq: seq
-							};
-							setJobs((list) => [replyJob, ...list.filter((item) => item.id !== replyJob.id)]);
-							setDraft("");
-						};
 						/* 对话优先（勾选）：聊天意图直接交给对话模型，不走优化提示词那一套。 */
-						/* 默认：这句话交给对话 agent —— LLM 自己决定聊天，还是调用 generate_image 工具。*/
-						if (!force) {
-							setGenerating(true);
-							try {
-								await replyWithChat(rawPrompt);
-							} catch (chatError) {
-								toast(t("chat.dialogNotReady"), "err");
-							} finally {
-								setGenerating(false);
-							}
-							return;
-						}
 					/* 模型隔离：对话/音频/向量模型不能生图（上游会回 404「模型不存在」）——
 					   选错了就别发请求，这里直接把原因说清楚。 */
 					const modelKind = modelKindOf(config.defaultModel, providers);
@@ -11328,91 +11281,6 @@ h(
 						return;
 					}
 
-						if (contextOn) {
-							try {
-								const turns = Math.max(1, Number(config.contextTurns) || 6);
-								const history = jobs
-									.slice(0, turns)
-									.reverse()
-									.map((job) => ({
-										user: job.userText || job.prompt || "",
-										prompt: job.prompt || "",
-										model: job.model || "",
-										images: (job.images || []).map((image) => image.url)
-									}));
-								const plan = await call("/chat/plan", {
-									method: "POST",
-									body: {
-										message: rawPrompt,
-										draft: rawPrompt,
-										referenceUrl: readyRefs[0]?.url || "",
-										referenceUrls: readyRefs.map((item) => item.url || "").filter(Boolean),
-										model: config.defaultModel,
-										size: isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
-										chatModel: config.chatModel || "",
-										// 「限制上下文模型直接调供应商出图」：开启时让它只整理/分类，不许自动切编辑
-										noAutoImage: contextNoAutoImage,
-										history
-									}
-								});
-								/* 上下文模型没判出（不可用/解析失败）+ 这句话像聊天 → 交给对话模型回答，不生图。 */
-								if (!plan?.ok && looksLikeChat(rawPrompt)) {
-									try {
-										await replyWithChat(rawPrompt);
-										setGenerating(false);
-										return;
-									} catch (chatError) {
-										toast(String(chatError?.message ?? chatError), "err");
-										setGenerating(false);
-										return;
-									}
-								}
-								/* 对话优先（勾选）：像聊天的消息即使上下文模型判成了出图，也让对话模型直接回答；
-								   挂了参考图说明真要改图，不拦。 */
-								if (plan?.ok && plan.action === "reply" && plan.reply) {
-									// 用户这句话是在纠正/讨论，不是要出图：只回一句话，留在会话历史里
-									const msgPayload = await call("/chat/message", {
-										method: "POST",
-										body: { message: rawPrompt, reply: plan.reply, conversationId, chatModel: plan.chatModel || "" }
-									});
-									const replyJob = { ...(msgPayload.job || {}), userText: rawPrompt, images: [], clientSeq: seq };
-									setJobs((list) => [replyJob, ...list.filter((item) => item.id !== replyJob.id)]);
-									setDraft("");
-									setGenerating(false);
-									return;
-								}
-								if (plan?.ok && plan.prompt) {
-									effectivePrompt = plan.prompt;
-									planNote = plan.prompt;
-									// 限制开启时忽略「自动切编辑」：只按用户原话与已挂参考图走
-									if (!contextNoAutoImage && plan.mode === "edit" && plan.referenceUrl) {
-										effectiveMode = "edit";
-										if (!effectiveReferenceUrls.includes(plan.referenceUrl)) effectiveReferenceUrls = [plan.referenceUrl, ...effectiveReferenceUrls];
-									}
-								}
-								// edit 但没有可用参考图：退回重新生成，不硬发一条空编辑
-								if (effectiveMode === "edit" && effectiveReferenceUrls.length === 0) {
-									const lastWithImage = jobs.find((item) => Array.isArray(item.images) && item.images.length > 0);
-									const fallbackUrl = lastWithImage?.images?.[0]?.url || "";
-									if (fallbackUrl) effectiveReferenceUrls = [fallbackUrl];
-									else effectiveMode = "generate";
-								}
-							} catch (error) {
-								// 上下文模型连不上：聊天意图走对话模型兜底，其余才提示后继续生图
-								if (looksLikeChat(rawPrompt)) {
-									try {
-										await replyWithChat(rawPrompt);
-										setGenerating(false);
-										return;
-									} catch (chatError) {
-										toast(String(chatError?.message ?? chatError), "err");
-										setGenerating(false);
-										return;
-									}
-								}
-								toast(t("chat.planFailed"));
-							}
-						}
 						const sendImages =
 							// 只有真 data URI（data: 开头）才当字节发；恢复出来的参考图 dataUrl 可能先是
 							// 本站 URL 字符串（只为缩略图），把它当 image 发出去会被宿主解出几十字节的假图
@@ -11574,7 +11442,7 @@ h(
 				generate: async () => {
 					const rawPrompt = draft.trim();
 					if (rawPrompt.length === 0) return;
-					return enqueueSend(rawPrompt, false);
+					return enqueueSend(rawPrompt, true);
 				},
 				/** 强制生成：跳过 agent，直接把这句话交给生图流程（输入框旁的「生成图片」按钮）。 */
 				forceGenerate: async () => {

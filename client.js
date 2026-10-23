@@ -10881,6 +10881,37 @@ h(
 			}
 		}
 
+		/* 渲染兜底：插件重载或渲染异常时不再整块白屏，给出可恢复的一屏错误提示。 */
+		class PluginBoundary extends react.Component {
+			constructor(props) {
+				super(props);
+				this.state = { error: null };
+			}
+			static getDerivedStateFromError(error) {
+				return { error };
+			}
+			componentDidCatch(error, info) {
+				console.error("[velapi-image-go] render failed:", error, info);
+			}
+			render() {
+				if (!this.state.error) return this.props.children;
+				return h(
+					"div",
+					{ className: "vig-root", style: { padding: 24, font: "13px/1.6 ui-sans-serif, system-ui", color: "#0b0b0c" } },
+					h("div", { style: { fontWeight: 650, fontSize: 14, marginBottom: 8 } }, "生图工作台渲染出错"),
+					h("div", { style: { color: "#8a8a8f", marginBottom: 12, wordBreak: "break-all" } }, String(this.state.error?.message ?? this.state.error)),
+					h(
+						"button",
+						{
+							style: { height: 32, padding: "0 14px", borderRadius: 999, background: "#ff3a00", color: "#fff", border: 0, cursor: "pointer" },
+							onClick: () => this.setState({ error: null })
+						},
+						"重试"
+					)
+				);
+			}
+		}
+
 		function Workbench({ onOpenInRightbar }) {
 			const [view, setView] = useState(() => window.localStorage.getItem(VIEW_KEY) || "chat");
 			// 右侧检查器收没收起（存 "0" = 收起）；默认展开
@@ -12447,7 +12478,7 @@ h(
 						window.addEventListener("pointerup", stop);
 					}
 				}),
-				h("div", { className: "vig-dock-body" }, h(Workbench, { onOpenInRightbar: null }))
+				h("div", { className: "vig-dock-body" }, h(PluginBoundary, null, h(Workbench, { onOpenInRightbar: null })))
 			);
 		}
 
@@ -12651,7 +12682,7 @@ h(
 					);
 					slots.inject("sidebar.right.pane.tab", () =>
 						slots.register({ name: "sidebar.right.pane.tab", key: TAB_ID }, function RightbarPane() {
-							return h(PaneHost, null, h(Workbench, { onOpenInRightbar: null }));
+							return h(PluginBoundary, null, h(PaneHost, null, h(Workbench, { onOpenInRightbar: null })));
 						})
 					);
 				} catch (error) {
@@ -12748,7 +12779,7 @@ h(
 								label: () => t("tab.title")
 							},
 							function SettingsSection() {
-								return h(Workbench, { onOpenInRightbar: openInRightbar });
+								return h(PluginBoundary, null, h(Workbench, { onOpenInRightbar: openInRightbar }));
 							}
 						)
 					);

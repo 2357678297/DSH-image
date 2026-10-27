@@ -2038,7 +2038,13 @@ body[data-ds-dark-theme] .vig-send:hover{background:#fff}
 	transition:background-color var(--vig-dur) var(--vig-ease),color var(--vig-dur) var(--vig-ease)}
 .vig-pop-item:hover,.vig-note-item:hover{background:var(--vig-surface-sunken)}
 .vig-pop-item.is-on,.vig-note-item.is-on{background:var(--vig-accent);color:var(--vig-surface)}
-.vig-floating,.vig-ps-float,.vig-ps-zoom{border-radius:var(--vig-r-pill)}
+.vig-floating,.vig-ps-zoom{border-radius:var(--vig-r-pill)}
+/* 透视矫正面板：矩形容器（之前被 pill 规则套成胶囊/椭圆） */
+.vig-ps-float{border-radius:12px}
+.vig-ps-params{border-radius:12px}
+.vig-ps-params .vig-btn{border-radius:8px}
+.vig-ps-params .vig-ps-seg{border-radius:8px}
+.vig-ps-params .vig-ps-seg-btn{border-radius:6px}
 
 /* --- 查看器 --- */
 .vig-viewer-body{border-radius:var(--vig-r-sheet)}

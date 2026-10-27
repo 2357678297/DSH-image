@@ -142,6 +142,30 @@ check(
 	"psAdjustPixels 空数组原样返回（0 像素时循环体不执行，不该凭空造数）",
 	I.psAdjustPixels(emptyAdjust, { brightness: 50 }) === emptyAdjust && emptyAdjust.length === 0
 );
+
+/* ---- 透视矫正数学：四点 → 规范矩形 ---- */
+{
+  // 异形（倾斜、透视）四边形，模拟拍照时的屏幕/纸张
+  const quad = [
+    { x: 100, y: 80 },
+    { x: 520, y: 140 },
+    { x: 480, y: 420 },
+    { x: 60, y: 360 }
+  ];
+  const plan = I.psWarpPlan({ mode: "flat", src: quad, width: 800, height: 600 });
+  const mapped = plan ? plan.from.map((point) => I.psApplyH(plan.forward, point)) : [];
+  const forwardOk =
+    Boolean(plan) &&
+    mapped.length === 4 &&
+    mapped.every((point, index) => Math.hypot(point.x - plan.to[index].x, point.y - plan.to[index].y) < 1);
+  check("透视矫正数学：forward 把四个角准确映射到矩形四角", forwardOk, JSON.stringify({ size: plan?.size, mapped }));
+  const back = plan ? plan.to.map((point) => I.psApplyH(plan.inverse, point)) : [];
+  const backOk =
+    Boolean(plan) &&
+    back.length === 4 &&
+    back.every((point, index) => Math.hypot(point.x - plan.from[index].x, point.y - plan.from[index].y) < 1);
+  check("透视矫正数学：inverse 把矩形四角映射回原四点（采样方向正确）", backOk, JSON.stringify({ back }));
+}
 check("psAdjustPixels null 原样返回（无图可调时不抛异常）", I.psAdjustPixels(null, { brightness: 50 }) === null);
 
 {

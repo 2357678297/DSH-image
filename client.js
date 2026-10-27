@@ -9680,7 +9680,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												const plan = psWarpPlan({ mode: "flat", src: orderedSrc, width: stageW, height: stageH });
 												if (!plan || !stage) return;
 												const out = psWarpCanvas(stage, plan.inverse, plan.size.w, plan.size.h);
-												commit(out, "warped", "canvasSize", t("ps.warp.confirm"));
+												/* 矫正结果直接换底图（尺寸变了，旧图层不再对得上；历史可撤销） */
+												pushHistory(source?.canvas ?? stage, t("ps.warp.confirm"));
+												setLayers([]);
+												setLayerSession(null);
+												setSource({ name: "warped", canvas: out, width: out.width, height: out.height });
 												setWarpLocked(true);
 												notify(t("ps.warp.done", { w: out.width, h: out.height }));
 											}

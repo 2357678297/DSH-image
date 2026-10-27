@@ -8844,11 +8844,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						const slot = Math.min(3, warpPick - 1);
 						setWarp((value) => {
 							const base = Array.isArray(value.src) && value.src.length === 4 ? value.src.slice() : psQuadCorners(stageW, stageH);
-							base[slot] = {
-								x: Math.min(Math.max(at.x, 0), stageW),
-								y: Math.min(Math.max(at.y, 0), stageH)
-							};
-							// 保持用户点选顺序（排序留给「确认矫正」，否则点序号会跳、拖不准）
+							// 第 N 次点击就落在鼠标点的位置（不 clamp、不排序），点满 4 个即可直接确认
+							base[slot] = { x: at.x, y: at.y };
 							return { ...value, src: base };
 							return { ...value, src: base };
 						});

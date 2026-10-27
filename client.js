@@ -1852,6 +1852,12 @@ body[data-ds-dark-theme] .vig-toast.is-err{background:rgba(48,26,30,.96)}
 .vig-ps-params-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vig-ps-params .vig-field{display:flex;flex-direction:column;gap:5px}
 .vig-ps-params .vig-label{white-space:nowrap}
+/* 顶点矫正/透视面板：限宽 + 长提示换行，别把浮层撑成一大块 */
+.vig-ps-params{max-width:320px;width:320px;box-sizing:border-box;overflow-wrap:anywhere}
+.vig-ps-params .vig-ps-row{flex-wrap:wrap;gap:6px}
+.vig-ps-params .vig-btn{height:28px;padding:0 10px;font-size:12px}
+.vig-ps-params .vig-muted{font-size:11.5px;line-height:1.5;margin:0}
+.vig-ps-float{max-width:340px}
 .vig-ps-params .vig-sel{width:100%}
 .vig-ps-params .vig-form-grid{grid-template-columns:1fr 1fr}
 .vig-ps-readout{font-size:12px;color:var(--vig-text);background:var(--vig-surface-sunken);border-radius:var(--vig-r-tile);

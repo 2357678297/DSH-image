@@ -493,6 +493,20 @@ if (!new URLSearchParams(location.search).get("model")) {
 				check("图层可删除：删掉后控制条不再有该层", host.querySelectorAll(".vig-ps-chip:not(.is-base):not(.is-add)").length === 0, JSON.stringify({ chips: host.querySelectorAll(".vig-ps-chip").length }));
 			}
 		}
+		// 透视矫正面板：限宽（长提示不该把浮层撑成一大块）
+		if (holdView === "ps" && new URLSearchParams(location.search).get("ps") === "load") {
+			const warpToolBtn = Array.from(host.querySelectorAll(".vig-ps-tool")).find((node) => String(node.getAttribute("title") || "").includes("透视矫正"));
+			if (warpToolBtn) {
+				flushSync(() => warpToolBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+				await wait(400);
+			}
+			const params = host.querySelector(".vig-ps-params");
+			check(
+				"透视面板限宽（不撑成畸形大块）",
+				Boolean(params) && params.offsetWidth > 0 && params.offsetWidth <= 360,
+				JSON.stringify({ w: params ? params.offsetWidth : 0 })
+			);
+		}
 		// 图库布局密度：&density=compact|standard|large（截图/审计用）
 		const densityText = { compact: "小图", standard: "标准", large: "大图" }[new URLSearchParams(location.search).get("density")];
 		if (densityText) {

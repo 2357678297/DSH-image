@@ -7581,6 +7581,34 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		/** 四点归一：接受 [{x,y}×4] 或 [[x,y]×4]；缺一个或不是数就返回 null。 */
+		/** 四点排序：左上 → 右上 → 右下 → 左下（点选顺序随便，确认前先理顺，避免凹形/翻面）。 */
+		function psQuadOrder(points) {
+			if (!Array.isArray(points) || points.length !== 4) return null;
+			const list = points.filter((point) => point && Number.isFinite(point.x) && Number.isFinite(point.y));
+			if (list.length !== 4) return null;
+			const cx = list.reduce((sum, point) => sum + point.x, 0) / 4;
+			const cy = list.reduce((sum, point) => sum + point.y, 0) / 4;
+			const sorted = list
+				.slice()
+				.sort((left, right) => Math.atan2(left.y - cy, left.x - cx) - Math.atan2(right.y - cy, right.x - cx));
+			let start = 0;
+			let best = Infinity;
+			sorted.forEach((point, index) => {
+				const score = point.x + point.y;
+				if (score < best) {
+					best = score;
+					start = index;
+				}
+			});
+			const ordered = [];
+			for (let index = 0; index < 4; index += 1) ordered.push(sorted[(start + index) % 4]);
+			// 屏幕坐标下「左上→右上→右下→左下」是顺时针：叉积为负就反转（左上仍是第一个）
+			const cross =
+				(ordered[1].x - ordered[0].x) * (ordered[2].y - ordered[0].y) -
+				(ordered[1].y - ordered[0].y) * (ordered[2].x - ordered[0].x);
+			return cross < 0 ? [ordered[0], ordered[3], ordered[2], ordered[1]] : ordered;
+		}
+
 		function psQuadPoints(quad) {
 			if (!quad || quad.length !== 4) return null;
 			const out = [];
@@ -8065,6 +8093,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const [activeLayerId, setActiveLayerId] = useState("");
 			// 右栏图层列表默认收起（图层操作走底部控制条；展开可看叠加算法 / 不透明度等高级项）
 			const [layersOpen, setLayersOpen] = useState(false);
+			/* 进入「透视矫正」自动进入点选模式：依次点四个角即可，不用先按按钮 */
+			useEffect(() => {
+				if (tool !== "warp") return;
+				setWarpPick((count) => (count > 0 ? count : 1));
+			}, [tool]);
 			/* 右侧收纳：图层面板可整体收起（localStorage 记住），腾出画布宽度 */
 			const [layersAside, setLayersAside] = useState(() => {
 				try {
@@ -8424,7 +8457,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						// 结果视图：能拖的只有橙（目标四点）；畸变的橙色是自动算的矩形，只给看结果
 						if (warp.mode !== "flat") drawQuad(scaled(dst.to), "#f08a24", "rgba(240,138,36,.14)", false, true);
 					} else {
-						if (warp.mode !== "distort") drawQuad(warp.src, "#0b0b0c", "rgba(11,11,12,.12)", true, true);
+						if (warp.mode !== "distort") drawQuad(warp.src, "#18a05a", "rgba(24,160,90,.14)", true, true);
 						if (warp.mode !== "flat") drawQuad(warp.dst, "#f08a24", "rgba(240,138,36,.14)", false, true);
 						// 变形模式的取图四点拖不动，只淡淡标一下它在哪儿
 						if (warp.mode === "distort") drawQuad(warpSrcQuad("distort", warp.src, stageW, stageH), "rgba(11,11,12,.55)", "rgba(11,11,12,.04)", true, false);
@@ -8804,7 +8837,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					// 四点矫正：按在哪个角上就拖哪个角（按当前视图决定拖的是取图四点还是目标四点）
 					if (tool !== "warp") return;
 					/* 顶点矫正：点选模式下点一下落一个角，四个角齐了再按「确认矫正」 */
-					if (warpPick > 0 && !warpLocked) {
+					if (warpPick > 0 && warpPick < 4 && !warpLocked) {
 						const at = pointToImage(event);
 						if (!at) return;
 						event.preventDefault();
@@ -8812,6 +8845,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						setWarp((value) => {
 							const base = Array.isArray(value.src) && value.src.length === 4 ? value.src.slice() : psQuadCorners(stageW, stageH);
 							base[slot] = at;
+							return { ...value, src: psQuadOrder(base) || base };
 							return { ...value, src: base };
 						});
 						setWarpPick((count) => Math.min(4, count + 1));
@@ -9642,7 +9676,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											"data-warp-confirm": "1",
 											disabled: !ready,
 											onClick: () => {
-												const plan = warpPlanNow;
+												const orderedSrc = psQuadOrder(Array.isArray(warp.src) && warp.src.length === 4 ? warp.src : null) || warp.src;
+												const plan = psWarpPlan({ mode: "flat", src: orderedSrc, width: stageW, height: stageH });
 												if (!plan || !stage) return;
 												const out = psWarpCanvas(stage, plan.inverse, plan.size.w, plan.size.h);
 												commit(out, "warped", "canvasSize", t("ps.warp.confirm"));

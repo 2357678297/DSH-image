@@ -259,6 +259,8 @@ function writeConvSetting(id, settings) {
 			"ps.adjust.noise": "噪点",
 			"ps.adjust.applyFilters": "应用滤镜",
 			"ps.layers": "图层",
+			"ps.layers.collapse": "收纳图层面板",
+			"ps.layers.expand": "展开图层面板",
 			"ps.layer.addLayer": "加图层",
 			"ps.layer.duplicate": "复制当前",
 			"ps.layer.remove": "删除图层",
@@ -2341,6 +2343,12 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-ps-tools{grid-column:1;grid-row:1}
 .vig-ps-stage{grid-column:2;grid-row:1}
 .vig-ps-layers{grid-column:3;grid-row:1}
+/* 右侧收纳：整块图层面板可收起，第三列归零，留一个浮动按钮叫回来 */
+.vig-ps{position:relative}
+.vig-ps[data-layers="0"]{grid-template-columns:96px minmax(0,1fr) 0}
+.vig-ps-layers.is-collapsed{display:none}
+.vig-ps-aside-toggle{position:absolute;right:10px;top:12px;z-index:6;width:30px;height:30px;border-radius:50%;border:1px solid var(--vig-line);background:var(--vig-surface);color:var(--vig-text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.08);transition:color var(--vig-dur) var(--vig-ease),border-color var(--vig-dur) var(--vig-ease)}
+.vig-ps-aside-toggle:hover{color:var(--vig-text);border-color:var(--vig-line-strong)}
 .vig-root[data-compact="1"] .vig-ps-tools,
 .vig-root[data-compact="1"] .vig-ps-stage,
 .vig-root[data-compact="1"] .vig-ps-layers,
@@ -8045,6 +8053,22 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const [activeLayerId, setActiveLayerId] = useState("");
 			// 右栏图层列表默认收起（图层操作走底部控制条；展开可看叠加算法 / 不透明度等高级项）
 			const [layersOpen, setLayersOpen] = useState(false);
+			/* 右侧收纳：图层面板可整体收起（localStorage 记住），腾出画布宽度 */
+			const [layersAside, setLayersAside] = useState(() => {
+				try {
+					return window.localStorage.getItem("dsh.velapi-image-go.ps-layers-aside") !== "0";
+				} catch (error) {
+					return true;
+				}
+			});
+			const setLayersAsidePersist = (open) => {
+				setLayersAside(open);
+				try {
+					window.localStorage.setItem("dsh.velapi-image-go.ps-layers-aside", open ? "1" : "0");
+				} catch (error) {
+					/* 隐私模式写不了就只活这次 */
+				}
+			};
 			const [dragLayerId, setDragLayerId] = useState("");
 			// 会话锁：state 要等下一轮渲染才看得到，连点两下同一层靠这个 ref 当场挡掉
 			const layerSessionRef = useRef(initial?.layerSession || null);
@@ -9848,6 +9872,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						"div",
 						{
 							className: "vig-ps",
+							"data-layers": layersAside ? "1" : "0",
 							"data-labels": panels.labels ? "1" : "0",
 							"data-params": panels.params ? "1" : "0",
 							"data-drop": fileOver ? "1" : "0",
@@ -10315,10 +10340,20 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						// 原来参数栏的位置：图层（叠加算法）。参数改成浮窗，压在画布上。
 						h(
 							"div",
-							{ className: `vig-ps-layers${layersOpen ? "" : " is-fold"}` },
+							{ className: `vig-ps-layers${layersOpen ? "" : " is-fold"}${layersAside ? "" : " is-collapsed"}` },
 							h(
 								"div",
 								{ className: "vig-ps-layers-head" },
+								h(
+									"button",
+									{
+										className: "vig-mini",
+										title: t("ps.layers.collapse"),
+										"data-layers-aside": "collapse",
+										onClick: () => setLayersAsidePersist(false)
+									},
+									h(Icon, { name: "chevron", size: 13 })
+								),
 								h(Icon, { name: "image", size: 15 }),
 								h("span", null, t("ps.layers")),
 								h("div", { className: "vig-spacer" }),
@@ -10493,6 +10528,19 @@ h(
 									)
 								)
 						),
+					// 收纳后的浮动展开按钮（右栏归零时还能把图层/历史叫回来）
+					layersAside
+						? null
+						: h(
+								"button",
+								{
+									className: "vig-ps-aside-toggle",
+									title: t("ps.layers.expand"),
+									"data-layers-aside": "expand",
+									onClick: () => setLayersAsidePersist(true)
+								},
+								h(Icon, { name: "chevronLeft", size: 14 })
+							),
 						h(
 							"div",
 							{

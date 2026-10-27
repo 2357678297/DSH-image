@@ -2440,12 +2440,11 @@ check(
       !/is-primary", disabled: !plan, onClick: applyWarp/.test(SOURCE)
   );
   check(
-    "实时：四点一动就重算结果（拖动中降采样、松手按屏幕比例补一张），结果侧主画布直接贴结果",
-    /setWarpView\(renderWarpView\(Boolean\(drag && drag\.mode === "warp"\)\)\);/.test(SOURCE) &&
-      /const outScale = warpOnDst \? \(fast \? Math\.min\(scale, 720 \/ span\) : scale\) : Math\.min\(1, 640 \/ span\);/.test(SOURCE) &&
-      /const srcMax = warpOnDst && !fast \? 0 : 1024;/.test(SOURCE) &&
-      /const shown = warpStageView \|\| stage;/.test(SOURCE) &&
-      /ctx\.drawImage\(shown, 0, 0\);/.test(SOURCE)
+    "四点矫正不做实时预览：点选/确认时才计算结果（结果进新图层）",
+    /const warpOnDst = false/.test(SOURCE) &&
+      !/setWarpView\(renderWarpView/.test(SOURCE) &&
+      /局部框选矫正：结果（框选区域裁切后的矩形）直接压成新图层/.test(SOURCE) &&
+      /canvas: out,/.test(SOURCE)
   );
   const warpShot = renderToStaticMarkup(
     React.createElement(w.PsView, {

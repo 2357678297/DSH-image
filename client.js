@@ -8236,7 +8236,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			/** 当前四点的变形计划（静态预览没有真 canvas，也照样能算尺寸）。 */
 			const warpPlanNow = stageW && stageH ? psWarpPlan({ mode: warp.mode, src: warpSrcQuad(warp.mode, warp.src, stageW, stageH), dst: warp.dst, width: stageW, height: stageH }) : null;
 			/** 「结果」这一侧主画布直接显示实时结果，「原图」那一侧主画布还是原图。 */
-			const warpOnDst = tool === "warp" && warpSide === "dst";
+			const warpOnDst = false; // 四点矫正不做实时预览：点选四点 → 确认 → 直接出新图层
 			const warpStageView = warpOnDst && warpView ? warpView : null;
 			const shownW = warpStageView ? warpStageView.width : stageW;
 			const shownH = warpStageView ? warpStageView.height : stageH;
@@ -8302,7 +8302,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					setWarpView((value) => (value ? null : value));
 					return;
 				}
-				setWarpView(renderWarpView(Boolean(drag && drag.mode === "warp")));
+				// 不实时渲染矫正结果（用户要求：只为点选/确认服务）
 			}, [stage, tool, warp, warpSide, scale, drag]);
 
 			/** 底图只在换图/改图时重画（3000×4000 的图每个 pointermove 都重画会卡死）。 */
@@ -9680,11 +9680,20 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												const plan = psWarpPlan({ mode: "flat", src: orderedSrc, width: stageW, height: stageH });
 												if (!plan || !stage) return;
 												const out = psWarpCanvas(stage, plan.inverse, plan.size.w, plan.size.h);
-												/* 矫正结果直接换底图（尺寸变了，旧图层不再对得上；历史可撤销） */
-												pushHistory(source?.canvas ?? stage, t("ps.warp.confirm"));
-												setLayers([]);
-												setLayerSession(null);
-												setSource({ name: "warped", canvas: out, width: out.width, height: out.height });
+												/* 局部框选矫正：结果（框选区域裁切后的矩形）直接压成新图层，原底图保留 */
+												pushHistory(stage, t("ps.warp.confirm"));
+												setLayers((list) => [
+													...list.map((item) => ({ ...item, visible: false })),
+													{
+														id: `layer_${Date.now().toString(36)}_${list.length}`,
+														name: t("ps.warp.confirm"),
+														canvas: out,
+														visible: true,
+														mode: "normal",
+														opacity: 1
+													}
+												]);
+												setActiveLayerId("");
 												setWarpLocked(true);
 												notify(t("ps.warp.done", { w: out.width, h: out.height }));
 											}

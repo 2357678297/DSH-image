@@ -8844,8 +8844,12 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						const slot = Math.min(3, warpPick - 1);
 						setWarp((value) => {
 							const base = Array.isArray(value.src) && value.src.length === 4 ? value.src.slice() : psQuadCorners(stageW, stageH);
-							base[slot] = at;
-							return { ...value, src: psQuadOrder(base) || base };
+							base[slot] = {
+								x: Math.min(Math.max(at.x, 0), stageW),
+								y: Math.min(Math.max(at.y, 0), stageH)
+							};
+							// 保持用户点选顺序（排序留给「确认矫正」，否则点序号会跳、拖不准）
+							return { ...value, src: base };
 							return { ...value, src: base };
 						});
 						setWarpPick((count) => Math.min(4, count + 1));

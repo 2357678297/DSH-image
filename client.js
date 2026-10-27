@@ -327,6 +327,11 @@ function writeConvSetting(id, settings) {
 			"ps.straightened": "已矫正 {angle}°",
 			"ps.straightAlready": "看着已经端正了，没动",
 			/* 四点透视矫正：把「取图四点」映到「目标四点」 */
+			"ps.warp.pick": "点选四角",
+			"ps.warp.pickHint": "在画面上依次点四个角（异形四边形也行），点满 4 个再按「确认矫正」。",
+			"ps.warp.confirm": "确认矫正",
+			"ps.warp.locked": "已锁定：四角固定，画面已矫正",
+			"ps.warp.pickCount": "已选 {n} / 4",
 			"ps.warp.mode": "方式",
 			"ps.warp.mode.flat": "四点畸变",
 			"ps.warp.mode.free": "自由拉伸",
@@ -771,6 +776,11 @@ function writeConvSetting(id, settings) {
 			"ps.straighten.tooShort": "Line too short — drag a longer one",
 			"ps.straightened": "Straightened {angle}°",
 			"ps.straightAlready": "Already level, nothing changed",
+			"ps.warp.pick": "Pick 4 corners",
+			"ps.warp.pickHint": "Click the four corners in order (any quadrilateral works), then press Confirm.",
+			"ps.warp.confirm": "Confirm",
+			"ps.warp.locked": "Locked: corners fixed, image rectified",
+			"ps.warp.pickCount": "Picked {n} / 4",
 			"ps.warp.mode": "Method",
 			"ps.warp.mode.flat": "4-point warp",
 			"ps.warp.mode.free": "Free stretch",
@@ -8084,6 +8094,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const [warpSide, setWarpSide] = useState(() => (initial?.warpMode === "distort" ? "dst" : "src"));
 			// 实时结果：四点一动就重画，不用按「应用」
 			const [warpView, setWarpView] = useState(null);
+			/* 顶点矫正：点选四个角（异形也行）→ 确认后锁定四点，把四边形拉成规范矩形 */
+			const [warpPick, setWarpPick] = useState(0);
+			const [warpLocked, setWarpLocked] = useState(false);
 			const warpProxyRef = useRef({ stage: null, q: 1, canvas: null });
 			const [keysOpen, setKeysOpen] = useState(() => Boolean(initial?.keys));
 			// 两侧面板按需展开：默认都展开，用户收起过才记住（存 "0"），和停靠面板同一套逻辑
@@ -8754,6 +8767,21 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if (tool !== "select") {
 					// 四点矫正：按在哪个角上就拖哪个角（按当前视图决定拖的是取图四点还是目标四点）
 					if (tool !== "warp") return;
+					/* 顶点矫正：点选模式下点一下落一个角，四个角齐了再按「确认矫正」 */
+					if (warpPick > 0 && !warpLocked) {
+						const at = pointToImage(event);
+						if (!at) return;
+						event.preventDefault();
+						const slot = Math.min(3, warpPick - 1);
+						setWarp((value) => {
+							const base = Array.isArray(value.src) && value.src.length === 4 ? value.src.slice() : psQuadCorners(stageW, stageH);
+							base[slot] = at;
+							return { ...value, src: base };
+						});
+						setWarpPick((count) => Math.min(4, count + 1));
+						return;
+					}
+					if (warpLocked) return;
 					event.preventDefault();
 					psCapturePointer(event.currentTarget, event.pointerId);
 					const at = pointToImage(event);
@@ -9552,6 +9580,49 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						return h(
 							"div",
 							null,
+							/* 顶点矫正流程：点选四角 → 确认矫正（锁定）→ 规范矩形 */
+							(() => {
+								const ready = warpPick === 4 && Boolean(warpPlanNow) && !warpLocked;
+								return h(
+									"div",
+									{ className: "vig-ps-row", style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" } },
+									h(
+										"button",
+										{
+											className: "vig-btn",
+											"data-warp-pick": "1",
+											onClick: () => {
+												setWarpPick(1);
+												setWarpLocked(false);
+												notify(t("ps.warp.pickHint"));
+											}
+										},
+										t("ps.warp.pick")
+									),
+									h(
+										"button",
+										{
+											className: "vig-btn is-primary",
+											"data-warp-confirm": "1",
+											disabled: !ready,
+											onClick: () => {
+												const plan = warpPlanNow;
+												if (!plan || !stage) return;
+												const out = psWarpCanvas(stage, plan.inverse, plan.size.w, plan.size.h);
+												commit(out, "warped", "canvasSize", t("ps.warp.confirm"));
+												setWarpLocked(true);
+												notify(t("ps.warp.done", { w: out.width, h: out.height }));
+											}
+										},
+										t("ps.warp.confirm")
+									),
+									warpLocked
+										? h("span", { className: "vig-muted", "data-warp-locked": "1" }, t("ps.warp.locked"))
+										: warpPick > 0
+											? h("span", { className: "vig-muted" }, t("ps.warp.pickCount", { n: Math.min(4, warpPick) }))
+											: null
+								);
+							})(),
 							h("p", { className: "vig-muted", style: { fontSize: 12, marginTop: 0 } }, t(`ps.warp.hint.${warp.mode}`)),
 							h("span", { className: "vig-label" }, t("ps.warp.mode")),
 							h(

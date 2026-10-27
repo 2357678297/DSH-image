@@ -3339,6 +3339,13 @@ check(
     /job\.conversationId !== conversationIdRef\.current/.test(SOURCE)
   );
   check(
+    "顶点矫正：点选四角 → 确认后锁定（规范矩形输出）",
+    /data-warp-pick/.test(SOURCE) &&
+      /data-warp-confirm/.test(SOURCE) &&
+      /warpLocked/.test(SOURCE) &&
+      /psWarpCanvas\(stage, plan\.inverse/.test(SOURCE)
+  );
+  check(
     "模型 kind 只认目录元数据（不再按名字猜视频：wan3.0-video-1080p 不会被误切视频协议）",
     /function modelKindOf\(id, providers\)/.test(SOURCE) &&
       !/VIDEO_NAME_HINT/.test(SOURCE) &&

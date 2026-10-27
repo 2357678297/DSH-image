@@ -332,6 +332,9 @@ function writeConvSetting(id, settings) {
 			"ps.warp.pick": "点选四角",
 			"ps.warp.pickHint": "在画面上依次点四个角（异形四边形也行），点满 4 个再按「确认矫正」。",
 			"ps.warp.confirm": "确认矫正",
+			"ps.warp.flipH": "水平翻转",
+			"ps.warp.flipV": "垂直翻转",
+			"ps.warp.flipNone": "先点「确认矫正」生成图层，再翻转",
 			"ps.warp.locked": "已锁定：四角固定，画面已矫正",
 			"ps.warp.pickCount": "已选 {n} / 4",
 			"ps.warp.mode": "方式",
@@ -781,6 +784,9 @@ function writeConvSetting(id, settings) {
 			"ps.warp.pick": "Pick 4 corners",
 			"ps.warp.pickHint": "Click the four corners in order (any quadrilateral works), then press Confirm.",
 			"ps.warp.confirm": "Confirm",
+			"ps.warp.flipH": "Flip horizontal",
+			"ps.warp.flipV": "Flip vertical",
+			"ps.warp.flipNone": "Confirm the correction first, then flip",
 			"ps.warp.locked": "Locked: corners fixed, image rectified",
 			"ps.warp.pickCount": "Picked {n} / 4",
 			"ps.warp.mode": "Method",
@@ -7602,11 +7608,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			});
 			const ordered = [];
 			for (let index = 0; index < 4; index += 1) ordered.push(sorted[(start + index) % 4]);
-			// 屏幕坐标下「左上→右上→右下→左下」是顺时针：叉积为负就反转（左上仍是第一个）
-			const cross =
-				(ordered[1].x - ordered[0].x) * (ordered[2].y - ordered[0].y) -
-				(ordered[1].y - ordered[0].y) * (ordered[2].x - ordered[0].x);
-			return cross < 0 ? [ordered[0], ordered[3], ordered[2], ordered[1]] : ordered;
+			return ordered;
 		}
 
 		function psQuadPoints(quad) {
@@ -9654,6 +9656,22 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							/* 顶点矫正流程：点选四角 → 确认矫正（锁定）→ 规范矩形 */
 							(() => {
 								const ready = warpPick === 4 && Boolean(warpPlanNow) && !warpLocked;
+								/* 镜像不自动纠正：翻转由用户点按钮决定 */
+								const flipWarpResult = (axis) => {
+									const targetId =
+										activeLayerId || (layers.length > 0 ? layers[layers.length - 1].id : "");
+									const target = layers.find((item) => item.id === targetId);
+									if (!target || !target.canvas) {
+										notify(t("ps.warp.flipNone"));
+										return;
+									}
+									pushHistory(stage, t("ps.warp.confirm"));
+									setLayers((list) =>
+										list.map((item) =>
+											item.id === targetId ? { ...item, canvas: psFlip(item.canvas, axis) } : item
+										)
+									);
+								};
 								return h(
 									"div",
 									{ className: "vig-ps-row", style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" } },
@@ -9700,6 +9718,24 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											}
 										},
 										t("ps.warp.confirm")
+									),
+									h(
+										"button",
+										{
+											className: "vig-btn",
+											"data-warp-fliph": "1",
+											onClick: () => flipWarpResult("h")
+										},
+										t("ps.warp.flipH")
+									),
+									h(
+										"button",
+										{
+											className: "vig-btn",
+											"data-warp-flipv": "1",
+											onClick: () => flipWarpResult("v")
+										},
+										t("ps.warp.flipV")
 									),
 									warpLocked
 										? h("span", { className: "vig-muted", "data-warp-locked": "1" }, t("ps.warp.locked"))

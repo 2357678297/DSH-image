@@ -8854,6 +8854,31 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						setWarpPick((count) => Math.min(4, count + 1));
 						return;
 					}
+					/* 四点已满：再点击画布也能定位——命中角点就走拖拽，没命中就把最近的那个角移过来 */
+					if (warpPick >= 4 && !warpLocked && Array.isArray(warp.src) && warp.src.length === 4) {
+						const at = pointToImage(event);
+						if (!at) return;
+						const radius = Math.max(6, 12 / scale);
+						const hit = psHitQuad(warp.src, at, radius);
+						if (!hit) {
+							event.preventDefault();
+							setWarp((value) => {
+								const src = value.src.slice();
+								let best = 0;
+								let bestDistance = Infinity;
+								src.forEach((point, index) => {
+									const distance = Math.hypot(point.x - at.x, point.y - at.y);
+									if (distance < bestDistance) {
+										bestDistance = distance;
+										best = index;
+									}
+								});
+								src[best] = { x: at.x, y: at.y };
+								return { ...value, src };
+							});
+							return;
+						}
+					}
 					if (warpLocked) return;
 					event.preventDefault();
 					psCapturePointer(event.currentTarget, event.pointerId);

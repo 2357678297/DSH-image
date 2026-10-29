@@ -503,6 +503,13 @@ function writeConvSetting(id, settings) {
 			"chat.refLimit": "参考图最多挂 4 张，先移掉一张",
 			"chat.modelInvalid": "当前模型不能生图（是对话/音频模型，或不在任何供应商目录里），先选一个图片模型",
 			"chat.queueFull": "发送太快了：这一句处理完再发下一句（最多排 6 条）",
+			"chat.jsonBody": "JSON 请求体",
+			"chat.jsonHint": "这是这次要发给宿主的 /generate 请求体，可以直接改（点应用后整包覆盖本次发送）。size 也可以写「2K · 16:9」这种档位+宽高比。",
+			"chat.jsonApply": "应用",
+			"chat.jsonReset": "恢复默认",
+			"chat.jsonApplied": "已应用 JSON 覆盖",
+			"chat.jsonInvalid": "JSON 格式不对",
+			"chat.sizeRaw": "尺寸原样发送（档位 + 宽高比，不转像素）",
 			"chat.thinking": "思考中…",
 			"chat.emptyReply": "（对话模型没有返回内容，换个对话模型再试一次）",
 			"chat.forceGenerateTooShort": "提示词太短：至少写 5 个字符的画面描述，再点「生成图片」",
@@ -2582,6 +2589,13 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			}))
 		);
 
+		/** 像素 → 「比例 · 档位」表达式（如 3072x1728 → 16:9 · 2K；认不出的原样返回）。 */
+		function sizeExpressionFor(value) {
+			const raw = String(value ?? "").trim();
+			const hit = SIZE_OPTIONS.find((option) => option.value === raw);
+			return hit ? hit.ratio : raw;
+		}
+
 		/**
 		 * 尺寸表达式：JSON 请求体里 size 可以写像素（3072x1728），也可以写「档位 + 宽高比」：
 		 *   "2K"、"16:9"、"2K · 16:9"（也认 2k/2K/4K、空格或 @ 分隔）。返回像素字符串。
@@ -3906,7 +3920,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						h(
 							"label",
 							{ className: "vig-ctx-row", style: { marginBottom: 8 } },
-							h("input", { type: "checkbox", className: "vig-ctx-check", checked: sizeRaw, "data-size-raw": "1", onChange: () => setSizeRawPersist(!sizeRaw) }),
+							h("input", { type: "checkbox", className: "vig-ctx-check", checked: sizeRaw, "data-size-raw": "1", onChange: () => { const next = !sizeRaw; setSizeRawPersist(next); if (jsonOpen) setJsonDraft(JSON.stringify(jsonOverrideRef.current ?? buildRequestPreview(draft), null, 2)); } }),
 							h("span", null, t("chat.sizeRaw"))
 						),
 						h("textarea", {
@@ -11352,7 +11366,7 @@ h(
 					conversationId,
 					model: config.defaultModel,
 					providerId: providerIdForModel(providers, config),
-					size: isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
+					size: sizeRaw ? sizeExpressionFor(isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize) : isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
 					quality: config.defaultQuality,
 					n: isVideoEndpoint ? 1 : config.defaultCount,
 					seconds: isVideoEndpoint ? config.videoSeconds || "4" : "",

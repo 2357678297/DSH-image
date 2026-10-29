@@ -8194,7 +8194,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			/* 进入「透视矫正」自动进入点选模式：依次点四个角即可，不用先按按钮 */
 			useEffect(() => {
 				if (tool !== "warp") return;
-				setWarpPick((count) => (count > 0 ? count : 1));
+				setWarpPick((count) => (count > 0 && count < 4 ? count : 0));
 			}, [tool]);
 			/* 右侧收纳：图层面板可整体收起（localStorage 记住），腾出画布宽度 */
 			const [layersAside, setLayersAside] = useState(() => {
@@ -8935,11 +8935,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					// 四点矫正：按在哪个角上就拖哪个角（按当前视图决定拖的是取图四点还是目标四点）
 					if (tool !== "warp") return;
 					/* 顶点矫正：点选模式下点一下落一个角，四个角齐了再按「确认矫正」 */
-					if (warpPick > 0 && warpPick < 4 && !warpLocked) {
+					if (warpPick < 4 && !warpLocked) {
 						const at = pointToImage(event);
 						if (!at) return;
 						event.preventDefault();
-						const slot = Math.min(3, warpPick - 1);
+						const slot = Math.min(3, warpPick);
 						setWarp((value) => {
 							const base = Array.isArray(value.src) && value.src.length === 4 ? value.src.slice() : psQuadCorners(stageW, stageH);
 							// 第 N 次点击就落在鼠标点的位置（不 clamp、不排序），点满 4 个即可直接确认
@@ -9802,7 +9802,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											className: "vig-btn",
 											"data-warp-pick": "1",
 											onClick: () => {
-												setWarpPick(1);
+												setWarpPick(0);
 												setWarpLocked(false);
 												notify(t("ps.warp.pickHint"));
 											}

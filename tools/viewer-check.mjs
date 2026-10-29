@@ -409,8 +409,8 @@ if (!new URLSearchParams(location.search).get("model")) {
 	const sizePost = posts.filter((item) => item.path.startsWith("/config") && item.body && item.body.defaultSize).pop();
 	check(
 		"尺寸下拉同时给比例与分辨率（1:1 · 1024×1024 / 16:9 · 1536×864），选中的像素写进 config",
-		optionLabels.includes("1:1 · 1024×1024") &&
-			optionLabels.includes("16:9 · 1536×864") &&
+		optionLabels.includes("1:1 · 1K · 1024×1024") &&
+			optionLabels.includes("16:9 · 1K · 1536×864") &&
 			Boolean(sizePost) &&
 			sizePost.body.defaultSize === "1536x864",
 		JSON.stringify({ first: optionLabels.slice(0, 3), size: sizePost ? sizePost.body.defaultSize : null })

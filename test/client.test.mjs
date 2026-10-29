@@ -3457,15 +3457,16 @@ check(
       const labels = options.map((option) => ui.sizeOptionLabel(option));
       const custom = ui.sizeOptionsFor("512x512");
       return (
-        options.length >= 8 &&
-        labels.includes("1:1 · 1024×1024") &&
-        labels.includes("16:9 · 1536×864") &&
-        labels.includes("9:16 · 864×1536") &&
-        labels.includes("16:9 · 2K · 2048×1152") &&
-        ui.sizeOptionTitle(options[0]) === "1:1 · 1024×1024" &&
+        options.length >= 18 &&
+        labels.includes("1:1 · 1K · 1024×1024") &&
+        labels.includes("16:9 · 1K · 1536×864") &&
+        labels.includes("9:16 · 1K · 864×1536") &&
+        labels.includes("16:9 · 2K · 3072×1728") &&
+        labels.includes("1:1 · 4K · 4096×4096") &&
+        ui.sizeOptionTitle(options[0]) === "1:1 · 1K · 1024×1024" &&
         custom[0]?.value === "512x512" &&
         ui.sizeOptionLabel(custom[0]) === "自定义 · 512×512" &&
-        chatView.includes(">1:1 · 1024×1024</option>")
+        chatView.includes(">1:1 · 1K · 1024×1024</option>")
       );
     })(),
     (ui.SIZE_OPTIONS || []).map((option) => ui.sizeOptionLabel(option)).join(" | ")

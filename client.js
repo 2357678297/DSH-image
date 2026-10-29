@@ -2559,16 +2559,26 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 
 		// 上游要的是像素，用户要的是比例：下拉里把比例写在前面（1:1 / 3:2 / 16:9 …），
 		// 选哪条就把 config.defaultSize 写成对应像素。老配置里的冷门尺寸也兜底显示。
-		const SIZE_OPTIONS = [
-			{ value: "1024x1024", ratio: "1:1" },
-			{ value: "1536x1024", ratio: "3:2" },
-			{ value: "1024x1536", ratio: "2:3" },
-			{ value: "1536x864", ratio: "16:9" },
-			{ value: "864x1536", ratio: "9:16" },
-			{ value: "2048x864", ratio: "21:9" },
-			{ value: "2048x1152", ratio: "16:9 · 2K" },
-			{ value: "2048x2048", ratio: "1:1 · 2K" }
+		/* 尺寸 = 比例 × 分辨率档：1K 基准表 ×1 / ×2 / ×4，6 个常用比例都有 1K / 2K / 4K */
+		const SIZE_BASE = [
+			{ ratio: "1:1", w: 1024, h: 1024 },
+			{ ratio: "3:2", w: 1536, h: 1024 },
+			{ ratio: "2:3", w: 1024, h: 1536 },
+			{ ratio: "16:9", w: 1536, h: 864 },
+			{ ratio: "9:16", w: 864, h: 1536 },
+			{ ratio: "21:9", w: 2048, h: 864 }
 		];
+		const SIZE_TIERS = [
+			{ id: "1K", scale: 1 },
+			{ id: "2K", scale: 2 },
+			{ id: "4K", scale: 4 }
+		];
+		const SIZE_OPTIONS = SIZE_TIERS.flatMap((tier) =>
+			SIZE_BASE.map((base) => ({
+				value: `${base.w * tier.scale}x${base.h * tier.scale}`,
+				ratio: `${base.ratio} · ${tier.id}`
+			}))
+		);
 
 		/** 当前尺寸在不在表里都要给一个能选中的项（老配置可能是 512x512 这类）。 */
 		function sizeOptionsFor(current) {

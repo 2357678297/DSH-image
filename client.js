@@ -628,6 +628,7 @@ function writeConvSetting(id, settings) {
 			"update.restarting": "正在重启 DSH：页面会短暂断开，重连后即新版本",
 			"update.pullFailed": "更新失败：{reason}",
 			"update.notWired": "更新通道还没接壤（宿主未实现 /update/check）",
+			"update.networkBlocked": "网络无法链接，需要特殊网络环境",
 			"update.prFlow": "PR 流程",
 			"prov.storageMovePick": "输入新的素材目录路径；现有素材会复制过去，旧目录原样保留。",
 			"prov.storageSaved": "已切到 {dir}",
@@ -1062,6 +1063,7 @@ function writeConvSetting(id, settings) {
 			"update.restarting": "Restarting DSH: the page will reconnect shortly",
 			"update.pullFailed": "Update failed: {reason}",
 			"update.notWired": "Update channel not wired yet (host has no /update/check)",
+			"update.networkBlocked": "Network unreachable — a specialized network environment (proxy/VPN) is required",
 			"update.prFlow": "PR flow",
 			"prov.storageMovePick": "Enter the new media folder path; existing files are copied there and the old folder is kept.",
 			"prov.storageSaved": "Switched to {dir}",
@@ -11292,7 +11294,9 @@ h(
 						window.setTimeout(() => setUpdateState({ phase: "idle", percent: 0 }), 3600);
 					} catch (error) {
 						setUpdateState({ phase: "unwired", percent: 100 });
-						toast(t("update.pullFailed", { reason: String(error?.message ?? error) }), "err");
+						const reason = String(error?.message ?? error);
+						const networkIssue = /unable to access|failed to connect|timed out|could not resolve|网络无法链接/i.test(reason);
+						toast(networkIssue ? t("update.networkBlocked") : t("update.pullFailed", { reason }), "err");
 						window.setTimeout(() => setUpdateState({ phase: "idle", percent: 0 }), 3600);
 					}
 					return;
@@ -11309,9 +11313,12 @@ h(
 					} else if (payload?.code === "latest") {
 						toast(`${t("update.latest")}${payload.short?.local ? ` · ${payload.short.local}` : ""}`);
 					} else {
-						// not_a_repo / remote_unreachable：宿主说清楚了为什么，直接展示它的 hint
 						setUpdateState({ phase: "unwired", percent: 100 });
-						toast(payload?.hint || t("update.notWired"), "err");
+						// 网络问题（GitHub 不可达）统一说人话：需要特殊网络环境
+						const networkIssue =
+							payload?.code === "remote_unreachable" ||
+							/unable to access|failed to connect|timed out|could not resolve/i.test(String(payload?.error ?? ""));
+						toast(networkIssue ? t("update.networkBlocked") : payload?.hint || t("update.notWired"), "err");
 					}
 					finish(payload?.code === "behind" || payload?.code === "latest" ? "done" : "unwired", 3200);
 				} catch (error) {

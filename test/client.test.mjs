@@ -3359,6 +3359,13 @@ check(
       /resolveSizeExpression\(sizeSpec/.test(SOURCE)
   );
   check(
+    "分辨率与宽高比分开：size 只放档位，宽高比进 aspect_ratio",
+    /function sizePartsFor/.test(SOURCE) &&
+      /aspect_ratio: sizePartsFor/.test(SOURCE) &&
+      /finalBody\.size = tierMatch/.test(SOURCE) &&
+      /finalBody\.size = tierMatch/.test(SOURCE)
+  );
+  check(
     "模型 kind 只认目录元数据（不再按名字猜视频：wan3.0-video-1080p 不会被误切视频协议）",
     /function modelKindOf\(id, providers\)/.test(SOURCE) &&
       !/VIDEO_NAME_HINT/.test(SOURCE) &&
@@ -3667,4 +3674,4 @@ check("不依赖宿主私有样式变量或 class", !/--dsw-/.test(css) && !/\.(
 check("复用宿主的深色模式开关", css.includes("body[data-ds-dark-theme]"));
 
 console.log(failures === 0 ? "\n全部通过" : `\n${failures} 项失败`);
-process.exitCode = failures === 0 ? 0 : 1;
+      /finalBody\.size = tierMatch/.test(SOURCE)

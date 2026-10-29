@@ -200,6 +200,7 @@ sameBytes(
 	[245, 235, 225, 40],
 	"255-10/255-20/255-30；透明度不是颜色，不参与反相"
 );
+  check("sizePartsFor：8192x3456 → size=4K + aspect_ratio=21:9", I.sizePartsFor("8192x3456").tier === "4K" && I.sizePartsFor("8192x3456").ratio === "21:9", JSON.stringify(I.sizePartsFor("8192x3456")));
 sameBytes(
 	"psAdjustPixels 灰度把纯红 (255,0,0) 变成 r=g=b=128",
 	I.psAdjustPixels(new Uint8ClampedArray([255, 0, 0, 255]), { grayscale: true }),

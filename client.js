@@ -2589,11 +2589,14 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			}))
 		);
 
-		/** 像素 → 「比例 · 档位」表达式（如 3072x1728 → 16:9 · 2K；认不出的原样返回）。 */
-		function sizeExpressionFor(value) {
+
+		/** 像素 → { tier, ratio }：size 只放分辨率档（4K），宽高比单独放 aspect_ratio（21:9）。 */
+		function sizePartsFor(value) {
 			const raw = String(value ?? "").trim();
 			const hit = SIZE_OPTIONS.find((option) => option.value === raw);
-			return hit ? hit.ratio : raw;
+			if (!hit) return { tier: raw, ratio: "" };
+			const [ratio, tier] = String(hit.ratio).split(" · ");
+			return { tier: tier || raw, ratio: ratio || "" };
 		}
 
 		/**
@@ -11366,7 +11369,10 @@ h(
 					conversationId,
 					model: config.defaultModel,
 					providerId: providerIdForModel(providers, config),
-					size: sizeRaw ? sizeExpressionFor(isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize) : isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
+					size: sizeRaw ? sizePartsFor(isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize).tier : isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
+					...(sizeRaw && sizePartsFor(isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize).ratio
+						? { aspect_ratio: sizePartsFor(isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize).ratio }
+						: {}),
 					quality: config.defaultQuality,
 					n: isVideoEndpoint ? 1 : config.defaultCount,
 					seconds: isVideoEndpoint ? config.videoSeconds || "4" : "",
@@ -11793,7 +11799,7 @@ h(
 						const tierMatch = sizeSpec.match(/(\d)\s*k/i);
 						const ratioMatch = sizeSpec.match(/(\d{1,2})\s*[:：]\s*(\d{1,2})/);
 						if (sizeRaw && (tierMatch || ratioMatch)) {
-							finalBody.size = sizeSpec;
+							finalBody.size = tierMatch ? `${Number(tierMatch[1])}K` : sizeSpec;
 							if (ratioMatch) finalBody.aspectRatio = `${Number(ratioMatch[1])}:${Number(ratioMatch[2])}`;
 						} else {
 							finalBody.size = resolveSizeExpression(sizeSpec, requestBody.size);
@@ -13400,6 +13406,7 @@ h(
 			// 尺寸 = 比例 × 像素（下拉文案与兜底项）
 			SIZE_OPTIONS,
 		resolveSizeExpression,
+		sizePartsFor,
 			sizeOptionsFor,
 			sizeOptionLabel,
 			sizeOptionTitle,

@@ -8915,9 +8915,13 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				const canvas = viewRef.current;
 				if (!canvas) return { x: 0, y: 0 };
 				const rect = canvas.getBoundingClientRect();
+				if (!(rect.width > 0) || !(rect.height > 0)) return { x: 0, y: 0 };
+				/* 显示尺寸 → 图片像素：x/y 分别按 canvas 与显示框的比例换算（CSS 非等比拉伸也不会偏） */
 				const sx = canvas.width / Math.max(1, rect.width);
 				const sy = canvas.height / Math.max(1, rect.height);
-				return { x: (event.clientX - rect.left) * sx, y: (event.clientY - rect.top) * sy };
+				const x = (event.clientX - rect.left) * sx;
+				const y = (event.clientY - rect.top) * sy;
+				return { x, y };
 			};
 
 			const onPointerDown = (event) => {
@@ -8942,8 +8946,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						const slot = Math.min(3, warpPick);
 						setWarp((value) => {
 							const base = Array.isArray(value.src) && value.src.length === 4 ? value.src.slice() : psQuadCorners(stageW, stageH);
-							// 第 N 次点击就落在鼠标点的位置（不 clamp、不排序），点满 4 个即可直接确认
-							base[slot] = { x: at.x, y: at.y };
+							// 第 N 次点击就落在鼠标点的位置；只有点到图片外才钳回图片边界（否则越界会让四边形贴边）
+							base[slot] = {
+								x: Math.min(Math.max(at.x, 0), stageW),
+								y: Math.min(Math.max(at.y, 0), stageH)
+							};
 							return { ...value, src: base };
 							return { ...value, src: base };
 						});

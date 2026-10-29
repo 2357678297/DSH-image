@@ -507,6 +507,37 @@ if (!new URLSearchParams(location.search).get("model")) {
 				JSON.stringify({ w: params ? params.offsetWidth : 0 })
 			);
 		}
+		// 透视矫正点选实测：&ps=pick 在画布 25%/75% 位置点四角，截图看四边形是否覆盖画面一半
+		if (holdView === "ps" && psMode === "pick") {
+			try {
+				const pickTile = await waitFor(() => host.querySelector(".vig-ps-recent-tile"), 5000);
+				if (pickTile) {
+					flushSync(() => pickTile.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+					await wait(1200);
+				}
+				const pickWarp = Array.from(host.querySelectorAll(".vig-ps-tool")).find((node) => String(node.getAttribute("title") || "").includes("透视矫正"));
+				if (pickWarp) {
+					flushSync(() => pickWarp.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+					await wait(500);
+				}
+				const pickCanvas = host.querySelector("canvas");
+				let clicked = 0;
+				if (pickCanvas) {
+					const rect = pickCanvas.getBoundingClientRect();
+					for (const [fx, fy] of [[0.25, 0.25], [0.75, 0.25], [0.75, 0.75], [0.25, 0.75]]) {
+						const x = rect.left + rect.width * fx;
+						const y = rect.top + rect.height * fy;
+						const target = document.elementFromPoint(x, y) || pickCanvas;
+						flushSync(() => target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: x, clientY: y, pointerId: 1, button: 0 })));
+						clicked += 1;
+						await wait(150);
+					}
+				}
+				check("点选四点：点击事件已发到画布", clicked === 4, JSON.stringify({ clicked }));
+			} catch (error) {
+				debug.push("ps pick: " + String(error && error.message));
+			}
+		}
 		// 图库布局密度：&density=compact|standard|large（截图/审计用）
 		const densityText = { compact: "小图", standard: "标准", large: "大图" }[new URLSearchParams(location.search).get("density")];
 		if (densityText) {

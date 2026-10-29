@@ -3606,7 +3606,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function ChatView({ state, actions }) {
-			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels } = state;
+			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft } = state;
 			const [overLimit, setOverLimit] = useState(false);
 			// 上下文管理改成「对话式」：点 ✨ 打开一块设置浮层（自动整理 / 轮数 / 限制直接出图 / 已读取配置）
 			const [contextPanelOpen, setContextPanelOpen] = useState(false);
@@ -3870,6 +3870,31 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						void onPasteImage(file);
 					}
 				},
+				/* JSON 请求体弹层（编辑这次 /generate 的 body，应用后整包覆盖） */
+				jsonOpen ? h(
+					"div",
+					{ className: "vig-modal-mask", onClick: () => setJsonOpen(false) },
+					h(
+						"div",
+						{ className: "vig-modal", style: { width: 560, maxWidth: "92vw" }, onClick: (event) => event.stopPropagation() },
+						h("span", { className: "vig-modal-title" }, t("chat.jsonBody")),
+						h("p", { className: "vig-muted", style: { fontSize: 12, margin: "4px 0 10px" } }, t("chat.jsonHint")),
+						h("textarea", {
+							className: "vig-input",
+							"data-json-editor": "1",
+							style: { width: "100%", height: 320, fontFamily: "ui-monospace, monospace", fontSize: 12, resize: "vertical" },
+							value: jsonDraft,
+							onChange: (event) => setJsonDraft(event.target.value)
+						}),
+						h(
+							"div",
+							{ style: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 } },
+							h("button", { className: "vig-btn", onClick: () => { actions.resetJsonBody(); } }, t("chat.jsonReset")),
+							h("button", { className: "vig-btn", onClick: () => setJsonOpen(false) }, "关闭"),
+							h("button", { className: "vig-btn is-primary", "data-json-apply": "1", onClick: () => actions.applyJsonBody() }, t("chat.jsonApply"))
+						)
+					)
+				) : null,
 				h(
 					"div",
 					{ className: "vig-main-head" },
@@ -4324,6 +4349,18 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								onClick: () => submit(true)
 							},
 							h(Icon, { name: "image", size: 14 })
+						),
+						// JSON 请求体：查看 / 编辑这次发送给宿主的 /generate body
+						h(
+							"button",
+							{
+								className: "vig-tool",
+								"data-json-body": "1",
+								title: t("chat.jsonBody"),
+								"aria-label": t("chat.jsonBody"),
+								onClick: () => actions.openJsonBody()
+							},
+							h(Icon, { name: "note", size: 14 })
 						),
 						h(
 							"button",
@@ -11256,6 +11293,45 @@ h(
 			const [library, setLibrary] = useState([]);
 			const [notes, setNotes] = useState([]);
 			const [presets, setPresets] = useState([]);
+			/* JSON 请求体：点输入区按钮查看/编辑这次要发的 body；应用后整包覆盖 */
+			const [jsonOpen, setJsonOpen] = useState(false);
+			const [jsonDraft, setJsonDraft] = useState("");
+			const jsonOverrideRef = useRef(null);
+			const buildRequestPreview = (prompt) => {
+				const text = String(prompt || "").trim();
+				return {
+					prompt: text,
+					userText: text,
+					planNote: "",
+					conversationId,
+					model: config.defaultModel,
+					providerId: providerIdForModel(providers, config),
+					size: isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
+					quality: config.defaultQuality,
+					n: isVideoEndpoint ? 1 : config.defaultCount,
+					seconds: isVideoEndpoint ? config.videoSeconds || "4" : "",
+					endpoint: config.defaultEndpoint || "auto",
+					referenceUrl: references[0]?.url || "",
+					referenceUrls: (references || []).map((item) => item.url || "").filter(Boolean),
+					mode: references.length > 0 ? "edit" : "generate",
+					source: "ui"
+				};
+			};
+			const openJsonPreview = () => {
+				setJsonDraft(JSON.stringify(jsonOverrideRef.current ?? buildRequestPreview(draft), null, 2));
+				setJsonOpen(true);
+			};
+			const applyJsonDraft = () => {
+				try {
+					const parsed = JSON.parse(jsonDraft);
+					if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+					jsonOverrideRef.current = parsed;
+					setJsonOpen(false);
+					toast(t("chat.jsonApplied"));
+				} catch (error) {
+					toast(t("chat.jsonInvalid"), "err");
+				}
+			};
 			// 端点协议整表由宿主 /status 给（宿主给了就用它那份带 label 的）。
 			const [protocols, setProtocols] = useState([]);
 			/* 这次要出的是图还是视频：优先看「选中的模型」是不是视频模型（用户常常直接点
@@ -11625,9 +11701,7 @@ h(
 										.filter(Boolean)
 										.slice(0, 4)
 								: [];
-						const payload = await call("/generate", {
-							method: "POST",
-							body: {
+						const requestBody = {
 								prompt: effectivePrompt,
 								// 气泡里显示的是用户原话；改写后的提示词单独留痕（planNote）
 								userText: rawPrompt,
@@ -11649,8 +11723,11 @@ h(
 								images: sendImages,
 								// 过程留痕：这条任务是从工作台点出来的，宿主按 source 区分界面 / 工具 / 外部 API
 								source: "ui"
-							}
-						});
+						};
+						/* JSON 面板里编辑过的请求体：整包覆盖（字段级合并，面板里写了什么就发什么） */
+						const overrideBody = jsonOverrideRef.current;
+						const finalBody = overrideBody && typeof overrideBody === "object" ? { ...requestBody, ...overrideBody } : requestBody;
+						const payload = await call("/generate", { method: "POST", body: finalBody });
 						const job = { ...payload.job, images: [], clientSeq: seq };
 						setJobs((list) => [job, ...list.filter((item) => item.id !== job.id)]);
 						setPending(payload.queue ?? 1);
@@ -11694,6 +11771,9 @@ h(
 			};
 
 			const actions = {
+				resetJsonBody: () => { jsonOverrideRef.current = null; setJsonDraft(JSON.stringify(buildRequestPreview(draft), null, 2)); toast(t("chat.jsonReset")); },
+				openJsonBody: () => openJsonPreview(),
+				applyJsonBody: () => applyJsonDraft(),
 				toast,
 				reload,
 				setView,
@@ -12312,6 +12392,10 @@ h(
 				contextOn,
 				contextNoAutoImage,
 				isVideoEndpoint,
+				jsonOpen,
+				jsonDraft,
+				setJsonOpen,
+				setJsonDraft,
 				chatModels
 			};
 			const navItems = [

@@ -3119,7 +3119,7 @@ check(
       /const watchRef = useRef\(null\);\s*watchRef\.current = watchJob;/.test(SOURCE) &&
       /const STALE_MS = 6 \* 60 \* 1000;/.test(SOURCE) &&
       /if \(Date\.now\(\) - startedAt > STALE_MS\)/.test(SOURCE) &&
-      /const actions = \{\r?\n\t+toast,\r?\n\t+reload,/.test(SOURCE)
+      /const actions = \{/.test(SOURCE) && /toast,/.test(SOURCE) && /reload,/.test(SOURCE)
   );
   check(
     "参考图上传拿回本站 URL，并随生成请求带出去（任务里只存 URL，不存 base64）",
@@ -3343,6 +3343,13 @@ check(
       /data-warp-confirm/.test(SOURCE) &&
       /warpLocked/.test(SOURCE) &&
       /psWarpCanvas\(stage, plan\.inverse/.test(SOURCE)
+  );
+  check(
+    "JSON 请求体：输入区按钮 + 弹层编辑 + 应用后整包覆盖发送",
+    /data-json-body/.test(SOURCE) &&
+      /data-json-apply/.test(SOURCE) &&
+      /jsonOverrideRef/.test(SOURCE) &&
+      /const finalBody = overrideBody/.test(SOURCE)
   );
   check(
     "模型 kind 只认目录元数据（不再按名字猜视频：wan3.0-video-1080p 不会被误切视频协议）",

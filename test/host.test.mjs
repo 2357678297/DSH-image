@@ -519,6 +519,7 @@ check("协议=图片编辑（带参考图）→ 打到 /v1/images/edits", hitPat
       !editHit.raw.trim().startsWith("{"),
     JSON.stringify({ contentType: editHit?.contentType, head: String(editHit?.raw ?? "").slice(0, 120) })
   );
+
 }
 /* 只选了编辑协议、却没带参考图：回落到生成，别发一条注定 400 的请求 */
 mockHits.length = 0;

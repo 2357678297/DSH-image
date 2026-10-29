@@ -3352,6 +3352,13 @@ check(
       /const finalBody = overrideBody/.test(SOURCE)
   );
   check(
+    "尺寸原样发送开关：默认开（档位 + 宽高比原样发、附 aspectRatio），关掉才转像素",
+    /data-size-raw/.test(SOURCE) &&
+      /finalBody\.aspectRatio/.test(SOURCE) &&
+      /delete finalBody\.aspectRatio/.test(SOURCE) &&
+      /resolveSizeExpression\(sizeSpec/.test(SOURCE)
+  );
+  check(
     "模型 kind 只认目录元数据（不再按名字猜视频：wan3.0-video-1080p 不会被误切视频协议）",
     /function modelKindOf\(id, providers\)/.test(SOURCE) &&
       !/VIDEO_NAME_HINT/.test(SOURCE) &&

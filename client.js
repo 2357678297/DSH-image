@@ -3630,7 +3630,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function ChatView({ state, actions }) {
-			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft } = state;
+			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft, sizeRaw, setSizeRawPersist } = state;
 			const [overLimit, setOverLimit] = useState(false);
 			// 上下文管理改成「对话式」：点 ✨ 打开一块设置浮层（自动整理 / 轮数 / 限制直接出图 / 已读取配置）
 			const [contextPanelOpen, setContextPanelOpen] = useState(false);
@@ -3903,6 +3903,12 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						{ className: "vig-modal", style: { width: 560, maxWidth: "92vw" }, onClick: (event) => event.stopPropagation() },
 						h("span", { className: "vig-modal-title" }, t("chat.jsonBody")),
 						h("p", { className: "vig-muted", style: { fontSize: 12, margin: "4px 0 10px" } }, t("chat.jsonHint")),
+						h(
+							"label",
+							{ className: "vig-ctx-row", style: { marginBottom: 8 } },
+							h("input", { type: "checkbox", className: "vig-ctx-check", checked: sizeRaw, "data-size-raw": "1", onChange: () => setSizeRawPersist(!sizeRaw) }),
+							h("span", null, t("chat.sizeRaw"))
+						),
 						h("textarea", {
 							className: "vig-input",
 							"data-json-editor": "1",
@@ -11319,6 +11325,22 @@ h(
 			const [presets, setPresets] = useState([]);
 			/* JSON 请求体：点输入区按钮查看/编辑这次要发的 body；应用后整包覆盖 */
 			const [jsonOpen, setJsonOpen] = useState(false);
+			/* size 原样发送：上游认「档位 + 宽高比」；关掉则发送前转成像素 */
+			const [sizeRaw, setSizeRaw] = useState(() => {
+				try {
+					return window.localStorage.getItem("dsh.velapi-image-go.size-raw") !== "0";
+				} catch (error) {
+					return true;
+				}
+			});
+			const setSizeRawPersist = (value) => {
+				setSizeRaw(value);
+				try {
+					window.localStorage.setItem("dsh.velapi-image-go.size-raw", value ? "1" : "0");
+				} catch (error) {
+					/* 隐私模式写不了就只活这次 */
+				}
+			};
 			const [jsonDraft, setJsonDraft] = useState("");
 			const jsonOverrideRef = useRef(null);
 			const buildRequestPreview = (prompt) => {
@@ -11752,7 +11774,17 @@ h(
 						const overrideBody = jsonOverrideRef.current;
 						const finalBody = overrideBody && typeof overrideBody === "object" ? { ...requestBody, ...overrideBody } : requestBody;
 						/* size 支持表达式：JSON 面板里写 "2K · 16:9" 也能发 */
-						finalBody.size = resolveSizeExpression(finalBody.size, requestBody.size);
+						/* size 表达式：默认原样发（上游认「档位 + 宽高比」）；关掉开关才转像素 */
+						const sizeSpec = String(finalBody.size ?? "").trim();
+						const tierMatch = sizeSpec.match(/(\d)\s*k/i);
+						const ratioMatch = sizeSpec.match(/(\d{1,2})\s*[:：]\s*(\d{1,2})/);
+						if (sizeRaw && (tierMatch || ratioMatch)) {
+							finalBody.size = sizeSpec;
+							if (ratioMatch) finalBody.aspectRatio = `${Number(ratioMatch[1])}:${Number(ratioMatch[2])}`;
+						} else {
+							finalBody.size = resolveSizeExpression(sizeSpec, requestBody.size);
+							delete finalBody.aspectRatio;
+						}
 						const payload = await call("/generate", { method: "POST", body: finalBody });
 						const job = { ...payload.job, images: [], clientSeq: seq };
 						setJobs((list) => [job, ...list.filter((item) => item.id !== job.id)]);
@@ -12422,6 +12454,8 @@ h(
 				jsonDraft,
 				setJsonOpen,
 				setJsonDraft,
+				sizeRaw,
+				setSizeRawPersist,
 				chatModels
 			};
 			const navItems = [

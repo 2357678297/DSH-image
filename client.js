@@ -2582,6 +2582,30 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			}))
 		);
 
+		/**
+		 * 尺寸表达式：JSON 请求体里 size 可以写像素（3072x1728），也可以写「档位 + 宽高比」：
+		 *   "2K"、"16:9"、"2K · 16:9"（也认 2k/2K/4K、空格或 @ 分隔）。返回像素字符串。
+		 */
+		function resolveSizeExpression(value, fallback = "1024x1024") {
+			const raw = String(value ?? "").trim();
+			if (!raw) return fallback;
+			if (/^\d{2,5}\s*[x×*]\s*\d{2,5}$/i.test(raw)) return raw.replace(/\s*[x×*]\s*/i, "x");
+			const fallbackPixels = String(fallback).match(/^(\d+)x(\d+)$/);
+			const fallbackLong = fallbackPixels ? Math.max(Number(fallbackPixels[1]), Number(fallbackPixels[2])) : 1024;
+			const tierMatch = raw.match(/(\d)\s*k/i);
+			let scale = tierMatch ? Math.max(1, Number(tierMatch[1])) : 0;
+			if (!scale) scale = fallbackLong >= 3000 ? 4 : fallbackLong >= 1500 ? 2 : 1;
+			const ratioMatch = raw.match(/(\d{1,2})\s*[:：]\s*(\d{1,2})/);
+			const ratioId = ratioMatch ? `${Number(ratioMatch[1])}:${Number(ratioMatch[2])}` : "";
+			const fallbackRatio = fallbackPixels ? `${Number(fallbackPixels[1])}:${Number(fallbackPixels[2])}` : "1:1";
+			const base =
+				SIZE_BASE.find((item) => item.ratio === ratioId) ||
+				SIZE_BASE.find((item) => item.ratio === fallbackRatio) ||
+				SIZE_BASE[0];
+			return `${base.w * scale}x${base.h * scale}`;
+		}
+
+
 		/** 当前尺寸在不在表里都要给一个能选中的项（老配置可能是 512x512 这类）。 */
 		function sizeOptionsFor(current) {
 			const list = SIZE_OPTIONS.slice();
@@ -11727,6 +11751,8 @@ h(
 						/* JSON 面板里编辑过的请求体：整包覆盖（字段级合并，面板里写了什么就发什么） */
 						const overrideBody = jsonOverrideRef.current;
 						const finalBody = overrideBody && typeof overrideBody === "object" ? { ...requestBody, ...overrideBody } : requestBody;
+						/* size 支持表达式：JSON 面板里写 "2K · 16:9" 也能发 */
+						finalBody.size = resolveSizeExpression(finalBody.size, requestBody.size);
 						const payload = await call("/generate", { method: "POST", body: finalBody });
 						const job = { ...payload.job, images: [], clientSeq: seq };
 						setJobs((list) => [job, ...list.filter((item) => item.id !== job.id)]);
@@ -13325,6 +13351,7 @@ h(
 			setHostCapabilities,
 			// 尺寸 = 比例 × 像素（下拉文案与兜底项）
 			SIZE_OPTIONS,
+		resolveSizeExpression,
 			sizeOptionsFor,
 			sizeOptionLabel,
 			sizeOptionTitle,

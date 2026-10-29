@@ -181,6 +181,14 @@ sameBytes(
 	[0, 0, 0, 40],
 	"10/20/30 各减 255 后为负，被 psClampByte 夹到 0"
 );
+
+/* ---- size 表达式（档位 + 宽高比） ---- */
+{
+  check("size 表达式：2K · 16:9 → 3072x1728", I.resolveSizeExpression("2K · 16:9") === "3072x1728", I.resolveSizeExpression("2K · 16:9"));
+  check("size 表达式：4K → 4096x4096", I.resolveSizeExpression("4K") === "4096x4096", I.resolveSizeExpression("4K"));
+  check("size 表达式：只有比例时按 fallback 档位（2048 宽 → 2K）", I.resolveSizeExpression("16:9", "2048x1152") === "3072x1728", I.resolveSizeExpression("16:9", "2048x1152"));
+  check("size 表达式：像素原样保留", I.resolveSizeExpression("1280x720") === "1280x720", I.resolveSizeExpression("1280x720"));
+}
 {
 	const a = I.psAdjustPixels(new Uint8ClampedArray([0, 100, 200, 255]), { brightness: 100 });
 	const b = I.psAdjustPixels(new Uint8ClampedArray([0, 100, 200, 255]), { brightness: 999 });

@@ -542,6 +542,8 @@ function writeConvSetting(id, settings) {
 			"lib.delete": "删除",
 			"lib.rename": "重命名",
 			"lib.refresh": "刷新",
+			"lib.pages": "图片分页", "lib.prevPage": "上一页", "lib.nextPage": "下一页",
+			"lib.moreIndex": "载入更早的图片（已载入 {n}/{total}）",
 			"lib.density": "布局密度",
 			"lib.view": "视图",
 			"lib.view.grid": "网格",
@@ -985,6 +987,8 @@ function writeConvSetting(id, settings) {
 			"lib.delete": "Delete",
 			"lib.rename": "Rename",
 			"lib.refresh": "Refresh",
+			"lib.pages": "Image pages", "lib.prevPage": "Previous page", "lib.nextPage": "Next page",
+			"lib.moreIndex": "Load older images ({n}/{total} indexed)",
 			"lib.density": "Grid density",
 			"lib.view": "View",
 			"lib.view.grid": "Grid",
@@ -1474,6 +1478,10 @@ body[data-ds-dark-theme] .vig-mark{background:var(--vig-accent);color:var(--vig-
 
 /* 图库 / 信息 / 供应商 */
 .vig-toolbar{display:flex;gap:8px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--vig-line);flex-wrap:wrap}
+.vig-lib-pages{display:flex;align-items:center;flex:none;flex-wrap:wrap;gap:6px;padding:4px 12px;border-bottom:1px solid var(--vig-line)}
+.vig-lib-pages output{font-variant-numeric:tabular-nums;font-size:12px;color:var(--vig-text-muted)}
+.vig-lib-pages [data-lib-more]{margin-inline-start:auto}
+.vig-main>.vig-tiles{min-height:0;overflow-y:auto;align-content:start}
 .vig-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px;padding:14px}
 .vig-tile{border:1px solid var(--vig-line);border-radius:var(--vig-r-tile);overflow:hidden;background:var(--vig-surface);
 	cursor:pointer;position:relative;transition:border-color .15s ease,box-shadow .15s ease}
@@ -4817,6 +4825,171 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		 * 图片管理
 		 * ------------------------------------------------------------------ */
 
+		// 图库索引只有原图 URL 的老宿主也能使用。只缓存缩过的 Blob，不把原图或活动 DOM 的 URL 留在 LRU。
+		const GALLERY_THUMB_SIDE = 320;
+		const thumbCache = new Map(), thumbJobs = new Map(), thumbQueue = [];
+		let thumbBytes = 0, thumbActive = 0;
+		function rememberThumb(key, blob) {
+			thumbCache.set(key, blob);
+			thumbBytes += blob.size;
+			while (thumbCache.size > 64 || thumbBytes > 8 * 1024 * 1024) {
+				const oldest = thumbCache.keys().next().value;
+				thumbBytes -= thumbCache.get(oldest).size;
+				thumbCache.delete(oldest);
+			}
+		}
+
+		async function shrinkGalleryBlob(blob, signal, dimensions) {
+			let image, temporaryUrl, decodedSmall = false;
+			const canvas = document.createElement("canvas");
+			try {
+				if (typeof createImageBitmap === "function") {
+					// 一侧由解码器按比例计算；不能同时指定两侧把实际长宽比拉歪。
+					if (dimensions && Math.max(dimensions.w, dimensions.h) > GALLERY_THUMB_SIDE) {
+						const side = dimensions.w >= dimensions.h ? "resizeWidth" : "resizeHeight";
+						try { image = await createImageBitmap(blob, { [side]: GALLERY_THUMB_SIDE, resizeQuality: "high" }); decodedSmall = true; } catch { /* 不支持 resize 选项的旧引擎 */ }
+					}
+					if (!image && !signal?.aborted) {
+						try { image = await createImageBitmap(blob); } catch { /* 浏览器可能只在 img 解码器支持这个格式。 */ }
+					}
+				}
+				if (signal?.aborted) throw new Error("cancelled");
+				if (!image) {
+					image = new Image();
+					temporaryUrl = URL.createObjectURL(blob);
+					await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = temporaryUrl; });
+				}
+				if (signal?.aborted) throw new Error("cancelled");
+				const w = image.naturalWidth || image.width, h = image.naturalHeight || image.height;
+				if (!w || !h) throw new Error("empty image");
+				const ratio = Math.min(1, GALLERY_THUMB_SIDE / Math.max(w, h));
+				if (!decodedSmall && ratio === 1 && blob.size <= 256 * 1024) return blob;
+				canvas.width = Math.max(1, Math.round(w * ratio));
+				canvas.height = Math.max(1, Math.round(h * ratio));
+				canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+				return await new Promise((resolve, reject) => canvas.toBlob((out) => out ? resolve(out) : reject(new Error("empty thumbnail")), "image/webp", 0.82));
+			} finally {
+				image?.close?.();
+				if (temporaryUrl) URL.revokeObjectURL(temporaryUrl);
+				canvas.width = canvas.height = 0;
+			}
+		}
+
+		async function loadGalleryThumb(job) {
+			const signal = job.controller?.signal;
+			for (const url of new Set([job.thumb, job.original].filter(Boolean))) {
+				if (!job.listeners.size) break;
+				try {
+					const response = await fetch(url, { credentials: "same-origin", signal });
+					if (!response.ok) continue;
+					const blob = await response.blob();
+					if (!blob.size || !job.listeners.size || /^(text\/|application\/json)/i.test(blob.type)) continue;
+					try { return { blob: await shrinkGalleryBlob(blob, signal, url === job.original ? job.dimensions : null), cache: true }; }
+					catch {
+						// 没有 canvas 编码器时使用已经下载的原图；不绕过队列重发 HTTP，也不长期缓存大图。
+						if (url === job.original && job.listeners.size && blob.type.startsWith("image/")) return { blob, cache: false };
+					}
+				} catch { /* 预制缩图不存在时，在同一槽内尝试原图。 */ }
+			}
+			return null;
+		}
+
+		function pumpGalleryThumbs() {
+			while (thumbActive < 2 && thumbQueue.length) {
+				const job = thumbQueue.shift();
+				if (!job.listeners.size) continue;
+				thumbActive++;
+				void loadGalleryThumb(job).then((result) => {
+					if (!job.listeners.size) return;
+					if (result?.cache && job.key.length < 4096) rememberThumb(job.key, result.blob);
+					for (const notify of job.listeners) notify(result?.blob ?? null);
+				}).finally(() => {
+					if (thumbJobs.get(job.key) === job) thumbJobs.delete(job.key);
+					thumbActive--;
+					pumpGalleryThumbs();
+				});
+			}
+		}
+
+		function acquireGalleryThumb(key, original, thumb, dimensions, notify) {
+			const cached = thumbCache.get(key);
+			if (cached) {
+				thumbCache.delete(key); thumbCache.set(key, cached);
+				notify(cached);
+				return () => {};
+			}
+			let job = thumbJobs.get(key);
+			if (!job) {
+				job = { key, original, thumb, dimensions, listeners: new Set(), controller: typeof AbortController === "function" ? new AbortController() : null };
+				thumbJobs.set(key, job);
+				thumbQueue.push(job);
+			}
+			job.listeners.add(notify);
+			pumpGalleryThumbs();
+			return () => {
+				job.listeners.delete(notify);
+				if (!job.listeners.size) {
+					if (thumbJobs.get(key) === job) thumbJobs.delete(key);
+					const i = thumbQueue.indexOf(job);
+					if (i >= 0) thumbQueue.splice(i, 1);
+					job.controller?.abort();
+				}
+			};
+		}
+
+		function observeGalleryThumb(node, change) {
+			if (typeof IntersectionObserver === "function") {
+				const observer = new IntersectionObserver((entries) => change(entries[entries.length - 1].isIntersecting), { rootMargin: "160px" });
+				observer.observe(node);
+				return () => observer.disconnect();
+			}
+			// 老浏览器用同一个可见性判据，不能因为没有 observer 就让列表全部取图。
+			const measure = () => {
+				const r = node.getBoundingClientRect();
+				change(r.width > 0 && r.height > 0 && r.bottom >= -160 && r.top <= window.innerHeight + 160 && r.right >= -160 && r.left <= window.innerWidth + 160);
+			};
+			measure();
+			window.addEventListener("scroll", measure, true); window.addEventListener("resize", measure);
+			return () => { window.removeEventListener("scroll", measure, true); window.removeEventListener("resize", measure); };
+		}
+
+		function GalleryThumb({ asset, ...imgProps }) {
+			const ref = useRef(null), [near, setNear] = useState(false), [display, setDisplay] = useState(null);
+			const original = asset?.url || "", thumb = asset?.thumbUrl || "";
+			const width = Number(asset?.width), height = Number(asset?.height);
+			const hasDimensions = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
+			const hash = asset?.sha256 || "";
+			const key = useMemo(() => JSON.stringify([thumb, original, hash]), [thumb, original, hash]);
+			useEffect(() => ref.current ? observeGalleryThumb(ref.current, setNear) : undefined, []);
+			useEffect(() => {
+				if (!near || (!original && !thumb)) return undefined;
+				let live = true, objectUrl, reader;
+				const release = acquireGalleryThumb(key, original, thumb, hasDimensions ? {w:width, h:height} : null, (blob) => {
+					if (!live) return;
+					if (!blob) { setDisplay({ key, src: undefined }); return; }
+					if (typeof URL.createObjectURL === "function") {
+						objectUrl = URL.createObjectURL(blob);
+						setDisplay({ key, src: objectUrl });
+					} else {
+						reader = new FileReader(); reader.onload = () => { if (live) setDisplay({ key, src: reader.result }); };
+						reader.readAsDataURL(blob);
+					}
+				});
+				return () => {
+					live = false; release(); if (reader?.readyState === 1) reader.abort();
+					if (objectUrl) URL.revokeObjectURL(objectUrl);
+					setDisplay(null);
+				};
+			}, [key, original, thumb, near, hasDimensions, width, height]);
+			const src = near && display?.key === key ? display.src : undefined;
+			const scale = hasDimensions ? Math.min(1, GALLERY_THUMB_SIDE / Math.max(width, height)) : 1;
+			return h("img", {
+				alt: asset?.name || "", width: hasDimensions ? Math.max(1, Math.round(width * scale)) : 64,
+				height: hasDimensions ? Math.max(1, Math.round(height * scale)) : 64,
+				...imgProps, ref, srcSet: undefined, src, decoding: "async"
+			});
+		}
+
 		function LibraryView({ state, actions }) {
 			const [selected, setSelected] = useState([]);
 			const [query, setQuery] = useState("");
@@ -4846,6 +5019,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				}
 			});
 			const pickMode = (value) => {
+				if (value === mode) return;
+				if (value === "grid") setGridPage(page);
+				else if (Math.floor(activeIndex / pageSize) !== page) setActiveId(items[start]?.id || "");
+				setSelected([]);
 				setMode(value);
 				try {
 					localStorage.setItem("vig.library.mode", value);
@@ -4853,31 +5030,50 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					/* 同上 */
 				}
 			};
+			// 只限制卡片的 DOM，不截断检索、查看器或方向键可达的索引。
+			const pageSize = 12;
+			const [gridPage, setGridPage] = useState(0);
+			const gridRef = useRef(null);
 			const [activeId, setActiveId] = useState("");
-			const items = useMemo(() => state.library.filter((asset) => {
-				if (model && asset.model !== model) return false;
-				if (!query) return true;
-				return `${asset.name} ${asset.prompt} ${asset.model}`.toLowerCase().includes(query.toLowerCase());
-			}), [state.library, model, query]);
-			const visibleIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
+			const items = useMemo(() => {
+				const needle = query.trim().toLowerCase();
+				if (!model && !needle) return state.library;
+				return state.library.filter((asset) => (!model || asset.model === model) &&
+					(!needle || `${asset.name} ${asset.prompt} ${asset.model}`.toLowerCase().includes(needle)));
+			}, [state.library, model, query]);
+			const activeIndex = items.length ? Math.max(0, items.findIndex((asset) => asset.id === activeId)) : -1;
+			const current = items[activeIndex] || null;
+			const pages = Math.max(1, Math.ceil(items.length / pageSize));
+			const page = mode === "stage" ? Math.max(0, Math.floor(activeIndex / pageSize)) : Math.min(gridPage, pages - 1);
+			const start = page * pageSize;
+			const pageItems = useMemo(() => items.slice(start, start + pageSize), [items, start]);
+			const visibleIds = useMemo(() => new Set(pageItems.map((item) => item.id)), [pageItems]);
+			const changePage = (index) => {
+				if (index < 0 || index >= pages) return;
+				setSelected([]);
+				if (mode === "stage") setActiveId(items[index * pageSize].id);
+				else setGridPage(index);
+			};
+			const resetFilter = (setter, value) => { setter(value); setGridPage(0); setActiveId(""); };
+			useEffect(() => { if (gridRef.current) gridRef.current.scrollTop = 0; }, [page, query, model]);
 			const visibleSelected = selected.filter((id) => visibleIds.has(id));
 			const deletingRef = useRef(false);
 			const [deleting, setDeleting] = useState(false);
 			useEffect(() => {
 				setSelected((list) => list.every((id) => visibleIds.has(id)) ? list : list.filter((id) => visibleIds.has(id)));
 			}, [visibleIds]);
-			const models = [...new Set(state.library.map((asset) => asset.model).filter(Boolean))].sort();
+			const models = useMemo(() => [...new Set(state.library.map((asset) => asset.model).filter(Boolean))].sort(), [state.library]);
 			// 图库里的模型 id 也要用目录元数据分组：供应商记录里那份 modelMeta
 			const meta = useMemo(() => {
 				const merged = {};
 				for (const provider of state.providers || []) {
-					for (const [id, entry] of Object.entries(provider.modelMeta || {})) merged[id] = { ...(merged[id] || {}), ...entry };
+					for (const id of models) {
+						const entry = provider.modelMeta?.[id];
+						if (entry) merged[id] = { ...merged[id], ...entry };
+					}
 				}
 				return merged;
-			}, [state.providers]);
-
-			const current = items.find((asset) => asset.id === activeId) || items[0] || null;
-			const activeIndex = current ? items.indexOf(current) : -1;
+			}, [state.providers, models]);
 			const stageRef = useRef(null);
 			const stripRef = useRef(null);
 			/* 缩略条跟随选中项滚动：切图（箭头/滚轮/键盘/点击）后把选中缩略图滚到中间，带 Q 弹 */
@@ -5112,12 +5308,12 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					{ className: "vig-toolbar" },
 					h(Icon, { name: "grid" }),
 					h("span", { className: "vig-item-title" }, t("nav.library")),
-					h("input", { className: "vig-in", style: { width: 200, height: 30 }, placeholder: t("lib.search"), value: query, onChange: (event) => setQuery(event.target.value) }),
+					h("input", { className: "vig-in", style: { width: 200, height: 30 }, placeholder: t("lib.search"), value: query, onChange: (event) => resetFilter(setQuery, event.target.value) }),
 					h(ModelPicker, {
 						value: model,
 						models,
 						meta,
-						onChange: setModel,
+						onChange: (value) => resetFilter(setModel, value),
 						allLabel: t("lib.allModels"),
 						drop: "down",
 						title: t("lib.allModels")
@@ -5190,6 +5386,15 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						t("lib.refresh")
 					)
 				),
+				pages > 1 || state.libraryTotal > state.library.length ? h("nav", { className: "vig-lib-pages", "aria-label": t("lib.pages") },
+					pages > 1 ? [
+						h("button", { key: "prev", className: "vig-icon-btn", "data-lib-prev": "1", title: t("lib.prevPage"), "aria-label": t("lib.prevPage"), disabled: page === 0, onClick: () => changePage(page - 1) }, h(Icon, { name: "chevronLeft" })),
+						h("output", { key: "range" }, `${start + 1}–${start + pageItems.length} / ${items.length}`),
+						h("button", { key: "next", className: "vig-icon-btn", "data-lib-next": "1", title: t("lib.nextPage"), "aria-label": t("lib.nextPage"), disabled: page >= pages - 1, onClick: () => changePage(page + 1) }, h(Icon, { name: "chevron" }))
+					] : null,
+					state.libraryTotal > state.library.length ? h("button", { className: "vig-btn is-ghost is-sm", "data-lib-more": "1", disabled: state.libraryLoadingMore, onClick: actions.loadMoreLibrary },
+						t("lib.moreIndex", { n: state.library.length, total: state.libraryTotal })) : null
+				) : null,
 				items.length === 0
 					? h("div", { className: "vig-empty" }, t("lib.empty"))
 					: mode === "stage"
@@ -5428,7 +5633,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								h(
 									"div",
 									{ className: "vig-strip", ref: stripRef },
-									items.map((asset) =>
+									pageItems.map((asset) =>
 										h(
 											"button",
 											{
@@ -5440,15 +5645,15 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												onClick: () => setActiveId(asset.id),
 												...imageDragProps(asset)
 											},
-											h("img", { src: asset.url, alt: asset.name, loading: "lazy", draggable: false })
+											h(GalleryThumb, { asset, draggable: false })
 										)
 									)
 								)
 							)
 						: h(
 							"div",
-							{ className: "vig-tiles", "data-density": density },
-							items.map((asset, position) =>
+							{ className: "vig-tiles", ref: gridRef, "data-density": density },
+							pageItems.map((asset, index) =>
 								h(
 									"div",
 									{
@@ -5460,15 +5665,15 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										...imageDragProps(asset)
 									},
 									h("div", { className: "vig-check" }, selected.includes(asset.id) ? h(Icon, { name: "check", size: 12 }) : null),
-									h("img", {
-										src: asset.url,
+									h(GalleryThumb, {
+										asset,
 										alt: asset.name,
 										loading: "lazy",
 										draggable: false,
 										title: t("viewer.title"),
 										onClick: (event) => {
 											event.stopPropagation();
-											actions.openViewer(items, position, "library");
+											actions.openViewer(items, start + index, "library");
 										}
 									}),
 									h(
@@ -5490,7 +5695,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 													className: "vig-mini",
 													title: t("viewer.title"),
 													"aria-label": t("viewer.title"),
-													onClick: () => actions.openViewer(items, position, "library")
+													onClick: () => actions.openViewer(items, start + index, "library")
 												},
 												h(Icon, { name: "expand", size: 13 })
 											),
@@ -11234,6 +11439,16 @@ h(
 			const [config, setConfig] = useState({ baseUrl: "", apiKeyEnv: "", keyMask: "", hasKey: false, defaultModel: "", defaultSize: "1024x1024", videoSize: "1280x720", videoRatio: "16:9", videoResolution: "720p", videoSeconds: "4", defaultQuality: "LOW", defaultCount: 1, defaultEndpoint: window.localStorage.getItem(ENDPOINT_KEY) || "auto", activeProviderId: "", stateDir: "", chatModel: "", contextTurns: 6 });
 			const [providers, setProviders] = useState([]);
 			const [library, setLibrary] = useState([]);
+			const [libraryTotal, setLibraryTotal] = useState(0);
+			const [libraryLoadingMore, setLibraryLoadingMore] = useState(false);
+			const libraryRevision = useRef(0);
+			const morePending = useRef(false);
+			const replaceLibrary = (payload) => {
+				++libraryRevision.current;
+				const rows = payload.items || [];
+				setLibrary(rows);
+				setLibraryTotal(payload.total ?? rows.length);
+			};
 			const [notes, setNotes] = useState([]);
 			const [presets, setPresets] = useState([]);
 			/* JSON 面板：基于当前草稿，仅将编辑过的字段绑定到下一次发送。 */
@@ -11472,7 +11687,7 @@ h(
 					setProtocols(Array.isArray(status.protocols) ? status.protocols : []);
 					setChatModels(Array.isArray(status.chatModels) ? status.chatModels : []);
 					setProviders(providerList.items || []);
-					setLibrary(lib.items || []);
+					replaceLibrary(lib);
 					setNotes(noteList.items || []);
 					setPresets(presetList.items || status.presets || []);
 					/* 对话（会话）：挑一个当前对话（本地记着的那条还在就用它，否则用第一条），
@@ -11712,7 +11927,21 @@ h(
 				saveConfig,
 				reloadLibrary: async () => {
 					const payload = await call("/library?limit=200");
-					setLibrary(payload.items || []);
+					replaceLibrary(payload);
+				},
+				loadMoreLibrary: async () => {
+					if (morePending.current || library.length >= libraryTotal) return;
+					morePending.current = true;
+					setLibraryLoadingMore(true);
+					const revision = libraryRevision.current;
+					try {
+						const payload = await call(`/library?limit=200&offset=${library.length}`);
+						if (revision !== libraryRevision.current) return;
+						const known = new Set(library.map((asset) => asset.id));
+						const extra = (payload.items || []).filter((asset) => !known.has(asset.id));
+						replaceLibrary({ items: [...library, ...extra], total: payload.total });
+					} catch (error) { toast(String(error?.message ?? error), "err"); }
+					finally { morePending.current = false; setLibraryLoadingMore(false); }
 				},
 				/* ---- 对话（会话）：新建不带记忆，每个会话的历史互相隔离 ---- */
 				switchConversation: async (id) => {
@@ -12128,8 +12357,9 @@ h(
 				},
 				renameAsset: async (id, name) => {
 					try {
-						await call("/library/rename", { method: "POST", body: { id, name } });
-						await actions.reloadLibrary();
+						const { item } = await call("/library/rename", { method: "POST", body: { id, name } });
+						++libraryRevision.current;
+						setLibrary((rows) => rows.map((asset) => asset.id === id ? { ...asset, ...item, name: item?.name || name } : asset));
 					} catch (error) {
 						toast(String(error?.message ?? error), "err");
 					}
@@ -12140,7 +12370,9 @@ h(
 					targets.forEach((id) => deletingAssetIds.current.add(id));
 					try {
 						await call("/library/delete", { method: "POST", body: { ids: targets } });
+						++libraryRevision.current;
 						setLibrary((list) => list.filter((item) => !targets.includes(item.id)));
+						setLibraryTotal((total) => Math.max(0, total - targets.length));
 						return true;
 					} catch (error) {
 						toast(String(error?.message ?? error), "err");
@@ -12278,7 +12510,7 @@ h(
 			const state = {
 				config,
 				providers,
-				library,
+				library, libraryTotal, libraryLoadingMore,
 				notes,
 				presets,
 				protocols,

@@ -199,6 +199,7 @@ const upload = await call("/upload", { method: "POST", body: { name: "ref.png", 
 check("POST /upload 收参考图", upload.status === 200 && upload.body?.item?.format === "png", upload.body?.item?.url);
 const fetched = await fetch(`${origin}${upload.body?.item?.url}`);
 check("GET /upload/<file> 回图字节", fetched.status === 200 && fetched.headers.get("content-type") === "image/png");
+check("静态原图嗅探后仍从零偏移流出，长度和每个字节均不变", Number(fetched.headers.get("content-length")) === Buffer.from(tinyPng, "base64").length && Buffer.from(await fetched.arrayBuffer()).equals(Buffer.from(tinyPng, "base64")));
 
 const escape = await fetch(`${origin}/api/velapi-image-go/asset/..%2f..%2fconfig.json`);
 check("静态端点挡住路径穿越", escape.status === 404);

@@ -21,6 +21,7 @@
     "test": "node test/host.test.mjs && node test/client.test.mjs",
     "wiring": "node tools/verify-wiring.mjs",
     "audit:workbench": "node tools/viewer-check.mjs --query audit=workbench && node tools/viewer-check.mjs --query audit=gallery && node tools/dock-check.mjs",
+    "test:gallery-perf": "node test/gallery-perf.test.mjs",
     "test:live": "node test/host.test.mjs --live",
     "preview": "node tools/preview.mjs",
     "fit": "node tools/fit-check.mjs",

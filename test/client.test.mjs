@@ -2929,7 +2929,7 @@ check(
       "结果卡与图库都能拖 / 都能开查看器（结果卡点击开 / 图库图片点击开 + 一个「图片查看器」按钮）",
       /onClick: \(\) => onPreview\?\.\(image\)/.test(SOURCE) &&
         /\.\.\.imageDragProps\(image\)/.test(SOURCE) &&
-        /actions\.openViewer\(items, position, "library"\)/.test(SOURCE) &&
+        /actions\.openViewer\(items, start \+ index, "library"\)/.test(SOURCE) &&
         /onPreview: actions\.openViewer/.test(SOURCE) &&
         /t\("viewer\.title"\)/.test(SOURCE)
     );

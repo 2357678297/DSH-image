@@ -1544,19 +1544,8 @@ const PRESETS = [
       })()
     );
 
-    check(
-      "透视接进几何联动：warp 是一种几何 kind，落定提交带 plan，导出实时结果时图层也按 plan 变形",
-      (() => {
-        const body = SOURCE.slice(SOURCE.indexOf("function PsView("), SOURCE.indexOf("function psHandles("));
-        const exportBody = body.slice(body.indexOf("const toDataUrl"), body.indexOf("const applySnapshot"));
-        return (
-          ui3.PS_GEOMETRY_KINDS.includes("warp") &&
-          ui3.psGeometryKind("warp") === "warp" &&
-          /commit\(baked, null, \{ kind: "warp", plan \}\)/.test(body) &&
-          /psTransformLayers\(layers, \{ kind: "warp", plan, width: stage\.width, height: stage\.height \}\)/.test(exportBody)
-        );
-      })()
-    );
+    check("透视引擎仍支持联动，但导出只读取已提交的文档或当前图层", ui3.PS_GEOMETRY_KINDS.includes("warp") &&
+      /const toDataUrl = \(\) => \{\s*const out = psExportComposite\(stage, layers, Boolean\(layerSession\)\);/.test(SOURCE));
 
     /* ---- PsView 接线：几何提交点 / undo / redo 真的用了上面这些纯函数 ---- */
     const psViewBody = SOURCE.slice(SOURCE.indexOf("function PsView("), SOURCE.indexOf("function psHandles("));
@@ -2086,7 +2075,7 @@ check("有深色主题覆盖", css.includes("body[data-ds-dark-theme]"));
 // 工具箱是「左工具条 / 中画布 / 右参数」三栏，窄容器必须折成一栏（否则 300px 卡片里塞不下）
 check(
   "工具箱三栏骨架 + 窄容器折成一栏",
-  /\.vig-ps\{display:grid;grid-template-columns:96px minmax\(0,1fr\) 240px/.test(css) && /\.vig-root\[data-compact="1"\] \.vig-ps\{grid-template-columns:minmax\(0,1fr\);/.test(css)
+  css.includes("grid-template-columns:var(--vig-tool-col) minmax(0,1fr) var(--vig-layers-col)") && /\.vig-root\[data-compact="1"\] \.vig-ps\{grid-template-columns:minmax\(0,1fr\);/.test(css)
 );
 check("滑杆自绘了滑块（原生滑块在深色主题下几乎看不见）", css.includes(".vig-range::-webkit-slider-thumb"));
 // 放大的图要能滚：滚动容器自己 flex + 内容 margin:auto，用 justify-content:center 会把左上角截掉
@@ -2097,10 +2086,8 @@ check(
 check("比例条浮在画布右下角", /\.vig-ps-zoom\{position:absolute;right:10px;bottom:10px/.test(css));
 // 按需展开：收起标签 → 52px 图标栏；收起参数 → 52px 竖签；两个都收 → 两侧 52px
 check(
-  "工具箱可以按需收起两侧（52px 图标栏 / 52px 竖签）",
-    // 参数改成浮窗后，收起参数不再动网格；第三列是图层面板，固定 240px
-    /\.vig-ps\[data-params="0"\]\{grid-template-columns:96px minmax\(0,1fr\) 240px\}/.test(css) &&
-    /\.vig-ps\[data-labels="0"\]\[data-params="0"\]\{grid-template-columns:52px minmax\(0,1fr\) 240px\}/.test(css)
+  "工具名和图层列独立收起，窄编辑区的参数不遮画布",
+  css.includes('.vig-ps[data-labels="0"]{--vig-tool-col:52px}') && css.includes('.vig-ps[data-layers="0"]{--vig-layers-col:0px}') && css.includes('@container vig-editor (max-width: 720px)')
 );
 check("画布高度跟着窗口走（不再是死板的 320px）", /min-height:clamp\(320px,58vh,720px\)/.test(css));
 check("空画面铺满整块画布（内容垂直居中，不再缩在顶部）", /\.vig-ps-empty\{position:absolute;inset:0;overflow:auto/.test(css));
@@ -2422,30 +2409,9 @@ check(
     "样式闸门：十字光标 + 三段方式切换（三列）",
     /\.vig-ps-canvas\.is-warp\{cursor:crosshair/.test(css) && /\.vig-ps-seg\.is-3\{grid-template-columns:repeat\(3,1fr\)\}/.test(css)
   );
-  check(
-    "接线：原图侧拖的是图片坐标，结果侧按按下去那刻的比例折回图片坐标（中途不跟指针打架）",
-    /drag\.which === "src" \? \{ \.\.\.value, src: moved \} : \{ \.\.\.value, dst: moved \}/.test(SOURCE) &&
-      /const at = drag\.which === "dst" && drag\.k \? \{ x: point\.x \/ drag\.k \+ drag\.bounds\.x, y: point\.y \/ drag\.k \+ drag\.bounds\.y \} : point;/.test(SOURCE) &&
-      /setDrag\(\{ mode: "warp", which: "dst", index: hit\.index, origin: warp\.dst, k, bounds: \{ x: plan\.bounds\.x, y: plan\.bounds\.y \} \}\)/.test(SOURCE)
-  );
-  check(
-    "不用点应用：拖的过程就是结果，落定走 bakeWarp（换工具/回车收口，导出按全分辨率现算）",
-    /const baked = warpFullCanvas\(\);/.test(SOURCE) &&
-      // 透视落定时把同一份 plan 一起提交：图层 / 蒙版跟着底图一起变形（不再是 commit(baked, null)）
-      /commit\(baked, null, \{ kind: "warp", plan \}\)/.test(SOURCE) &&
-      /if \(previous === "warp" && tool !== "warp"\) bakeWarp\(true\);/.test(SOURCE) &&
-      /const live = stage && plan && !psQuadsEqual\(plan\.from, plan\.to\) \? warpFullCanvas\(\) : null;/.test(SOURCE) &&
-      /case "warp":\s*\n\s*applyWarp\(\);/.test(SOURCE) &&
-      // 面板里不能再出现「应用」那个按钮
-      !/is-primary", disabled: !plan, onClick: applyWarp/.test(SOURCE)
-  );
-  check(
-    "四点矫正不做实时预览：点选/确认时才计算结果（结果进新图层）",
-    /const warpOnDst = false/.test(SOURCE) &&
-      !/setWarpView\(renderWarpView/.test(SOURCE) &&
-      /局部框选矫正：结果（框选区域裁切后的矩形）直接压成新图层/.test(SOURCE) &&
-      /canvas: out,/.test(SOURCE)
-  );
+  check("取图点和目标点使用同一张画布的图像坐标", /const moved = psMoveQuadPoint\(quad, drag.index, point, stage.width, stage.height\)/.test(SOURCE));
+  check("点击和 Enter 共用显式提交，不在退出工具时提交草稿", !SOURCE.includes("bakeWarp(") && /case "warp":\s*applyWarp\(\)/.test(SOURCE) && /"data-warp-confirm":[\s\S]{0,120}onClick: applyWarp/.test(SOURCE));
+  check("确认以可见像素为输入并打开裁出图层的原生尺寸", /psWarpCanvas\(pixels, plan.inverse, plan.size.w, plan.size.h\)/.test(SOURCE) && /psLayerSessionStart\(result, base, null\)/.test(SOURCE));
   const warpShot = renderToStaticMarkup(
     React.createElement(w.PsView, {
       state: { library: [] },
@@ -2459,13 +2425,13 @@ check(
       warpShot.includes(">自由拉伸<") &&
       warpShot.includes(">变形<") &&
       warpShot.includes(">重置四点<") &&
-      warpShot.includes(">原图<") &&
-      warpShot.includes(">结果<") &&
+      warpShot.includes(">取图点<") &&
+      !warpShot.includes(">目标点<") &&
       // SSR 不跑 effect，四点还是 null，所以这里读的是「还没摆点」的提示；
       // 摆好之后的那行读数由 ps.warp.out 的文案单独钉（下面那一条）
       warpShot.includes('class="vig-ps-readout"') &&
-      warpShot.includes("拖角点定位置") &&
-      warpShot.includes("边拖边出结果") &&
+      warpShot.includes("已选 0 / 4") &&
+      warpShot.includes("仅确认后生效") &&
       !warpShot.includes(">应用<") &&
       !/vig-ps-live/.test(warpShot) &&
       /class="vig-ps-tool[^"]*" title="透视矫正/.test(warpShot),
@@ -2509,17 +2475,7 @@ check(
     seeded("flat", { src: quad(16) }).includes("输出 224 × 224") && !/拖角点定位置/.test(seeded("flat", { src: quad(16) }))
   );
   /* ---- 这一轮的两处返工：四点贴最外圈 + 移动实时（不用按应用） ---- */
-  check(
-    "四点初值贴着图片最外圈（不再内缩一圈），三种方式都从四角起手",
-    JSON.stringify(w.psQuadCorners(200, 100)) === JSON.stringify([{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 100 }, { x: 0, y: 100 }]) &&
-      /const corners = psQuadCorners\(width, height\);/.test(SOURCE) &&
-      /return mode === "distort" \? \{ src: corners, dst: corners \} : mode === "free" \? \{ src: corners, dst: corners \} : \{ src: corners, dst: null \};/.test(SOURCE) &&
-      // 初值贴边 ⇒ flat 一进来输出就是整张图那么大
-      (() => {
-        const plan = w.psWarpPlan({ mode: "flat", src: w.psQuadCorners(200, 100), width: 200, height: 100 });
-        return plan.size.w === 200 && plan.size.h === 100;
-      })()
-  );
+  check("自由/变形仍使用原图四角，平面取点使用空草稿", JSON.stringify(w.psQuadCorners(200,100)) === JSON.stringify([{x:0,y:0},{x:200,y:0},{x:200,y:100},{x:0,y:100}]) && warpShot.includes("已选 0 / 4"));
   check(
     "矩阵相乘 / 缩放矩阵：作用顺序是「先右后左」，拼出来的结果能对得上单点手算",
     JSON.stringify(w.psMatMul(w.psScaleH(2, 3), w.psScaleH(5, 7))) === JSON.stringify(w.psScaleH(10, 21)) &&
@@ -2577,20 +2533,8 @@ check(
       w.psWarpPlan({ mode: "distort", src: w.psQuadCorners(200, 100), dst: [{ x: 10, y: 10 }, { x: 190, y: 10 }, { x: 190, y: 90 }, { x: 100, y: 50 }], width: 200, height: 100 }) === null &&
       w.psWarpPlan({ mode: "flat", src: [{ x: 10, y: 10 }, { x: 190, y: 10 }, { x: 190, y: 90 }, { x: 100, y: 50 }], width: 200, height: 100 }) === null
   );
-  check(
-    "样式闸门：没有面板小窗口（实时就在画布上）+ 结果侧画布不吃缩放（1:1 摆）",
-    !/vig-ps-live/.test(css) && !/vig-ps-live/.test(SOURCE) && !/warpLiveRef/.test(SOURCE) &&
-      /const cssPerPx = warpStageView \? 1 : scale;/.test(SOURCE) &&
-      /const canvasW = Math\.max\(1, Math\.round\(shownW \* cssPerPx\)\);/.test(SOURCE)
-  );
-  check(
-    "实时在原图这一侧的画布上：结果裁进蓝四点围出的框里贴回去，框外还是原图",
-    /const quad = psQuadPoints\(plan\.from\);/.test(SOURCE) &&
-      /const box = psQuadBounds\(plan\.from\);/.test(SOURCE) &&
-      /ctx\.clip\(\);/.test(SOURCE) &&
-      /ctx\.drawImage\(warpView, box\.x, box\.y, box\.w, box\.h\);/.test(SOURCE) &&
-      /if \(warpStageView \|\| !plan \|\| !warpView\) return;/.test(SOURCE)
-  );
+  check("图片和标记同用 canvasW / canvasH，不再叠实时结果", /ref: overlayRef,[\s\S]{0,130}width: canvasW, height: canvasH/.test(SOURCE) && !SOURCE.includes("warpStageView"));
+  check("草稿不画假角点；四点齐再填充绿色区域", /if \(points.length === 4\) \{ ctx.closePath\(\)/.test(SOURCE) && /points.forEach\(\(p, i\)/.test(SOURCE));
 }
 
 /* ---- 4e. 上游报错摆出来 + 供应商端点协议 --------------------------- */
@@ -3046,19 +2990,16 @@ check(
       /setPsImage\(\{ name: image\.name/.test(SOURCE)
   );
 
-  check(
-    "挂了参考图 + 选「图片编辑」协议：生成请求带 mode:edit 和参考图字节（别只发文字被 400）",
-    /const wantsEdit = readyRefs\.length > 0;/.test(SOURCE) &&
-      /let effectiveMode = wantsEdit \? "edit" : "generate"/.test(SOURCE) &&
-      /image: sendImages\[0\]/.test(SOURCE) &&
-      /images: sendImages/.test(SOURCE) &&
-      /referenceUrls: effectiveReferenceUrls/.test(SOURCE)
-  );
+  const makeRequest = (references = [], settings = {}) => w.buildGenerationRequest({
+    prompt: "test", config: { defaultModel: "m", defaultSize: "8192x3456", defaultCount: 1 }, providers: [], conversationId: "A", references, isVideoEndpoint: false, sizeRaw: true, ...settings
+  });
+  const refBody = makeRequest([{ url: "/local/1", dataUrl: "/local/1" }, { url: "/local/2", dataUrl: "data:image/png;base64,A" }]);
+  check("图生图保留 URL 和真实字节；无参考图走生成", refBody.mode === "edit" && refBody.image === "data:image/png;base64,A" && refBody.referenceUrls.join() === "/local/1,/local/2" && makeRequest().mode === "generate");
   check(
     "发送前把没有本站 URL 的参考图补传留档（两张变一张的根因）",
     /发送前把「还没有本站 URL」的参考图补一份留档/.test(SOURCE) &&
       /if \(!item\.url && typeof item\.dataUrl === "string" && item\.dataUrl\.startsWith\("data:"\)\) \{[\s\S]{0,220}await uploadRefData\(item\.name, item\.dataUrl\)/.test(SOURCE) &&
-      /let effectiveReferenceUrls = readyRefs\.map\(\(item\) => item\.url \|\| ""\)\.filter\(Boolean\)/.test(SOURCE)
+      /const urls = readyRefs.map\(\(ref\) => ref.url\).filter\(Boolean\)/.test(SOURCE)
   );
   check(
     "✨ 浮层 UI 保留（逻辑回退：上下文管理不再参与发送流程）",
@@ -3125,8 +3066,7 @@ check(
     "参考图上传拿回本站 URL，并随生成请求带出去（任务里只存 URL，不存 base64）",
     /const uploadRefData = async \(name, dataUrl\) => \{[\s\S]{0,300}call\("\/upload", \{ method: "POST", body: \{ name: name \|\| "reference\.png", data: dataUrl \} \}\)/.test(SOURCE) &&
       /setReferences\(\(current\) => current\.map\(\(item\) => \(item\.dataUrl === dataUrl && !item\.url \? \{ \.\.\.item, url \} : item\)\)\)/.test(SOURCE) &&
-      /referenceUrl: effectiveReferenceUrls\[0\] \|\| ""/.test(SOURCE) &&
-      /referenceUrls: effectiveReferenceUrls/.test(SOURCE) &&
+      refBody.referenceUrl === refBody.referenceUrls[0] &&
       /referenceUrl: job\.referenceUrl \|\| ""/.test(SOURCE)
   );
   check(
@@ -3292,13 +3232,7 @@ check(
       /onDelete: actions\.deleteJob/.test(SOURCE) &&
       /onEdit: actions\.editJob/.test(SOURCE)
   );
-  check(
-    "参考图字节只认真 data URI：URL 字符串不再当 image 发（37 字节假图根治），多张一起发",
-    /typeof item\.dataUrl === "string" && item\.dataUrl\.startsWith\("data:"\) \? item\.dataUrl : null/.test(SOURCE) &&
-      /images: sendImages/.test(SOURCE) &&
-      /editJob: \(job\) => \{[\s\S]{0,900}urlToDataUrl\(url\)/.test(SOURCE) &&
-      /!blob\.type\.startsWith\("image\/"\)\) return ""/.test(SOURCE)
-  );
+  check("参考图字节不接受 URL 充当伪文件", refBody.images.length === 1 && refBody.images[0] === refBody.image && makeRequest([{dataUrl: "/local/1"}]).images.length === 0);
   check(
     "更新入口：先设计（检查 /update/check）+ 按需进度条（role=progressbar）",
     /call\("\/update\/check", \{ method: "POST", body: \{\} \}\)/.test(SOURCE) &&
@@ -3309,15 +3243,15 @@ check(
       /updateState\.phase === "done"/.test(SOURCE)
   );
   check(
-    "更新通道两段式：检查到 behind 后再点一次 → 拉取（/update/apply）并重启（/update/restart）",
+    "更新通道两段式：检查到 behind 后再点一次 → 拉取（/update/apply）且不会自动重启",
     /call\("\/update\/apply", \{ method: "POST", body: \{\} \}\)/.test(SOURCE) &&
-      /call\("\/update\/restart", \{ method: "POST", body: \{\} \}\)/.test(SOURCE) &&
+      !/call\("\/update\/restart", \{ method: "POST", body: \{\} \}\)/.test(SOURCE) &&
       /updateInfoRef/.test(SOURCE) &&
       /update\.clickAgain/.test(SOURCE)
   );
   check(
     "发送 = 直接生图（逻辑回退：不再走对话 agent / 上下文判定）",
-    /return enqueueSend\(rawPrompt, true\)/.test(SOURCE) &&
+    /return enqueueSend\(rawPrompt\)/.test(SOURCE) &&
       !/call\("\/chat\/agent"/.test(SOURCE) &&
       !/const replyWithChat = async/.test(SOURCE)
   );
@@ -3330,7 +3264,7 @@ check(
   check(
     "会话隔离：每个会话独立记住生图配置（localStorage），切会话恢复",
     /CONV_SETTINGS_KEY/.test(SOURCE) &&
-      /readConvSettings\(\)\[conversationId\]/.test(SOURCE) &&
+      /readConvSettings\(\)\[id\]/.test(SOURCE) &&
       /pickConfigFields/.test(SOURCE)
   );
   check(
@@ -3342,29 +3276,15 @@ check(
     /data-warp-pick/.test(SOURCE) &&
       /data-warp-confirm/.test(SOURCE) &&
       /warpLocked/.test(SOURCE) &&
-      /psWarpCanvas\(stage, plan\.inverse/.test(SOURCE)
+      /psWarpCanvas\(pixels, plan\.inverse/.test(SOURCE)
   );
-  check(
-    "JSON 请求体：输入区按钮 + 弹层编辑 + 应用后整包覆盖发送",
-    /data-json-body/.test(SOURCE) &&
-      /data-json-apply/.test(SOURCE) &&
-      /jsonOverrideRef/.test(SOURCE) &&
-      /const finalBody = overrideBody/.test(SOURCE)
-  );
-  check(
-    "尺寸原样发送开关：默认开（档位 + 宽高比原样发、附 aspectRatio），关掉才转像素",
-    /data-size-raw/.test(SOURCE) &&
-      /finalBody\.aspectRatio/.test(SOURCE) &&
-      /delete finalBody\.aspectRatio/.test(SOURCE) &&
-      /resolveSizeExpression\(sizeSpec/.test(SOURCE)
-  );
-  check(
-    "分辨率与宽高比分开：size 只放档位，宽高比进 aspect_ratio",
-    /function sizePartsFor/.test(SOURCE) &&
-      /aspect_ratio: sizePartsFor/.test(SOURCE) &&
-      /finalBody\.size = tierMatch/.test(SOURCE) &&
-      /finalBody\.size = tierMatch/.test(SOURCE)
-  );
+  check("JSON 只覆盖编辑过的字段，不允许把请求串到其它会话", JSON.stringify(w.requestOverrides({prompt:"A", quality:"LOW", conversationId:"a"}, {prompt:"A", quality:"HIGH", conversationId:"b"})) === '{"quality":"HIGH"}' && SOURCE.includes("data-json-apply"));
+  check("所有 18 种尺寸的字段与像素可双向无损切换", w.SIZE_OPTIONS.every(o => {
+    const raw = w.normalizeGenerationBody({ size: o.value }, true, "1024x1024", false);
+    const converted = w.normalizeGenerationBody(raw, false, "1024x1024", false);
+    return raw.aspect_ratio && converted.size === o.value && !("aspect_ratio" in converted) && !("aspectRatio" in converted);
+  }));
+  check("4K 宽图默认拆字段；自定义/视频像素不套图片档位", makeRequest().size === "4K" && makeRequest().aspect_ratio === "21:9" && w.normalizeGenerationBody({size:"800x375"}, true, "8192x3456", false).size === "800x375" && makeRequest([], {isVideoEndpoint:true}).size === "1280x720");
   check(
     "模型 kind 只认目录元数据（不再按名字猜视频：wan3.0-video-1080p 不会被误切视频协议）",
     /function modelKindOf\(id, providers\)/.test(SOURCE) &&
@@ -3423,7 +3343,7 @@ check(
   check(
     "发送串行化：对话端口与生图端口不并发（sendChain 队列 + clientSeq 排序）",
     /const sendChainRef = useRef\(Promise\.resolve\(\)\)/.test(SOURCE) &&
-      /const runGenerateFlow = async \(rawPrompt, seq, force = false\) => \{/.test(SOURCE) &&
+      /const runGenerateFlow = async \(requestBody, override, seq\) => \{/.test(SOURCE) &&
       /pendingSendsRef\.current >= 6/.test(SOURCE) &&
       /clientSeq: seq/.test(SOURCE) &&
       /Number\.isFinite\(Number\(job\.clientSeq\)\)/.test(SOURCE)
@@ -3530,11 +3450,10 @@ check(
       /defaultEndpoint: status\.config\?\.defaultEndpoint \|\| previous\.defaultEndpoint \|\| "auto"/.test(SOURCE)
   );
   check(
-    "保存配置是乐观更新 + 合并回包：宿主吞掉字段也不许把刚选的值冲回默认（协议选不动那个 bug）",
+    "保存配置是乐观更新 + 按会话合并回包：宿主吞掉字段也不许把刚选的值冲回默认",
     /setConfig\(\(previous\) => \(\{ \.\.\.previous, \.\.\.patch \}\)\)/.test(SOURCE) &&
       /setConfig\(\(previous\) => \(\{\s*\.\.\.previous,\s*\.\.\.payload\.config,/.test(SOURCE) &&
-      /defaultEndpoint: payload\.config\?\.defaultEndpoint \|\| previous\.defaultEndpoint \|\| "auto"/.test(SOURCE) &&
-      // 老写法是直接覆盖：宿主回包里没有这一项，用户的选择就没了
+      /readConvSettings\(\)\[owner\]/.test(SOURCE) &&
       !/setConfig\(payload\.config\);/.test(SOURCE)
   );
 
@@ -3674,4 +3593,4 @@ check("不依赖宿主私有样式变量或 class", !/--dsw-/.test(css) && !/\.(
 check("复用宿主的深色模式开关", css.includes("body[data-ds-dark-theme]"));
 
 console.log(failures === 0 ? "\n全部通过" : `\n${failures} 项失败`);
-      /finalBody\.size = tierMatch/.test(SOURCE)
+process.exitCode = failures ? 1 : 0;

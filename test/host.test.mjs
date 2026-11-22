@@ -500,12 +500,13 @@ check("上游请求照旧带鉴权头", mockHits.some((hit) => hit.auth === "Bea
 mockProvider = await saveMockProvider({ id: mockProvider.id, endpoint: "images_edits" });
 mockHits.length = 0;
 const PNG_FOR_EDIT = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
-await runMockJob("编辑协议", { mode: "edit", image: `data:image/png;base64,${PNG_FOR_EDIT}` });
+await runMockJob("编辑协议", { size: "4K", aspect_ratio: "21:9", mode: "edit", image: `data:image/png;base64,${PNG_FOR_EDIT}` });
 check("协议=图片编辑（带参考图）→ 打到 /v1/images/edits", hitPaths().includes("/v1/images/edits"), hitPaths().join(","));
 /* 图生图必须 multipart：JSON + base64 会被 GPT 系模型回 400
    image file or image_url is required（用户截图那条） */
 {
   const editHit = mockHits.filter((hit) => hit.url === "/v1/images/edits").pop();
+  check("编辑协议：4K 和 21:9 是两个独立表单字段", /name="size"\r?\n\r?\n4K/.test(editHit?.raw) && /name="aspect_ratio"\r?\n\r?\n21:9/.test(editHit?.raw));
   check(
     "图生图走 multipart/form-data：image 是文件字段，model/prompt/size/n 都在",
     Boolean(editHit) &&

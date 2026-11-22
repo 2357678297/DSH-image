@@ -341,17 +341,17 @@ function writeConvSetting(id, settings) {
 			"ps.warp.mode.flat": "四点畸变",
 			"ps.warp.mode.free": "自由拉伸",
 			"ps.warp.mode.distort": "变形",
-			"ps.warp.hint.flat": "四点默认贴着图片最外圈。把蓝四点拖到画面里那块倾斜的四边形上（屏幕、纸张、门框、招牌都行）—— 框里当场被拉平，结果直接出在主画布上。",
-			"ps.warp.hint.free": "蓝四点 = 从哪儿取，橙四点 = 放到哪儿；八个角都能拖（都从图片最外圈起手），任意四边形映到任意四边形。框里实时出结果，换个视图看最终那张。",
-			"ps.warp.hint.distort": "只拖橙色四点：整幅图跟着被拉成这个四边形，实时跟手（取图四点固定贴图片四角）。",
+			"ps.warp.hint.flat": "在原图点选四个角。绿色点按点击顺序编号，选满后可拖动微调。",
+			"ps.warp.hint.free": "切换取图点或目标点，分别拖动绿色或橙色四角。",
+			"ps.warp.hint.distort": "拖动橙色目标点，取图范围固定为整张原图。",
 			"ps.warp.out": "输出 {w} × {h}",
 			"ps.warp.drag": "拖角点定位置",
 			"ps.warp.reset": "重置四点",
 			"ps.warp.view": "视图",
-			"ps.warp.side.src": "原图",
-			"ps.warp.side.dst": "结果",
-						"ps.warp.liveTag": "边拖边出结果",
-			"ps.warp.tip": "原图这侧：框住的那块在画布上实时被拉平（框外不动）；结果这侧：看最终那张。都不用点应用 —— Esc 撤回这次拖拽，换工具或回车就落定。",
+			"ps.warp.side.src": "取图点",
+			"ps.warp.side.dst": "目标点",
+						"ps.warp.liveTag": "仅确认后生效",
+			"ps.warp.tip": "确认或按 Enter 新建并打开矫正图层；切换工具和导出不会应用未确认的选区。",
 			"ps.warp.done": "已矫正 {w} × {h}",
 			"ps.warp.degenerate": "四点不能重合、不能三点共线，也不能凹进去或交叉（那样画面会翻到四边形外面），挪一下再试。",
 			"ps.width": "宽",
@@ -445,12 +445,9 @@ function writeConvSetting(id, settings) {
 			"chat.context": "上下文",
 			"chat.contextOn": "上下文管理：开 —— 每轮先由对话模型把本对话的历史整理成提示词",
 			"chat.contextPanel": "对话模型",
-			"chat.dialogDesc": "发消息先进这里：聊天就直接回答，要出图才生图。",
+			"chat.dialogDesc": "本面板保留旧版设置。发送始终直接生图，不调用对话模型。",
 			"chat.forceGenerate": "生成图片",
 			"chat.forceGenerateHint": "跳过对话，直接把这句话交给生图（agent 之外的手动入口）",
-			"chat.forceGenerate": "Generate image",
-			"chat.forceGenerateTooShort": "Prompt too short: write at least 5 characters describing the image, then press Generate image",
-			"chat.forceGenerateHint": "Skip the agent and generate an image from this prompt",
 			"chat.dialogNotReady": "Chat endpoint not ready: refresh the page (F5); restart DSH only if it still fails",
 			"chat.contextDesc": "只负责整理提示词与读取配置，不直接调用供应商出图。",
 			"chat.contextAuto": "优化提示词",
@@ -504,7 +501,7 @@ function writeConvSetting(id, settings) {
 			"chat.modelInvalid": "当前模型不能生图（是对话/音频模型，或不在任何供应商目录里），先选一个图片模型",
 			"chat.queueFull": "发送太快了：这一句处理完再发下一句（最多排 6 条）",
 			"chat.jsonBody": "JSON 请求体",
-			"chat.jsonHint": "这是这次要发给宿主的 /generate 请求体，可以直接改（点应用后整包覆盖本次发送）。size 也可以写「2K · 16:9」这种档位+宽高比。",
+			"chat.jsonHint": "修改的字段仅用于本会话的下一次发送；会话 ID 由工作台管理。size 是档位，aspect_ratio 是宽高比。关闭原样发送则转换为像素。",
 			"chat.jsonApply": "应用",
 			"chat.jsonReset": "恢复默认",
 			"chat.jsonApplied": "已应用 JSON 覆盖",
@@ -630,8 +627,8 @@ function writeConvSetting(id, settings) {
 			"update.latest": "已是最新版本",
 			"update.ready": "有新版本，按 PR 流程更新",
 			"update.behind": "远端有更新 {sha}，拉取后需重启 DSH",
-			"update.clickAgain": "再点一次更新即拉取并重启",
-			"update.applied": "已更新到 {sha}，正在重启 DSH…",
+			"update.clickAgain": "再点一次拉取更新，不会重启 DSH",
+			"update.applied": "已拉取到 {sha}，DSH 未重启",
 			"update.restarting": "正在重启 DSH：页面会短暂断开，重连后即新版本",
 			"update.pullFailed": "更新失败：{reason}",
 			"update.notWired": "更新通道还没接壤（宿主未实现 /update/check）",
@@ -801,17 +798,17 @@ function writeConvSetting(id, settings) {
 			"ps.warp.mode.flat": "4-point warp",
 			"ps.warp.mode.free": "Free stretch",
 			"ps.warp.mode.distort": "Distort",
-			"ps.warp.hint.flat": "The four points start on the image's outermost corners. Drag them onto the skewed quad in the shot (screen, paper, door frame) — the framed area is flattened right on the canvas.",
-			"ps.warp.hint.free": "Blue = where to sample, amber = where it lands; all eight corners drag (each starts on the image's outer corners), any quad to any quad. The framed area updates live; switch views for the final frame.",
-			"ps.warp.hint.distort": "Drag only the amber corners: the whole image is pulled into that quad live (source stays pinned to the image corners).",
+			"ps.warp.hint.flat": "Pick four corners on the source. Green numbers follow your clicks; drag to refine.",
+			"ps.warp.hint.free": "Choose source or destination points, then drag their corners.",
+			"ps.warp.hint.distort": "Drag the orange destination points. The source is the full image.",
 			"ps.warp.out": "Output {w} × {h}",
 			"ps.warp.drag": "Drag a corner to place it",
 			"ps.warp.reset": "Reset corners",
 			"ps.warp.view": "View",
-			"ps.warp.side.src": "Source",
-			"ps.warp.side.dst": "Result",
-						"ps.warp.liveTag": "Result follows as you drag",
-			"ps.warp.tip": "On Source the framed area is straightened live on the canvas (outside it stays untouched); on Result you see the final frame. No apply step — Esc undoes this drag; switching tools or Enter settles it.",
+			"ps.warp.side.src": "Source points",
+			"ps.warp.side.dst": "Destination points",
+						"ps.warp.liveTag": "Confirm to apply",
+			"ps.warp.tip": "Confirm or press Enter to open a new corrected layer. Switching tools or exporting does not apply draft points.",
 			"ps.warp.done": "Warped to {w} × {h}",
 			"ps.warp.degenerate": "Corners may not coincide, be collinear, or form a concave/crossed quad (that flips the picture outside the quad) — move one and retry.",
 			"ps.width": "Width",
@@ -899,6 +896,9 @@ function writeConvSetting(id, settings) {
 			"chat.deletedConv": "Conversation deleted",
 			"chat.convList": "Switch conversation",
 			"chat.untitledConv": "Untitled",
+			"chat.forceGenerate": "Generate image",
+			"chat.forceGenerateTooShort": "Prompt too short: write at least 5 characters describing the image, then press Generate image",
+			"chat.forceGenerateHint": "Generate an image directly",
 			"chat.convMemory": "Each conversation keeps its own memory; a new conversation starts empty",
 			"chat.context": "Context",
 			"chat.contextOn": "Context manager: on — a chat model rewrites this conversation's history into the prompt each turn",
@@ -1065,8 +1065,8 @@ function writeConvSetting(id, settings) {
 			"update.latest": "You are on the latest version",
 			"update.ready": "Update available — shipped via PR flow",
 			"update.behind": "Remote has {sha} — pull then restart DSH",
-			"update.clickAgain": "click Update again to pull and restart",
-			"update.applied": "Updated to {sha}, restarting DSH…",
+			"update.clickAgain": "click Update again to pull without restarting",
+			"update.applied": "Pulled {sha}; DSH has not restarted",
 			"update.restarting": "Restarting DSH: the page will reconnect shortly",
 			"update.pullFailed": "Update failed: {reason}",
 			"update.notWired": "Update channel not wired yet (host has no /update/check)",
@@ -1705,7 +1705,7 @@ body[data-ds-dark-theme] .vig-toast.is-err{background:rgba(48,26,30,.96)}
 .vig-root[data-compact="1"] .vig-main-body{min-height:180px}
 
 /* ---- 图片处理工具箱：左工具条 / 中画布 / 右参数 ---- */
-.vig-ps{display:grid;grid-template-columns:96px minmax(0,1fr) 240px;gap:12px;padding:12px;align-items:start;position:relative}
+.vig-ps{--vig-tool-col:clamp(60px,10%,96px);--vig-layers-col:clamp(144px,22%,240px);--vig-float-w:clamp(236px,32%,320px);display:grid;grid-template-columns:var(--vig-tool-col) minmax(0,1fr) var(--vig-layers-col);gap:12px;padding:12px;align-items:start;position:relative}
 /* 拖入：整块工具箱蒙一层虚框，松手就载入（不抢当前工具的状态） */
 .vig-ps::after{content:"";position:absolute;inset:6px;border:2px dashed transparent;border-radius:14px;
 	pointer-events:none;transition:border-color .12s}
@@ -1716,9 +1716,7 @@ body[data-ds-dark-theme] .vig-toast.is-err{background:rgba(48,26,30,.96)}
 	background:var(--vig-surface);border:1px solid var(--vig-accent-line);box-shadow:var(--vig-shadow);
 	color:var(--vig-accent);font-size:13px;font-weight:600}
 /* 按需展开：收起标签 → 工具条瘦成图标栏；收起参数 → 参数栏瘦成一条竖签 */
-.vig-ps[data-labels="0"]{grid-template-columns:52px minmax(0,1fr) 236px}
-.vig-ps[data-params="0"]{grid-template-columns:96px minmax(0,1fr) 240px} /* 参数收起只影响浮窗，第三列现在是图层面板，别跟着压窄 */
-.vig-ps[data-labels="0"][data-params="0"]{grid-template-columns:52px minmax(0,1fr) 240px}
+.vig-ps[data-labels="0"]{--vig-tool-col:52px}
 .vig-ps-tools{display:flex;flex-direction:column;gap:6px;position:relative}
 .vig-ps-tools-toggle{display:flex;align-items:center;justify-content:center;height:20px;border:0;border-radius:8px;
 	background:transparent;color:var(--vig-text-muted);cursor:pointer;opacity:.75}
@@ -1868,7 +1866,7 @@ body[data-ds-dark-theme] .vig-toast.is-err{background:rgba(48,26,30,.96)}
 .vig-ps-params .vig-field{display:flex;flex-direction:column;gap:5px}
 .vig-ps-params .vig-label{white-space:nowrap}
 /* 顶点矫正/透视面板：限宽 + 长提示换行，别把浮层撑成一大块 */
-.vig-ps-params{max-width:320px;width:320px;box-sizing:border-box;overflow-wrap:anywhere}
+.vig-ps-params{max-width:100%;width:var(--vig-float-w);box-sizing:border-box;overflow-wrap:anywhere}
 .vig-ps-params .vig-ps-row{flex-wrap:wrap;gap:6px}
 .vig-ps-params .vig-btn{height:28px;padding:0 10px;font-size:12px}
 .vig-ps-params .vig-muted{font-size:11.5px;line-height:1.5;margin:0}
@@ -1903,7 +1901,7 @@ body[data-ds-dark-theme] .vig-toast.is-err{background:rgba(48,26,30,.96)}
 .vig-root[data-compact="1"] .vig-ps-tool{flex:1 1 72px;flex-direction:row;justify-content:center;padding:8px 6px}
 .vig-root[data-compact="1"] .vig-ps-stage{min-height:240px}
 /* 窄容器里浮窗改成贴右上，别按绝对 left 往外顶（320px 会横向溢出） */
-.vig-root[data-compact="1"] .vig-ps-float{left:auto !important;right:8px;width:min(256px,calc(100% - 16px))}
+
 .vig-ps-keys{display:flex;flex-direction:column;gap:6px;margin-top:12px}
 .vig-ps-keys-title{font-size:11.5px;font-weight:600;color:var(--vig-text-muted);letter-spacing:.4px}
 .vig-ps-keys-row{display:grid;grid-template-columns:126px minmax(0,1fr) auto;gap:10px;align-items:center;font-size:12.5px}
@@ -2252,7 +2250,7 @@ body[data-ds-dark-theme] .vig-mask-pill{background:rgba(20,20,22,.94)}
 .vig-tools .vig-sel{min-width:0;max-width:170px;flex:none;white-space:nowrap}
 /* 展开器：一块浮在工具行上方的面板，不占行内空间（不是把按钮塞回行里） */
 .vig-tools-pop{position:absolute;left:0;bottom:calc(100% + 10px);z-index:34;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
-	min-width:min(340px,calc(100vw - 56px));max-width:min(560px,calc(100vw - 56px));padding:10px 12px;
+	width:min(560px,100%);min-width:0;max-width:100%;padding:10px 12px;
 	border:1px solid var(--vig-line);border-radius:var(--vig-r-card);background:rgba(255,255,255,.97);
 	box-shadow:var(--vig-sh-2);-webkit-backdrop-filter:blur(14px) saturate(1.1);backdrop-filter:blur(14px) saturate(1.1);
 	opacity:0;visibility:hidden;pointer-events:none;transform:translateY(4px);
@@ -2281,8 +2279,8 @@ body[data-ds-dark-theme] .vig-tools-pop{background:rgba(20,20,22,.96)}
 /* ============================================================
    设计系统 v2.19 · 上下文管理「对话式」浮层
    ============================================================ */
-.vig-ctx-wrap{position:relative;display:inline-flex}
-.vig-ctx-pop{position:absolute;left:0;bottom:calc(100% + 10px);z-index:38;width:min(360px,calc(100vw - 56px));
+.vig-ctx-wrap{position:static;display:inline-flex}
+.vig-ctx-pop{position:absolute;left:0;bottom:calc(100% + 10px);z-index:38;width:min(360px,100%);
 	display:flex;flex-direction:column;gap:10px;padding:14px 16px;border:1px solid var(--vig-line);
 	border-radius:var(--vig-r-card);background:rgba(255,255,255,.97);box-shadow:var(--vig-sh-2);
 	-webkit-backdrop-filter:blur(14px) saturate(1.1);backdrop-filter:blur(14px) saturate(1.1)}
@@ -2372,7 +2370,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-ps-layers{grid-column:3;grid-row:1}
 /* 右侧收纳：整块图层面板可收起，第三列归零，留一个浮动按钮叫回来 */
 .vig-ps{position:relative}
-.vig-ps[data-layers="0"]{grid-template-columns:96px minmax(0,1fr) 0}
+.vig-ps[data-layers="0"]{--vig-layers-col:0px}
 .vig-ps-layers.is-collapsed{display:none}
 .vig-ps-aside-toggle{position:absolute;right:10px;top:12px;z-index:6;width:30px;height:30px;border-radius:50%;border:1px solid var(--vig-line);background:var(--vig-surface);color:var(--vig-text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.08);transition:color var(--vig-dur) var(--vig-ease),border-color var(--vig-dur) var(--vig-ease)}
 .vig-ps-aside-toggle:hover{color:var(--vig-text);border-color:var(--vig-line-strong)}
@@ -2414,6 +2412,35 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-ps-chipprops-val{font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--vig-text-muted);min-width:30px}
 /* 右栏图层列表默认收起：图层操作走底部控制条，展开才看叠加算法/不透明度等高级项 */
 .vig-ps-layers.is-fold .vig-ps-layer-row{display:none}
+/* 按面板内可分配的空间伸缩，不缩放文字或画布像素。 */
+.vig-root[data-compact="0"] .vig-nav{width:clamp(100px,14%,168px)}
+.vig-root[data-compact="0"] .vig-side:not(.is-collapsed){width:clamp(152px,22%,268px)}
+.vig-tools{flex-wrap:wrap}
+.vig-tools-pop .vig-note-pick{position:static}
+.vig-note-pop{max-width:100%}
+.vig-ps-host{container:vig-editor / inline-size}
+.vig-ps-host .vig-ps-stage{min-height:clamp(180px,calc(var(--vig-host-height,100vh)*.56),720px)}
+.vig-ps-params.vig-ps-float{top:clamp(0px,var(--vig-float-y),max(0px,100% - 100px));right:auto;left:clamp(0px,var(--vig-float-x),max(0px,100% - var(--vig-float-w)));max-height:calc(100% - clamp(0px,var(--vig-float-y),max(0px,100% - 100px)))}
+.vig-ps-params.vig-ps-float.is-collapsed{width:auto;left:auto;right:0}
+/* 外层仍能三列时，编辑器自身也可能只剩 400px。此时参数进入文档流，不覆盖取点区。 */
+@container vig-editor (max-width: 720px){
+ .vig-root .vig-ps{grid-template-columns:minmax(0,1fr);grid-template-rows:auto;gap:8px;padding:8px}
+ .vig-root .vig-ps>.vig-ps-tools{grid-area:1/1;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;min-width:0}
+ .vig-root .vig-ps-tools-toggle{display:none}
+ .vig-root .vig-ps .vig-ps-tool{flex:0 0 auto;flex-direction:row;padding:6px 8px;min-height:32px}
+ .vig-root .vig-ps>.vig-ps-stage{grid-area:2/1;width:100%;min-width:0;min-height:clamp(160px,min(60cqw,calc(var(--vig-host-height,100vh)*.44)),360px)}
+ .vig-root .vig-ps>.vig-ps-params{grid-area:3/1;position:static;width:100%;max-width:100%;max-height:none}
+ .vig-root .vig-ps>.vig-ps-params.is-collapsed{width:100%;border-radius:12px}
+ .vig-root .vig-ps-params-open{flex-direction:row;justify-content:center;width:100%}
+ .vig-root .vig-ps-params-open span{writing-mode:horizontal-tb}
+ .vig-root .vig-ps>.vig-ps-layerbar{grid-area:4/1;position:static;min-width:0}
+ .vig-root .vig-ps>.vig-ps-layers{grid-area:5/1;min-width:0}
+ .vig-root .vig-ps-aside-toggle{position:static;grid-area:5/1;justify-self:end}
+ .vig-ps-params-head{cursor:default!important;touch-action:auto!important}
+}
+.vig-json-modal{width:min(560px,100%);max-height:min(90dvh,100%)}
+.vig-json-editor{box-sizing:border-box;width:100%;height:clamp(100px,36dvh,320px);max-height:56dvh;font:12px ui-monospace,monospace;resize:vertical}
+
 `;
 
 		/* ------------------------------------------------------------------ *
@@ -2614,7 +2641,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			if (!scale) scale = fallbackLong >= 3000 ? 4 : fallbackLong >= 1500 ? 2 : 1;
 			const ratioMatch = raw.match(/(\d{1,2})\s*[:：]\s*(\d{1,2})/);
 			const ratioId = ratioMatch ? `${Number(ratioMatch[1])}:${Number(ratioMatch[2])}` : "";
-			const fallbackRatio = fallbackPixels ? `${Number(fallbackPixels[1])}:${Number(fallbackPixels[2])}` : "1:1";
+			const knownFallback = sizePartsFor(fallback);
+			if (!tierMatch && knownFallback.ratio) scale = Number.parseInt(knownFallback.tier, 10);
+			const fallbackRatio = knownFallback.ratio || (fallbackPixels ? `${Number(fallbackPixels[1])}:${Number(fallbackPixels[2])}` : "1:1");
 			const base =
 				SIZE_BASE.find((item) => item.ratio === ratioId) ||
 				SIZE_BASE.find((item) => item.ratio === fallbackRatio) ||
@@ -2623,7 +2652,45 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 
-		/** 当前尺寸在不在表里都要给一个能选中的项（老配置可能是 512x512 这类）。 */
+		/** 从同一份尺寸描述生成宿主字段；视频/自定义像素不套图片档位表。 */
+		function generationSize(body, raw, fallback, video = false) {
+			const size = String(body.size || fallback).trim();
+			const pixel = /^\d+\s*[x×*]\s*\d+$/i.test(size);
+			const parts = sizePartsFor(pixel ? resolveSizeExpression(size) : fallback);
+			const inlineRatio = size.match(/\d{1,2}\s*[:：]\s*\d{1,2}/)?.[0];
+			const tier = size.match(/(\d+)\s*k/i)?.[1];
+			const ratio = String(inlineRatio || body.aspect_ratio || body.aspectRatio || parts.ratio || "").replace(/\s/g, "").replace("：", ":");
+			if (video || (pixel && !parts.ratio) || (!pixel && !tier && !inlineRatio)) return { size, ...(raw && (body.aspect_ratio || body.aspectRatio) ? { aspect_ratio: body.aspect_ratio || body.aspectRatio } : {}) };
+			const level = tier ? `${tier}K` : parts.ratio ? parts.tier : "1K";
+			if (raw) return { size: level, ...(ratio ? { aspect_ratio: ratio } : {}) };
+			return { size: pixel && !body.aspect_ratio && !body.aspectRatio ? resolveSizeExpression(size) : resolveSizeExpression(`${level} ${ratio}`, fallback) };
+		}
+
+		function normalizeGenerationBody(body, raw, fallback, video) {
+			const { aspect_ratio, aspectRatio, ...rest } = body;
+			return { ...rest, ...generationSize(body, raw, fallback, video) };
+		}
+
+		/** 预览和入队都从这里取字段；补传参考图只会补本站 URL。 */
+		function buildGenerationRequest({ prompt, config, providers, conversationId, references, isVideoEndpoint, sizeRaw }) {
+			const urls = references.map((ref) => ref.url).filter(Boolean);
+			const images = references.map((ref) => ref.dataUrl).filter((url) => typeof url === "string" && url.startsWith("data:")).slice(0, 4);
+			const size = isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize;
+			return normalizeGenerationBody({
+				prompt, userText: prompt, planNote: "", conversationId,
+				model: config.defaultModel, providerId: providerIdForModel(providers, config),
+				size, quality: config.defaultQuality, n: isVideoEndpoint ? 1 : config.defaultCount,
+				seconds: isVideoEndpoint ? config.videoSeconds || "4" : "", endpoint: config.defaultEndpoint || "auto",
+				mode: references.length ? "edit" : "generate", referenceUrl: urls[0] || "", referenceUrls: urls,
+				...(images.length ? { image: images[0] } : {}), images, source: "ui"
+			}, sizeRaw, size, isVideoEndpoint);
+		}
+
+		/** 只记编辑过的字段，不把旧 prompt、模型或参考图冻结到下一次发送。 */
+		function requestOverrides(base, edited) {
+			return Object.fromEntries(Object.entries(edited).filter(([key, value]) => key !== "conversationId" && JSON.stringify(base[key]) !== JSON.stringify(value)));
+		}
+
 		function sizeOptionsFor(current) {
 			const list = SIZE_OPTIONS.slice();
 			if (current && !list.some((item) => item.value === current)) list.unshift({ value: current, ratio: t("chat.sizeCustom") });
@@ -2891,10 +2958,13 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				const node = ref.current;
 				if (!node) return undefined;
 				const apply = (width) => setWide(width >= breakpoint);
+				node.style.setProperty("--vig-host-height", `${node.clientHeight}px`);
 				apply(node.clientWidth || 0);
 				if (typeof ResizeObserver === "undefined") return undefined;
 				const observer = new ResizeObserver((entries) => {
-					const width = entries[0]?.contentRect?.width ?? node.clientWidth ?? 0;
+					const bounds = entries[0]?.contentRect;
+					node.style.setProperty("--vig-host-height", `${bounds?.height ?? node.clientHeight}px`);
+					const width = bounds?.width ?? node.clientWidth ?? 0;
 					apply(width);
 				});
 				observer.observe(node);
@@ -3647,7 +3717,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function ChatView({ state, actions }) {
-			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft, sizeRaw, setSizeRawPersist } = state;
+			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft, sizeRaw, toggleJsonSize } = state;
 			const [overLimit, setOverLimit] = useState(false);
 			// 上下文管理改成「对话式」：点 ✨ 打开一块设置浮层（自动整理 / 轮数 / 限制直接出图 / 已读取配置）
 			const [contextPanelOpen, setContextPanelOpen] = useState(false);
@@ -3833,7 +3903,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if (text.length === 0) return;
 				// 「生成图片」前的硬校验：提示词太短上游会直接拒（prompt_too_short），先拦一下
 				if (force && text.length < 5) {
-					toast(t("chat.forceGenerateTooShort"), "err");
+					actions.toast?.(t("chat.forceGenerateTooShort"), "err");
 					return;
 				}
 				void (force ? actions.forceGenerate() : actions.generate());
@@ -3911,25 +3981,24 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						void onPasteImage(file);
 					}
 				},
-				/* JSON 请求体弹层（编辑这次 /generate 的 body，应用后整包覆盖） */
+				/* 编辑当前会话的下一次请求。 */
 				jsonOpen ? h(
 					"div",
 					{ className: "vig-modal-mask", onClick: () => setJsonOpen(false) },
 					h(
 						"div",
-						{ className: "vig-modal", style: { width: 560, maxWidth: "92vw" }, onClick: (event) => event.stopPropagation() },
+						{ className: "vig-modal vig-json-modal", role: "dialog", "aria-label": t("chat.jsonBody"), onClick: (event) => event.stopPropagation() },
 						h("span", { className: "vig-modal-title" }, t("chat.jsonBody")),
 						h("p", { className: "vig-muted", style: { fontSize: 12, margin: "4px 0 10px" } }, t("chat.jsonHint")),
 						h(
 							"label",
 							{ className: "vig-ctx-row", style: { marginBottom: 8 } },
-							h("input", { type: "checkbox", className: "vig-ctx-check", checked: sizeRaw, "data-size-raw": "1", onChange: () => { const next = !sizeRaw; setSizeRawPersist(next); if (jsonOpen) setJsonDraft(JSON.stringify(jsonOverrideRef.current ?? buildRequestPreview(draft), null, 2)); } }),
+							h("input", { type: "checkbox", className: "vig-ctx-check", checked: sizeRaw, "data-size-raw": "1", onChange: () => toggleJsonSize(!sizeRaw) }),
 							h("span", null, t("chat.sizeRaw"))
 						),
 						h("textarea", {
-							className: "vig-input",
+							className: "vig-input vig-json-editor", "aria-label": t("chat.jsonBody"),
 							"data-json-editor": "1",
-							style: { width: "100%", height: 320, fontFamily: "ui-monospace, monospace", fontSize: 12, resize: "vertical" },
 							value: jsonDraft,
 							onChange: (event) => setJsonDraft(event.target.value)
 						}),
@@ -4944,7 +5013,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const submitMask = async () => {
 				const prompt = maskPrompt.trim();
 				if (!prompt) {
-					toast(t("lib.maskEmpty"), "err");
+					actions.toast?.(t("lib.maskEmpty"), "err");
 					return;
 				}
 				if (!current || !stageImgRef.current || maskBusy) return;
@@ -4979,7 +5048,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					const result = await actions.maskEdit({ imageDataUrl, maskDataUrl, prompt, referenceUrl: current.url });
 					if (result?.ok) clearMask();
 				} catch (error) {
-					toast(String(error?.message ?? error), "err");
+					actions.toast?.(String(error?.message ?? error), "err");
 				} finally {
 					setMaskBusy(false);
 				}
@@ -8191,11 +8260,6 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const [activeLayerId, setActiveLayerId] = useState("");
 			// 右栏图层列表默认收起（图层操作走底部控制条；展开可看叠加算法 / 不透明度等高级项）
 			const [layersOpen, setLayersOpen] = useState(false);
-			/* 进入「透视矫正」自动进入点选模式：依次点四个角即可，不用先按按钮 */
-			useEffect(() => {
-				if (tool !== "warp") return;
-				setWarpPick((count) => (count > 0 && count < 4 ? count : 0));
-			}, [tool]);
 			/* 右侧收纳：图层面板可整体收起（localStorage 记住），腾出画布宽度 */
 			const [layersAside, setLayersAside] = useState(() => {
 				try {
@@ -8227,7 +8291,6 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const activeLayerIndex = (layers || []).findIndex((item) => item.id === activeLayerId);
 			const activeLayer = activeLayerIndex >= 0 ? layers[activeLayerIndex] : null;
 			// 参数面板浮窗的位置（拖过就记住）
-			const lastFloat = useRef(null);
 			const [floatPos, setFloatPos] = useState(() => {
 				try {
 					const saved = JSON.parse(window.localStorage.getItem("dsh.velapi-image-go.ps.float") ?? "null");
@@ -8259,12 +8322,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			// 一边看原图（放四点）、一边看结果（定形状）。取图四点画在原图上才对得准，
 			// 目标四点画在结果上才对得齐 —— 两边在同一个视图里会重叠成一个，所以给个切换。
 			const [warpSide, setWarpSide] = useState(() => (initial?.warpMode === "distort" ? "dst" : "src"));
-			// 实时结果：四点一动就重画，不用按「应用」
-			const [warpView, setWarpView] = useState(null);
-			/* 顶点矫正：点选四个角（异形也行）→ 确认后锁定四点，把四边形拉成规范矩形 */
-			const [warpPick, setWarpPick] = useState(0);
-			const [warpLocked, setWarpLocked] = useState(false);
-			const warpProxyRef = useRef({ stage: null, q: 1, canvas: null });
+			const [warpResultId, setWarpResultId] = useState("");
+			const warpLocked = Boolean(warpResultId && layerSession?.id === warpResultId);
+			const warpPick = warp.mode === "flat" ? warp.src?.length || 0 : 4;
 			const [keysOpen, setKeysOpen] = useState(() => Boolean(initial?.keys));
 			// 两侧面板按需展开：默认都展开，用户收起过才记住（存 "0"），和停靠面板同一套逻辑
 			const [panels, setPanels] = useState(() => {
@@ -8326,87 +8386,29 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const scale = zoom.mode === "fit" ? view.fit : zoom.mode === "actual" ? 1 : zoom.scale;
 			scaleRef.current = scale;
 
-			/** 四点初值：一律贴图片最外边的四个角（要的就是能从最外圈往里收，不是内缩一圈）。 */
-			const warpInitial = (mode, width, height) => {
-				const corners = psQuadCorners(width, height);
-				return mode === "distort" ? { src: corners, dst: corners } : mode === "free" ? { src: corners, dst: corners } : { src: corners, dst: null };
-			};
-			/** 当前四点的变形计划（静态预览没有真 canvas，也照样能算尺寸）。 */
-			const warpPlanNow = stageW && stageH ? psWarpPlan({ mode: warp.mode, src: warpSrcQuad(warp.mode, warp.src, stageW, stageH), dst: warp.dst, width: stageW, height: stageH }) : null;
-			/** 「结果」这一侧主画布直接显示实时结果，「原图」那一侧主画布还是原图。 */
-			const warpOnDst = false; // 四点矫正不做实时预览：点选四点 → 确认 → 直接出新图层
-			const warpStageView = warpOnDst && warpView ? warpView : null;
-			const shownW = warpStageView ? warpStageView.width : stageW;
-			const shownH = warpStageView ? warpStageView.height : stageH;
-			// 结果那一侧是按屏幕分辨率渲染的，1:1 摆出来；原图那一侧还是图片像素 × 缩放比
-			const cssPerPx = warpStageView ? 1 : scale;
-			const canvasW = Math.max(1, Math.round(shownW * cssPerPx));
-			const canvasH = Math.max(1, Math.round(shownH * cssPerPx));
-
-			/** 预览用的小图：大图先降一次采样，免得每个 pointermove 都 getImageData 整张。 */
-			const warpProxySource = (q) => {
-				const cache = warpProxyRef.current;
-				if (!stage) return null;
-				if (cache.stage === stage && Math.abs(cache.q - q) < 1e-6) return cache.canvas;
-				const small = psCanvas(Math.max(1, Math.round(stage.width * q)), Math.max(1, Math.round(stage.height * q)));
-				small.getContext("2d").drawImage(stage, 0, 0, small.width, small.height);
-				warpProxyRef.current = { stage, q, canvas: small };
-				return small;
-			};
-			/**
-			 * 算一张当前四点的实时结果。fast = 正在拖：输出和源都降一档，指针跟得上；
-			 * 松手那次用屏幕分辨率 + 原图采样，画面是清晰的。
-			 */
-			const renderWarpView = (fast) => {
-				const plan = warpPlanNow;
-				if (!stage || !plan) return null;
-				const span = Math.max(plan.size.w, plan.size.h) || 1;
-				// 结果那一侧按屏幕比例出图（和原图那一侧看起来一样大）；拖的时候压到 720 以内跟得动指针。
-				// 原图那一侧只是把结果贴回框里（上限 640），拼的是跟手，不是极致清晰。
-				const outScale = warpOnDst ? (fast ? Math.min(scale, 720 / span) : scale) : Math.min(1, 640 / span);
-				const srcMax = warpOnDst && !fast ? 0 : 1024;
-				const prep = psWarpPreview(plan, { outScale, srcW: stage.width, srcH: stage.height, srcMax });
-				if (!prep) return null;
-				try {
-					return psWarpCanvas(prep.srcScale >= 1 ? stage : warpProxySource(prep.srcScale), prep.H, prep.w, prep.h);
-				} catch {
-					return null;
-				}
-			};
-			/** 全分辨率结果：导出/落定要的是原图那么大，不是屏幕上那块。 */
-			const warpFullCanvas = () => {
-				const plan = warpPlanNow;
-				if (!stage || !plan) return null;
-				try {
-					return psWarpCanvas(stage, plan.inverse, plan.size.w, plan.size.h);
-				} catch {
-					return null;
-				}
-			};
-			// 换图或换方式就把四点摆回初值，并且回到该方式该看的那一侧
+			// 平面矫正只保存真实点击，不用四个默认角和另一份计数假装已选。
+			const warpInitial = (mode, width, height) => ({ mode,
+				src: mode === "flat" ? [] : psQuadCorners(width, height),
+				dst: mode === "flat" ? null : psQuadCorners(width, height)
+			});
+			const warpPlanNow = tool === "warp" && stageW && stageH && !warpLocked ? psWarpPlan({ mode: warp.mode,
+				src: warp.mode === "flat" ? psQuadOrder(warp.src) : warpSrcQuad(warp.mode, warp.src, stageW, stageH),
+				dst: warp.dst, width: stageW, height: stageH
+			}) : null;
+			const shownW = stageW, shownH = stageH;
+			const canvasW = Math.max(1, Math.round(stageW * scale));
+			const canvasH = Math.max(1, Math.round(stageH * scale));
 			useEffect(() => {
-				if (!stage) {
-					// 静态预览（只有 preview 数据、没有真 canvas）：种子四点照画，别抹掉
-					if (warpSeed) return;
-					setWarp((value) => (value.src || value.dst ? { ...value, src: null, dst: null } : value));
-					return;
-				}
-				setWarp((value) => ({ mode: value.mode, ...warpInitial(value.mode, stage.width, stage.height) }));
+				if (!stage || tool !== "warp") return;
+				setWarp(warpInitial(warp.mode, stage.width, stage.height));
 				setWarpSide(warp.mode === "distort" ? "dst" : "src");
-			}, [stage, warp.mode]);
-			// 四点一动就重画实时结果：拖的时候走降采样，松手补一张清晰的
-			useEffect(() => {
-				if (!stage || tool !== "warp") {
-					setWarpView((value) => (value ? null : value));
-					return;
-				}
-				// 不实时渲染矫正结果（用户要求：只为点选/确认服务）
-			}, [stage, tool, warp, warpSide, scale, drag]);
+				setDrag(null);
+			}, [stage, warp.mode, tool]);
 
 			/** 底图只在换图/改图时重画（3000×4000 的图每个 pointermove 都重画会卡死）。 */
 			useEffect(() => {
 				const canvas = viewRef.current;
-				const shown = warpStageView || stage;
+				const shown = stage;
 				if (!canvas || !shown) return;
 				canvas.width = shown.width;
 				canvas.height = shown.height;
@@ -8419,29 +8421,12 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				psDrawLayers(ctx, psCanvasLayers(layers, Boolean(layerSession)), canvas.width, canvas.height, (layer) =>
 					psMaskedCanvas(layer.canvas, layer.mask?.canvas, canvas.width, canvas.height)
 				);
-				/* 原图这一侧：把「框住那一块拉平 / 拉成形状」的实时结果直接画回画布上 ——
-				 * 框里当场变、框外还是原图，不需要另外开一个小窗口看结果。
-				 * 为了让「框里是结果、框外还是原始图」一眼分得清，框外先压一层浅白（evenodd 挖洞），
-				 * 不然小角度变形时看起来就是两张一样的图叠在一起。 */
-				const plan = warpPlanNow;
-				if (warpStageView || !plan || !warpView) return;
-				const quad = psQuadPoints(plan.from);
-				const box = psQuadBounds(plan.from);
-				if (!quad || !box || box.w < 1 || box.h < 1) return;
-				ctx.save();
-				ctx.beginPath();
-				quad.forEach((point, index) => (index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y)));
-				ctx.closePath();
-				ctx.clip();
-				ctx.imageSmoothingQuality = "high";
-				ctx.drawImage(warpView, box.x, box.y, box.w, box.h);
-				ctx.restore();
-			}, [stage, warpStageView, warpView, layers, layerSession]);
+			}, [stage, layers, layerSession]);
 
 			/** 选区 / 切割线画在第二层：拖动时只重画这一层。线宽按缩放比折算，视觉粗细恒定。 */
 			useEffect(() => {
 				const canvas = overlayRef.current;
-				const shown = warpStageView || stage;
+				const shown = stage;
 				if (!canvas || !shown) return;
 				canvas.width = shown.width;
 				canvas.height = shown.height;
@@ -8510,58 +8495,30 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					}
 					ctx.restore();
 				}
-				/* 四点矫正：蓝 = 取图四点（从哪儿取），橙 = 目标四点（放到哪儿）。
-				 * 哪个视图就画哪个视图里对得上的那一组：原图对蓝、结果对橙，另一组只淡淡标一下。 */
-				if (tool === "warp" && (warp.src || warp.dst)) {
-					const dst = warpPlanNow;
-					// 结果视图里画布是「输出尺寸」，四点按比例缩过来才对得齐
-					const fit = dst && stage ? Math.min(canvas.width / dst.size.w, canvas.height / dst.size.h) : 1;
-					const scaled = (quad) => (quad ? quad.map((point) => ({ x: point.x * fit, y: point.y * fit })) : null);
-					// 这一层里 1 个 CSS 像素等于几个画布像素：原图侧是 1/scale，结果侧是 1:1
-					const unit = warpStageView ? 1 : scale;
-					const handle = Math.max(9 / unit, 6 / unit);
-					const label = Math.max(11 / unit, 8.5 / unit);
-					const drawQuad = (quad, stroke, fill, dashed, numbered) => {
-						if (!quad) return;
-						ctx.save();
-						ctx.beginPath();
-						ctx.moveTo(quad[0].x, quad[0].y);
-						for (let index = 1; index < 4; index += 1) ctx.lineTo(quad[index].x, quad[index].y);
-						ctx.closePath();
-						ctx.fillStyle = fill;
-						ctx.fill();
-						ctx.strokeStyle = stroke;
-						ctx.lineWidth = Math.max(1.6 / unit, 1 / fit);
-						if (dashed) ctx.setLineDash([7 / unit, 5 / unit]);
-						ctx.stroke();
-						ctx.setLineDash([]);
-						quad.forEach((point, index) => {
-							ctx.fillStyle = "#fff";
-							ctx.fillRect(point.x - handle / 2, point.y - handle / 2, handle, handle);
-							ctx.strokeStyle = stroke;
-							ctx.lineWidth = Math.max(1.6 / unit, 1 / fit);
-							ctx.strokeRect(point.x - handle / 2, point.y - handle / 2, handle, handle);
-							if (numbered) {
-								ctx.fillStyle = stroke;
-								ctx.font = `600 ${label}px system-ui, sans-serif`;
-								ctx.textAlign = "left";
-								ctx.textBaseline = "bottom";
-								ctx.fillText(String(index + 1), point.x + handle, point.y - handle / 2);
-							}
-						});
-						ctx.restore();
-					};
-					if (warpSide === "dst" && dst) {
-						// 结果视图：能拖的只有橙（目标四点）；畸变的橙色是自动算的矩形，只给看结果
-						if (warp.mode !== "flat") drawQuad(scaled(dst.to), "#f08a24", "rgba(240,138,36,.14)", false, true);
-					} else {
-						if (warp.mode !== "distort") drawQuad(warp.src, "#18a05a", "rgba(24,160,90,.14)", true, true);
-						if (warp.mode !== "flat") drawQuad(warp.dst, "#f08a24", "rgba(240,138,36,.14)", false, true);
-						// 变形模式的取图四点拖不动，只淡淡标一下它在哪儿
-						if (warp.mode === "distort") drawQuad(warpSrcQuad("distort", warp.src, stageW, stageH), "rgba(11,11,12,.55)", "rgba(11,11,12,.04)", true, false);
-					}
+				if (tool === "warp" && !warpLocked) {
+					const points = (warpSide === "dst" ? warp.dst : warp.src) || [];
+					if (!points.length) return;
+					const outline = warp.mode === "flat" && points.length === 4 ? psQuadOrder(points) : points;
+					const stroke = warpSide === "dst" ? "#f08a24" : "#18a05a";
+					ctx.save();
+					ctx.beginPath();
+					outline.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+					if (points.length === 4) { ctx.closePath(); ctx.fillStyle = warpSide === "dst" ? "rgba(240,138,36,.14)" : "rgba(24,160,90,.14)"; ctx.fill(); }
+					ctx.strokeStyle = stroke;
+					ctx.lineWidth = 1.6 / scale;
+					ctx.stroke();
+					const size = 9 / scale;
+					ctx.font = `600 ${11 / scale}px system-ui, sans-serif`;
+					points.forEach((p, i) => {
+						ctx.fillStyle = "#fff";
+						ctx.fillRect(p.x-size/2, p.y-size/2, size, size);
+						ctx.strokeRect(p.x-size/2, p.y-size/2, size, size);
+						ctx.fillStyle = stroke;
+						ctx.fillText(String(i+1), p.x+size, p.y-size/2);
+					});
+					ctx.restore();
 				}
-			}, [stage, selection, tool, splitCols, splitRows, scale, ruler, warp, warpSide, warpStageView]);
+			}, [stage, selection, tool, splitCols, splitRows, scale, ruler, warp, warpSide, warpLocked]);
 
 			/** 适应窗口的比例：容器尺寸变了就重算（用户手动放大过就不动它）。 */
 			useEffect(() => {
@@ -8703,8 +8660,15 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if (name !== null) setSelection(null);
 			};
 
-			const loadImage = async ({ name, dataUrl, canvas }) => {
+			const loadImage = async ({ name, dataUrl, canvas, preserveLayers = false }) => {
 				if (canvas) {
+					if (!preserveLayers) {
+						layerSessionRef.current = null;
+						setLayerSession(null);
+						setActiveLayerId("");
+						setWarpResultId("");
+						setLayers([]);
+					}
 					setSource({ name: name || "image", canvas, width: canvas.width, height: canvas.height });
 					setCanvasSize((value) => ({ ...value, w: canvas.width, h: canvas.height }));
 					setTarget((value) => ({ ...value, w: canvas.width, h: canvas.height }));
@@ -8778,7 +8742,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if (!session) return;
 				layerSessionRef.current = session;
 				setLayerSession(session);
-				await loadImage({ name: layer.name, canvas: layer.canvas });
+				await loadImage({ name: layer.name, canvas: layer.canvas, preserveLayers: true });
 				notify(t("ps.layer.editing", { name: layer.name }));
 			};
 
@@ -8798,7 +8762,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						setLayers(result.layers);
 						notify(t("ps.layer.committed", { name: session.name }));
 					}
-					if (result.base?.canvas) await loadImage({ name: result.base.name, canvas: result.base.canvas });
+					if (result.base?.canvas) await loadImage({ name: result.base.name, canvas: result.base.canvas, preserveLayers: true });
 				} finally {
 					layerSessionRef.current = null;
 				}
@@ -8842,19 +8806,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				}
 			};
 
-			/** 导出统一走这里：PNG 像素 + 当前分辨率（写进 pHYs，宿主按魔数原样落盘）。 */
-			/**
-			 * 导出走这个：四点矫正没落定时，导出的是「当前四点的全分辨率结果」，
-			 * 不是屏幕上那张预览小图 —— 手上正在调什么，存下来就该是什么。
-			 */
+			/** 导出已提交的画面，不读取工具草稿。单层会话保留裁出图层的实际宽高。 */
 			const toDataUrl = () => {
-				const plan = currentWarpPlan();
-				const live = stage && plan && !psQuadsEqual(plan.from, plan.to) ? warpFullCanvas() : null;
-				const shown = live || stage;
-				// 还没落定时导出的是「实时透视结果」：图层也要按同一份 plan 变形，合成图才不会和底图错位
-				const liveLayers = live ? psTransformLayers(layers, { kind: "warp", plan, width: stage.width, height: stage.height }) : layers;
-				// 有图层就导合成图：看到的就是导出的；单层会话导的只是这一层的内容（不把底图叠回来）
-				const out = psExportComposite(shown, liveLayers, Boolean(layerSession));
+				const out = psExportComposite(stage, layers, Boolean(layerSession));
 				if (!out) return "";
 				return psApplyDpi(out.toDataURL("image/png"), dpi);
 			};
@@ -8864,6 +8818,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				const restored = psHistoryRestore(snapshot, { layers, layerSession });
 				if (!restored) return;
 				setSource({ name: restored.name, canvas: restored.canvas, width: restored.width, height: restored.height });
+				setActiveLayerId(restored.layerSession?.id || "");
+				setCanvasSize((value) => ({ ...value, w: restored.width, h: restored.height }));
+				setTarget((value) => ({ ...value, w: restored.width, h: restored.height }));
 				setLayers(restored.layers);
 				// 会话状态也一起回退：只回底图不回会话，画布上会挂着「已经退出的会话层」
 				layerSessionRef.current = restored.layerSession;
@@ -8936,82 +8893,24 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					return;
 				}
 				if (tool !== "select") {
-					// 四点矫正：按在哪个角上就拖哪个角（按当前视图决定拖的是取图四点还是目标四点）
-					if (tool !== "warp") return;
-					/* 顶点矫正：点选模式下点一下落一个角，四个角齐了再按「确认矫正」 */
-					if (warpPick < 4 && !warpLocked) {
-						const at = pointToImage(event);
-						if (!at) return;
-						event.preventDefault();
-						const slot = Math.min(3, warpPick);
-						setWarp((value) => {
-							const base = Array.isArray(value.src) && value.src.length === 4 ? value.src.slice() : psQuadCorners(stageW, stageH);
-							// 第 N 次点击就落在鼠标点的位置；只有点到图片外才钳回图片边界（否则越界会让四边形贴边）
-							base[slot] = {
-								x: Math.min(Math.max(at.x, 0), stageW),
-								y: Math.min(Math.max(at.y, 0), stageH)
-							};
-							return { ...value, src: base };
-							return { ...value, src: base };
-						});
-						setWarpPick((count) => Math.min(4, count + 1));
-						return;
-					}
-					/* 四点已满：再点击画布也能定位——命中角点就走拖拽，没命中就把最近的那个角移过来 */
-					if (warpPick >= 4 && !warpLocked && Array.isArray(warp.src) && warp.src.length === 4) {
-						const at = pointToImage(event);
-						if (!at) return;
-						const radius = Math.max(6, 12 / scale);
-						const hit = psHitQuad(warp.src, at, radius);
-						if (!hit) {
-							event.preventDefault();
-							setWarp((value) => {
-								const src = value.src.slice();
-								let best = 0;
-								let bestDistance = Infinity;
-								src.forEach((point, index) => {
-									const distance = Math.hypot(point.x - at.x, point.y - at.y);
-									if (distance < bestDistance) {
-										bestDistance = distance;
-										best = index;
-									}
-								});
-								src[best] = { x: at.x, y: at.y };
-								return { ...value, src };
-							});
-							return;
-						}
-					}
-					if (warpLocked) return;
-					event.preventDefault();
-					psCapturePointer(event.currentTarget, event.pointerId);
+					if (tool !== "warp" || warpLocked) return;
 					const at = pointToImage(event);
-					const radius = Math.max(6, 12 / scale);
-					const plan = warpPlanNow;
-					if (warpSide === "dst" && plan && warp.mode !== "flat" && warpView) {
-						// 结果视图：画布是输出尺寸，把视图坐标折回图片坐标。
-						// 折算比例在按下的这一刻定死 —— 拖动会改外接矩形，跟着变会跟指针打架。
-						const k = warpView.width / plan.size.w;
-						const fitQuad = plan.to.map((point) => ({ x: point.x * k, y: point.y * k }));
-						const hit = psHitQuad(fitQuad, at, radius);
-						if (!hit) return;
-						setDrag({ mode: "warp", which: "dst", index: hit.index, origin: warp.dst, k, bounds: { x: plan.bounds.x, y: plan.bounds.y } });
+					event.preventDefault();
+					const point = { x: Math.max(0, Math.min(at.x, stageW)), y: Math.max(0, Math.min(at.y, stageH)) };
+					if (warp.mode === "flat" && warpPick < 4) {
+						setWarp((value) => value.src?.length >= 4 ? value : { ...value, src: [...(value.src || []), point] });
 						return;
 					}
-					const near = [];
-					if (warp.mode !== "distort" && warp.src) {
-						const hit = psHitQuad(warp.src, at, radius);
-						if (hit) near.push({ which: "src", ...hit });
+					const which = warpSide === "dst" ? "dst" : "src";
+					const quad = warp[which];
+					const hit = psHitQuad(quad, at, Math.max(2, 12 / scale));
+					if (hit) {
+						psCapturePointer(event.currentTarget, event.pointerId);
+						setDrag({ mode: "warp", which, index: hit.index, origin: quad });
+					} else if (warp.mode === "flat" && quad?.length === 4) {
+						const nearest = quad.reduce((i, p, j) => Math.hypot(p.x-at.x, p.y-at.y) < Math.hypot(quad[i].x-at.x, quad[i].y-at.y) ? j : i, 0);
+						setWarp((value) => ({ ...value, src: value.src.map((p,i) => i === nearest ? point : p) }));
 					}
-					if (warp.mode === "free" && warp.dst) {
-						const hit = psHitQuad(warp.dst, at, radius);
-						if (hit) near.push({ which: "dst", ...hit });
-					}
-					if (!near.length) return;
-					near.sort((a, b) => a.dist - b.dist);
-					const picked = near[0];
-					const origin = picked.which === "src" ? warp.src : warp.dst;
-					setDrag({ mode: "warp", which: picked.which, index: picked.index, origin });
 					return;
 				}
 				event.preventDefault();
@@ -9044,9 +8943,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if (drag.mode === "warp") {
 					setWarp((value) => {
 						const quad = drag.which === "src" ? value.src : value.dst;
-						// 结果视图里指针是「输出坐标」，加回外接矩形偏移才是图片坐标
-						const at = drag.which === "dst" && drag.k ? { x: point.x / drag.k + drag.bounds.x, y: point.y / drag.k + drag.bounds.y } : point;
-						const moved = psMoveQuadPoint(quad, drag.index, at, stage.width, stage.height);
+						const moved = psMoveQuadPoint(quad, drag.index, point, stage.width, stage.height);
 						return drag.which === "src" ? { ...value, src: moved } : { ...value, dst: moved };
 					});
 					return;
@@ -9110,58 +9007,45 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				notify(t("ps.straightened", { angle: String(deg) }));
 			};
 
-			/** 当前四点方案就是上面那份 warpPlanNow（换图/换方式会重置），退化时是 null。 */
-			const currentWarpPlan = () => warpPlanNow;
-
 			const resetWarp = () => {
 				if (!stage) return;
 				setDrag(null);
-				setWarp((value) => ({ mode: value.mode, ...warpInitial(value.mode, stage.width, stage.height) }));
+				setWarpResultId("");
+				setWarp(warpInitial(warp.mode, stageW, stageH));
 			};
-
-			/**
-			 * 落定：把当前四点的结果写成真像素（进历史，撤销/落盘/别的工具都在它上面干活）。
-			 * 界面上没有「应用」按钮 —— 拖的时候就已经是结果了，这里是换工具/回车时收口。
-			 */
-			const bakeWarp = (quiet) => {
-				const plan = currentWarpPlan();
-				if (!stage || !plan) {
-					if (!quiet) notify(t("ps.warp.degenerate"), "err");
-					return null;
-				}
-				// 四点没动过就别往历史里塞一张一样的图
-				if (psQuadsEqual(plan.from, plan.to)) return null;
-				setBusy("变形");
-				try {
-					const baked = warpFullCanvas();
-					if (!baked) return null;
-					// 透视也是一种几何：把同一份 plan 一起提交，图层 / 蒙版才跟着底图一起变形
-					commit(baked, null, { kind: "warp", plan });
-					if (!quiet) notify(t("ps.warp.done", { w: String(plan.size.w), h: String(plan.size.h) }));
-					return baked;
-				} catch (error) {
-					if (!quiet) notify(String(error?.message ?? error), "err");
-					return null;
-				} finally {
-					setBusy("");
-				}
-			};
-			/** 回车 = 落定（和「换工具自动落定」同一件事）。 */
+			// 按钮和 Enter 共用唯一提交点。打开独立图层会话，避免将局部结果拉伸成原图大小。
 			const applyWarp = () => {
-				if (!stage) return;
-				if (!currentWarpPlan()) {
-					notify(t("ps.warp.degenerate"), "err");
-					return;
-				}
-				bakeWarp(false);
+				if (!stage || !warpPlanNow || warpLocked) return;
+				try {
+					const plan = warpPlanNow;
+					const pixels = psExportComposite(stage, layers, Boolean(layerSession));
+					const out = psWarpCanvas(pixels, plan.inverse, plan.size.w, plan.size.h);
+					const id = `layer_${Date.now().toString(36)}_${layers.length}`;
+					const result = { id, name: t("ps.warp.confirm"), canvas: out, visible: true, mode: "normal", opacity: 1 };
+					const base = layerSession?.base || source;
+					const previous = layerSession ? psLayerSessionExit(layerSession, layers, stage).layers : layers;
+					const session = psLayerSessionStart(result, base, null);
+					if (!session) return;
+					pushHistory(stage, result.name);
+					setLayers([...previous.map((item) => ({ ...item, visible: false })), result]);
+					layerSessionRef.current = session;
+					setLayerSession(session);
+					setActiveLayerId(id);
+					setSource({ name: result.name, canvas: out, width: out.width, height: out.height });
+					setCanvasSize((value) => ({ ...value, w: out.width, h: out.height }));
+					setTarget((value) => ({ ...value, w: out.width, h: out.height }));
+					setSelection(null);
+					setWarpResultId(id);
+					notify(t("ps.warp.done", { w: out.width, h: out.height }));
+				} catch (error) { notify(String(error?.message ?? error), "err"); }
 			};
-			// 离开这个工具（切工具箱 / 换视图）就自动落定，省掉一次「应用」点击
-			const warpToolRef = useRef(tool);
-			useEffect(() => {
-				const previous = warpToolRef.current;
-				warpToolRef.current = tool;
-				if (previous === "warp" && tool !== "warp") bakeWarp(true);
-			}, [tool]);
+			const flipWarpResult = (axis) => {
+				if (!warpLocked || !stage) return;
+				const out = psFlip(stage, axis);
+				pushHistory(stage, t(axis === "h" ? "ps.warp.flipH" : "ps.warp.flipV"));
+				setLayers(psLayerCommit(layers, warpResultId, out));
+				setSource({ ...source, canvas: out });
+			};
 
 			const autoStraighten = () => {
 				if (!stage) return;
@@ -9772,34 +9656,15 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							h("p", { className: "vig-muted", style: { fontSize: 11.5, margin: 0 } }, t("ps.straighten.dragHint"))
 						);
 					case "warp": {
-						/* 三种方式共用一套四点：畸变（拖取图四点拉平）、自由拉伸（两边都拖）、变形（只拖目标四点）。
-						 * 拖的时候就出结果 —— 没有「应用」这一步，界面上也就不放那个按钮。 */
-						const plan = currentWarpPlan();
-						const size = plan?.size ?? null;
+						const size = warpPlanNow?.size;
 						const canSrc = warp.mode !== "distort";
-						const canDst = true;
+						const canDst = warp.mode !== "flat";
 						return h(
 							"div",
 							null,
 							/* 顶点矫正流程：点选四角 → 确认矫正（锁定）→ 规范矩形 */
 							(() => {
-								const ready = warpPick === 4 && Boolean(warpPlanNow) && !warpLocked;
-								/* 镜像不自动纠正：翻转由用户点按钮决定 */
-								const flipWarpResult = (axis) => {
-									const targetId =
-										activeLayerId || (layers.length > 0 ? layers[layers.length - 1].id : "");
-									const target = layers.find((item) => item.id === targetId);
-									if (!target || !target.canvas) {
-										notify(t("ps.warp.flipNone"));
-										return;
-									}
-									pushHistory(stage, t("ps.warp.confirm"));
-									setLayers((list) =>
-										list.map((item) =>
-											item.id === targetId ? { ...item, canvas: psFlip(item.canvas, axis) } : item
-										)
-									);
-								};
+								const ready = Boolean(warpPlanNow) && !warpLocked;
 								return h(
 									"div",
 									{ className: "vig-ps-row", style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" } },
@@ -9808,9 +9673,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										{
 											className: "vig-btn",
 											"data-warp-pick": "1",
+											disabled: !stage || warp.mode !== "flat",
 											onClick: () => {
-												setWarpPick(0);
-												setWarpLocked(false);
+												resetWarp();
 												notify(t("ps.warp.pickHint"));
 											}
 										},
@@ -9822,28 +9687,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											className: "vig-btn is-primary",
 											"data-warp-confirm": "1",
 											disabled: !ready,
-											onClick: () => {
-												const orderedSrc = psQuadOrder(Array.isArray(warp.src) && warp.src.length === 4 ? warp.src : null) || warp.src;
-												const plan = psWarpPlan({ mode: "flat", src: orderedSrc, width: stageW, height: stageH });
-												if (!plan || !stage) return;
-												const out = psWarpCanvas(stage, plan.inverse, plan.size.w, plan.size.h);
-												/* 局部框选矫正：结果（框选区域裁切后的矩形）直接压成新图层，原底图保留 */
-												pushHistory(stage, t("ps.warp.confirm"));
-												setLayers((list) => [
-													...list.map((item) => ({ ...item, visible: false })),
-													{
-														id: `layer_${Date.now().toString(36)}_${list.length}`,
-														name: t("ps.warp.confirm"),
-														canvas: out,
-														visible: true,
-														mode: "normal",
-														opacity: 1
-													}
-												]);
-												setActiveLayerId("");
-												setWarpLocked(true);
-												notify(t("ps.warp.done", { w: out.width, h: out.height }));
-											}
+											onClick: applyWarp
 										},
 										t("ps.warp.confirm")
 									),
@@ -9852,6 +9696,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										{
 											className: "vig-btn",
 											"data-warp-fliph": "1",
+											disabled: !warpLocked,
 											onClick: () => flipWarpResult("h")
 										},
 										t("ps.warp.flipH")
@@ -9861,6 +9706,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										{
 											className: "vig-btn",
 											"data-warp-flipv": "1",
+											disabled: !warpLocked,
 											onClick: () => flipWarpResult("v")
 										},
 										t("ps.warp.flipV")
@@ -9883,7 +9729,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										{
 											key: id,
 											className: `vig-ps-seg-btn${warp.mode === id ? " is-on" : ""}`,
-											onClick: () => setWarp((value) => ({ ...value, mode: id }))
+											onClick: () => { setWarpResultId(""); setWarp((value) => ({ ...value, mode: id })); }
 										},
 										t(`ps.warp.mode.${id}`)
 									)
@@ -9910,7 +9756,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										)
 									)
 							),
-							h("div", { className: "vig-ps-readout" }, size ? t("ps.warp.out", { w: String(size.w), h: String(size.h) }) : warp.src || warp.dst ? t("ps.warp.degenerate") : t("ps.warp.drag")),
+							h("div", { className: "vig-ps-readout" }, size ? t("ps.warp.out", { w: String(size.w), h: String(size.h) }) : warpLocked ? t("ps.warp.locked") : warpPick === 4 && warp.src?.length ? t("ps.warp.degenerate") : t("ps.warp.pickCount", { n: warpPick })),
 							h(
 								"div",
 								{ className: "vig-row" },
@@ -10092,7 +9938,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				),
 				h(
 					"div",
-					{ className: "vig-main-body", style: { padding: 0 } },
+					{ className: "vig-main-body vig-ps-host", style: { padding: 0 } },
 					h(
 						"div",
 						{
@@ -10771,9 +10617,7 @@ h(
 							{
 								className: `vig-ps-params vig-ps-float${panels.params ? "" : " is-collapsed"}`,
 								// 收起时贴在右边缘（当抽屉把），展开时用拖过的位置
-								style: panels.params
-									? { left: `${floatPos.x}px`, top: `${floatPos.y}px` }
-									: { right: 0, top: `${floatPos.y}px` }
+								style: { "--vig-float-x": `${floatPos.x}px`, "--vig-float-y": `${floatPos.y}px` }
 							},
 							panels.params
 								? h(
@@ -10786,22 +10630,25 @@ h(
 											onPointerDown: (event) => {
 												if (event.button !== 0) return;
 												if (event.target?.closest?.("button")) return;
+												const panel = event.currentTarget.parentElement;
+												const area = panel.offsetParent;
+												if (!area || getComputedStyle(panel).position !== "absolute") return;
 												event.preventDefault();
-												const startX = event.clientX;
-												const startY = event.clientY;
-												const origin = floatPos;
+												const startX = event.clientX, startY = event.clientY;
+												const origin = { x: panel.offsetLeft, y: panel.offsetTop };
+												let saved = origin;
 												const move = (moveEvent) => {
 													const next = {
-														x: Math.max(0, Math.min(600, origin.x + moveEvent.clientX - startX)),
-														y: Math.max(0, Math.min(600, origin.y + moveEvent.clientY - startY))
+														x: Math.max(0, Math.min(area.clientWidth - panel.offsetWidth, origin.x + moveEvent.clientX - startX)),
+														y: Math.max(0, Math.min(area.clientHeight - 100, origin.y + moveEvent.clientY - startY))
 													};
-													lastFloat.current = next;
+													saved = next;
 													setFloatPos(next);
 												};
 												const stop = () => {
 													window.removeEventListener("pointermove", move);
 													window.removeEventListener("pointerup", stop);
-													const saved = lastFloat.current ?? origin;
+													window.removeEventListener("pointercancel", stop);
 													try {
 														window.localStorage.setItem("dsh.velapi-image-go.ps.float", JSON.stringify(saved));
 													} catch {
@@ -10810,6 +10657,7 @@ h(
 												};
 												window.addEventListener("pointermove", move);
 												window.addEventListener("pointerup", stop);
+												window.addEventListener("pointercancel", stop);
 											}
 										},
 										h(Icon, { name: PS_TOOLS.find((item) => item.id === tool)?.icon || "crop" }),
@@ -11347,7 +11195,7 @@ h(
 			const [library, setLibrary] = useState([]);
 			const [notes, setNotes] = useState([]);
 			const [presets, setPresets] = useState([]);
-			/* JSON 请求体：点输入区按钮查看/编辑这次要发的 body；应用后整包覆盖 */
+			/* JSON 面板：基于当前草稿，仅将编辑过的字段绑定到下一次发送。 */
 			const [jsonOpen, setJsonOpen] = useState(false);
 			/* size 原样发送：上游认「档位 + 宽高比」；关掉则发送前转成像素 */
 			const [sizeRaw, setSizeRaw] = useState(() => {
@@ -11367,43 +11215,34 @@ h(
 			};
 			const [jsonDraft, setJsonDraft] = useState("");
 			const jsonOverrideRef = useRef(null);
-			const buildRequestPreview = (prompt) => {
-				const text = String(prompt || "").trim();
-				return {
-					prompt: text,
-					userText: text,
-					planNote: "",
-					conversationId,
-					model: config.defaultModel,
-					providerId: providerIdForModel(providers, config),
-					size: sizeRaw ? sizePartsFor(isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize).tier : isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
-					...(sizeRaw && sizePartsFor(isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize).ratio
-						? { aspect_ratio: sizePartsFor(isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize).ratio }
-						: {}),
-					quality: config.defaultQuality,
-					n: isVideoEndpoint ? 1 : config.defaultCount,
-					seconds: isVideoEndpoint ? config.videoSeconds || "4" : "",
-					endpoint: config.defaultEndpoint || "auto",
-					referenceUrl: references[0]?.url || "",
-					referenceUrls: (references || []).map((item) => item.url || "").filter(Boolean),
-					mode: references.length > 0 ? "edit" : "generate",
-					source: "ui"
-				};
+			const jsonBaseRef = useRef(null);
+			const buildRequestPreview = (prompt, raw = sizeRaw) => buildGenerationRequest({ prompt: String(prompt || "").trim(), config, providers, conversationId, references, isVideoEndpoint, sizeRaw: raw });
+			const jsonBody = () => {
+				const parsed = JSON.parse(jsonDraft);
+				if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
+				return parsed;
 			};
 			const openJsonPreview = () => {
-				setJsonDraft(JSON.stringify(jsonOverrideRef.current ?? buildRequestPreview(draft), null, 2));
+				const base = buildRequestPreview(draft);
+				jsonBaseRef.current = base;
+				setJsonDraft(JSON.stringify(normalizeGenerationBody({ ...base, ...jsonOverrideRef.current }, sizeRaw, isVideoEndpoint ? config.videoSize : config.defaultSize, isVideoEndpoint), null, 2));
 				setJsonOpen(true);
+			};
+			const toggleJsonSize = (next) => {
+				try {
+					const body = normalizeGenerationBody(jsonBody(), next, isVideoEndpoint ? config.videoSize : config.defaultSize, isVideoEndpoint);
+					jsonBaseRef.current = buildRequestPreview(draft, next);
+					setJsonDraft(JSON.stringify(body, null, 2));
+					setSizeRawPersist(next);
+				} catch { toast(t("chat.jsonInvalid"), "err"); }
 			};
 			const applyJsonDraft = () => {
 				try {
-					const parsed = JSON.parse(jsonDraft);
-					if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
-					jsonOverrideRef.current = parsed;
+					const parsed = normalizeGenerationBody(jsonBody(), sizeRaw, isVideoEndpoint ? config.videoSize : config.defaultSize, isVideoEndpoint);
+					jsonOverrideRef.current = requestOverrides(jsonBaseRef.current || {}, parsed);
 					setJsonOpen(false);
 					toast(t("chat.jsonApplied"));
-				} catch (error) {
-					toast(t("chat.jsonInvalid"), "err");
-				}
+				} catch { toast(t("chat.jsonInvalid"), "err"); }
 			};
 			// 端点协议整表由宿主 /status 给（宿主给了就用它那份带 label 的）。
 			const [protocols, setProtocols] = useState([]);
@@ -11416,14 +11255,14 @@ h(
 			})();
 			const selectedModelKind = modelKindOf(config.defaultModel, providers);
 			const isVideoEndpoint = endpointKind === "video" || selectedModelKind === "video";
-			/* 更新入口：一次点击 = 检查；查到新版本后再点一次 = 拉取 + 重启。
+			/* 更新入口：一次点击 = 检查；查到新版本后再点一次 = 只拉取，不重启。
 			   （进度条只在这期间出现，结束就收起。） */
 			const [updateState, setUpdateState] = useState({ phase: "idle", percent: 0 });
 			const updateInfoRef = useRef(null);
 			const checkUpdate = async () => {
 				if (updateState.phase === "running") return;
 				const recent = updateInfoRef.current;
-				// 第二次点击（刚查到 behind，两分钟内有效）：直接拉取 + 重启
+				// 第二次点击（刚查到 behind，两分钟内有效）：直接只拉取，不重启
 				if (recent?.code === "behind" && Date.now() - recent.at < 120000) {
 					updateInfoRef.current = null;
 					setUpdateState({ phase: "running", percent: 45 });
@@ -11432,9 +11271,7 @@ h(
 						if (applied?.pulled) {
 							setUpdateState({ phase: "done", percent: 100 });
 							toast(t("update.applied", { sha: applied.short?.to || "" }));
-							// 拉取成功：让宿主 15 秒后重启（页面会断开重连）
-							await call("/update/restart", { method: "POST", body: {} });
-							toast(t("update.restarting"));
+							window.setTimeout(() => setUpdateState({ phase: "idle", percent: 0 }), 3600);
 							return;
 						}
 						setUpdateState({ phase: "done", percent: 100 });
@@ -11480,19 +11317,16 @@ h(
 			const [jobs, setJobs] = useState([]);
 			/* 会话隔离：切换会话时恢复该会话自己的生图配置；新会话回落到最初默认，不继承上一个会话。 */
 			const conversationIdRef = useRef(conversationId);
-			useEffect(() => {
-				conversationIdRef.current = conversationId;
-			}, [conversationId]);
 			const initialConfigRef = useRef(null);
-			useEffect(() => {
-				if (initialConfigRef.current === null && config?.defaultModel) initialConfigRef.current = pickConfigFields(config);
-			}, [config]);
-			useEffect(() => {
-				if (!conversationId) return;
-				const snapshot = pickConfigFields(config);
-				if (!snapshot.defaultModel) return;
-				writeConvSetting(conversationId, snapshot);
-			}, [conversationId, config.defaultModel, config.defaultSize, config.defaultQuality, config.defaultCount, config.defaultEndpoint, config.videoSize, config.videoRatio, config.videoResolution, config.videoSeconds]);
+			// 切换时只恢复本地设置，绝不把上一个会话的 render 快照写给新会话。
+			const activateConversation = useCallback((id) => {
+				conversationIdRef.current = id;
+				setConversationId(id);
+				jsonOverrideRef.current = null;
+				setJsonOpen(false);
+				const saved = readConvSettings()[id] || initialConfigRef.current;
+				if (saved) setConfig((previous) => ({ ...previous, ...saved }));
+			}, []);
 
 			const [pending, setPending] = useState(0);
 			const [draft, setDraft] = useState("");
@@ -11582,6 +11416,7 @@ h(
 						call("/notes"),
 						call("/conversations").catch(() => ({ items: [] }))
 					]);
+					if (!initialConfigRef.current && status.config?.defaultModel) initialConfigRef.current = pickConfigFields(status.config);
 					setConfig((previous) => ({
 						...status.config,
 						// 宿主老版本没有这个字段时，保留本地那份（协议选择不至于刷新就回默认）
@@ -11601,10 +11436,15 @@ h(
 					   只拉这个会话的任务 —— 每个会话记忆互相隔离。 */
 					const convItems = convList.items || [];
 					setConversations(convItems);
-					const storedConv = window.localStorage.getItem(CONV_KEY) || "";
+					const storedConv = conversationIdRef.current || window.localStorage.getItem(CONV_KEY) || "";
 					const activeConv = convItems.some((item) => item.id === storedConv) ? storedConv : convItems[0]?.id || "";
-					setConversationId(activeConv);
+					if (activeConv !== conversationIdRef.current) activateConversation(activeConv);
+					else {
+						const saved = readConvSettings()[activeConv];
+						if (saved) setConfig((previous) => ({ ...previous, ...saved }));
+					}
 					const jobList = await call(`/jobs?limit=40${activeConv ? `&conversationId=${encodeURIComponent(activeConv)}` : ""}`).catch(() => ({ items: [], pending: 0 }));
+					if (activeConv !== conversationIdRef.current) return;
 					const items = jobList.items || [];
 					setJobs(items);
 					setPending(jobList.pending || 0);
@@ -11691,14 +11531,21 @@ h(
 					// 先乐观落到本地：宿主老版本还没有 defaultEndpoint 这个字段（重启后才吃到），
 					// 它回的那份 config 里没有这一项 —— 直接 setConfig(payload.config) 会把用户刚选的
 					// 值冲回默认，看起来就是「协议选不动」。
+					const owner = conversationIdRef.current;
+					const selected = pickConfigFields(patch);
+					if (owner && Object.keys(selected).length) {
+						writeConvSetting(owner, { ...initialConfigRef.current, ...readConvSettings()[owner], ...selected });
+					}
 					setConfig((previous) => ({ ...previous, ...patch }));
 					try {
 						const payload = await call("/config", { method: "POST", body: patch });
+						if (owner !== conversationIdRef.current) return payload.config;
 						setConfig((previous) => ({
 							...previous,
 							...payload.config,
+							...readConvSettings()[owner],
 							// 宿主没回这个字段就保留本地的选择（老宿主 / 请求被吞）
-							defaultEndpoint: payload.config?.defaultEndpoint || previous.defaultEndpoint || "auto"
+							defaultEndpoint: readConvSettings()[owner]?.defaultEndpoint || payload.config?.defaultEndpoint || previous.defaultEndpoint || "auto"
 						}));
 						return payload.config;
 					} catch (error) {
@@ -11709,128 +11556,57 @@ h(
 				[toast]
 			);
 
-			/* ------------------------------------------------------------ *
-			 * 发送串行化（竞态）
-			 * 对话端口（/chat/plan、/chat/say）和生图端口（/generate）如果并发，
-			 * 两条消息的 plan 与生成会交错、回复顺序也会乱。所以每次发送进同一条 Promise 链，
-			 * 前一句的 plan/生图请求发完才处理下一句；本地 job 带 clientSeq，渲染按它排序。
-			 * ------------------------------------------------------------ */
+			// 点击时固定本次请求；只串行提交，不等待上游完成出图。
 			const sendChainRef = useRef(Promise.resolve());
 			const pendingSendsRef = useRef(0);
 			const sendSeqRef = useRef(0);
-			const runGenerateFlow = async (rawPrompt, seq, force = false) => {
-					/* 进行中占位：agent / 生图都可能跑几十秒，先把「用户消息 + 思考中」画出来 */
-					const pendingId = `pending_${seq}`;
-					setJobs((list) => [
-						{ id: pendingId, kind: "pending", status: "running", prompt: rawPrompt, userText: rawPrompt, images: [], referenceUrls: (references || []).map((item) => item.url || "").filter(Boolean), model: "", size: "", clientSeq: seq, createdAt: new Date().toISOString() },
-						...list.filter((item) => item.id !== pendingId)
-					]);
-					try {
-						/* 发送前把「还没有本站 URL」的参考图补一份留档：从图库 / 重绘 / 预设挂进来的
-						   chip 不走 /upload，没有 URL 的话 referenceUrls 会少一张 —— 发出去变成单图，
-						   缩略图 / 重试 / 编辑也会丢图。补传失败就退回纯字节（images[]）继续发。 */
-						const readyRefs = [];
-						for (const item of references) {
-							let entry = item;
-							if (!item.url && typeof item.dataUrl === "string" && item.dataUrl.startsWith("data:")) {
-								const url = await uploadRefData(item.name, item.dataUrl);
-								entry = { ...item, url };
-								if (url) setReferences((current) => current.map((ref) => (ref.dataUrl === item.dataUrl && !ref.url ? { ...ref, url } : ref)));
-							}
-							readyRefs.push(entry);
+			const runGenerateFlow = async (requestBody, override, seq) => {
+				const rawPrompt = requestBody.userText;
+				const isCurrent = () => requestBody.conversationId === conversationIdRef.current;
+				/* 请求受理前的占位属于这一笔发送。 */
+				const pendingId = `pending_${seq}`;
+				if (isCurrent()) setJobs((list) => [
+					{ id: pendingId, kind: "pending", status: "running", prompt: rawPrompt, userText: rawPrompt, images: [], referenceUrls: (references || []).map((item) => item.url || "").filter(Boolean), model: "", size: "", clientSeq: seq, createdAt: new Date().toISOString() },
+					...list.filter((item) => item.id !== pendingId)
+				]);
+				try {
+					/* 发送前把「还没有本站 URL」的参考图补一份留档：从图库 / 重绘 / 预设挂进来的
+					   chip 不走 /upload，没有 URL 的话 referenceUrls 会少一张 —— 发出去变成单图，
+					   缩略图 / 重试 / 编辑也会丢图。补传失败就退回纯字节（images[]）继续发。 */
+					const readyRefs = [];
+					for (const item of references) {
+						let entry = item;
+						if (!item.url && typeof item.dataUrl === "string" && item.dataUrl.startsWith("data:")) {
+							const url = await uploadRefData(item.name, item.dataUrl);
+							entry = { ...item, url };
+							if (url && isCurrent()) setReferences((current) => current.map((ref) => (ref.dataUrl === item.dataUrl && !ref.url ? { ...ref, url } : ref)));
 						}
-						// 挂了参考图 + 协议是「图片编辑」：参考图必须真的带上（mode: edit + image），
-						// 以前只按 editMode 判断，选了编辑协议却没点「用这张重绘」时会只发文字，
-						// 上游回 400 image file or image_url is required。宿主那边如果没有字节
-						// 也会从 referenceUrl 读回一份，所以这里给足任意一种即可。
-						// 挂了参考图就走图生图/编辑（生成接口不收参考图；以前只有开了「用这张重绘」或选了 edits 协议才带图）
-						const wantsEdit = readyRefs.length > 0;
-						let effectivePrompt = rawPrompt;
-						let effectiveMode = wantsEdit ? "edit" : "generate";
-						let effectiveReferenceUrls = readyRefs.map((item) => item.url || "").filter(Boolean);
-						let planNote = "";
-						/* 上下文管理（默认开）：把本会话最近几轮交给对话模型，整理出这一轮的提示词。
-						   只喂当前会话的 jobs —— 新对话没有历史，记忆天然隔离。 */
-						/* 聊天意图兜底：上下文模型没给出可用判断（不可用 / 解析失败）时，
-						   提问、闲聊这类消息直接交给对话模型回答，不硬打到生图端口。 */
-						/* 对话 agent：把话交给 LLM，由它决定聊天还是调用 generate_image 工具（生图 = 工具）。
-						   返回的 images 是工具产物，直接挂在这条 assistant 消息上。 */
-						/* 对话优先（勾选）：聊天意图直接交给对话模型，不走优化提示词那一套。 */
-					/* 模型隔离：对话/音频/向量模型不能生图（上游会回 404「模型不存在」）——
-					   选错了就别发请求，这里直接把原因说清楚。 */
-					const modelKind = modelKindOf(config.defaultModel, providers);
-					const knownModel = (providers || []).some((provider) => (provider.models || []).includes(config.defaultModel));
-					if (!knownModel || ["chat", "audio", "embedding", "rerank"].includes(modelKind)) {
-						toast(t("chat.modelInvalid"), "err");
-						return;
+						readyRefs.push(entry);
 					}
-
-						const sendImages =
-							// 只有真 data URI（data: 开头）才当字节发；恢复出来的参考图 dataUrl 可能先是
-							// 本站 URL 字符串（只为缩略图），把它当 image 发出去会被宿主解出几十字节的假图
-							effectiveMode === "edit"
-								? readyRefs
-										.map((item) => (typeof item.dataUrl === "string" && item.dataUrl.startsWith("data:") ? item.dataUrl : null))
-										.filter(Boolean)
-										.slice(0, 4)
-								: [];
-						const requestBody = {
-								prompt: effectivePrompt,
-								// 气泡里显示的是用户原话；改写后的提示词单独留痕（planNote）
-								userText: rawPrompt,
-								planNote,
-								conversationId,
-								model: config.defaultModel,
-								// 模型属于谁就发给谁（宿主也会按模型再校正一遍，这里先把话说清楚）
-								providerId: providerIdForModel(providers, config),
-								// 视频协议用独立的视频尺寸与时长；张数固定 1（视频一次一条）
-								size: isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize,
-								quality: config.defaultQuality,
-								n: isVideoEndpoint ? 1 : config.defaultCount,
-								seconds: isVideoEndpoint ? config.videoSeconds || "4" : "",
-								endpoint: config.defaultEndpoint || "auto",
-								referenceUrl: effectiveReferenceUrls[0] || "",
-								referenceUrls: effectiveReferenceUrls,
-								mode: effectiveMode,
-								image: sendImages[0],
-								images: sendImages,
-								// 过程留痕：这条任务是从工作台点出来的，宿主按 source 区分界面 / 工具 / 外部 API
-								source: "ui"
-						};
-						/* JSON 面板里编辑过的请求体：整包覆盖（字段级合并，面板里写了什么就发什么） */
-						const overrideBody = jsonOverrideRef.current;
-						const finalBody = overrideBody && typeof overrideBody === "object" ? { ...requestBody, ...overrideBody } : requestBody;
-						/* size 支持表达式：JSON 面板里写 "2K · 16:9" 也能发 */
-						/* size 表达式：默认原样发（上游认「档位 + 宽高比」）；关掉开关才转像素 */
-						const sizeSpec = String(finalBody.size ?? "").trim();
-						const tierMatch = sizeSpec.match(/(\d)\s*k/i);
-						const ratioMatch = sizeSpec.match(/(\d{1,2})\s*[:：]\s*(\d{1,2})/);
-						if (sizeRaw && (tierMatch || ratioMatch)) {
-							finalBody.size = tierMatch ? `${Number(tierMatch[1])}K` : sizeSpec;
-							if (ratioMatch) finalBody.aspectRatio = `${Number(ratioMatch[1])}:${Number(ratioMatch[2])}`;
-						} else {
-							finalBody.size = resolveSizeExpression(sizeSpec, requestBody.size);
-							delete finalBody.aspectRatio;
-						}
-						const payload = await call("/generate", { method: "POST", body: finalBody });
-						const job = { ...payload.job, images: [], clientSeq: seq };
+					const urls = readyRefs.map((ref) => ref.url).filter(Boolean);
+					const finalBody = { ...requestBody,
+						referenceUrls: Object.hasOwn(override, "referenceUrls") ? requestBody.referenceUrls : urls,
+						referenceUrl: Object.hasOwn(override, "referenceUrl") ? requestBody.referenceUrl : urls[0] || ""
+					};
+					const payload = await call("/generate", { method: "POST", body: finalBody });
+					const job = { ...payload.job, images: [], clientSeq: seq };
+					if (isCurrent()) {
 						setJobs((list) => [job, ...list.filter((item) => item.id !== job.id)]);
 						setPending(payload.queue ?? 1);
-						setDraft("");
-						// 对话标题可能刚被这段提示词命名（宿主会改），刷新一下会话列表
-						void call("/conversations")
-							.then((list) => setConversations(list.items || []))
-							.catch(() => {});
-						watchJob(job.id);
-					} catch (error) {
-						setGenerating(false);
-						toast(String(error?.message ?? error), "err");
 					}
+					// 对话标题可能刚被这段提示词命名（宿主会改），刷新一下会话列表
+					void call("/conversations")
+						.then((list) => setConversations(list.items || []))
+						.catch(() => {});
+					watchJob(job.id);
+				} catch (error) {
+					toast(String(error?.message ?? error), "err");
+				}
 			};
 
-			/** 发送队列：串行化 agent/生图流程（避免对话端口与生图端口竞态）。 */
+			/** 发送队列：串行提交独立的生成请求。 */
 			const queueWarnRef = useRef(0);
-			const enqueueSend = (rawPrompt, force = false) => {
+			const enqueueSend = (rawPrompt) => {
 				if (String(rawPrompt || "").trim().length === 0) return null;
 				if (pendingSendsRef.current >= 6) {
 					// 连点保护：同一句话被连点时不刷屏，3 秒内只提示一次
@@ -11840,23 +11616,33 @@ h(
 					}
 					return null;
 				}
+				// JSON 修改只属于当前会话的下一次入队，不读取队列等待期间的新设置。
+				const override = jsonOverrideRef.current || {};
+				const base = buildRequestPreview(rawPrompt);
+				const body = normalizeGenerationBody({ ...base, ...override }, sizeRaw, isVideoEndpoint ? config.videoSize : config.defaultSize, isVideoEndpoint);
+				const known = providers.some((provider) => provider.models?.includes(body.model));
+				if (!known || ["chat", "audio", "embedding", "rerank"].includes(modelKindOf(body.model, providers))) {
+					toast(t("chat.modelInvalid"), "err");
+					return null;
+				}
+				jsonOverrideRef.current = null;
 				// 入队即清空输入框：连点不会重复发送同一句（prompt 已经捕获进队列）
 				setDraft("");
 				const seq = ++sendSeqRef.current;
 				pendingSendsRef.current += 1;
 				setGenerating(true);
-				const runSend = () => runGenerateFlow(rawPrompt, seq, force);
+				const runSend = () => runGenerateFlow(body, override, seq);
 				const run = sendChainRef.current.then(runSend, runSend);
 				sendChainRef.current = run.catch(() => {});
 				return run.finally(() => {
 					pendingSendsRef.current = Math.max(0, pendingSendsRef.current - 1);
-					setJobs((list) => list.filter((item) => item.kind !== "pending"));
+					setJobs((list) => list.filter((item) => item.id !== `pending_${seq}`));
 					if (pendingSendsRef.current === 0) setGenerating(false);
 				});
 			};
 
 			const actions = {
-				resetJsonBody: () => { jsonOverrideRef.current = null; setJsonDraft(JSON.stringify(buildRequestPreview(draft), null, 2)); toast(t("chat.jsonReset")); },
+				resetJsonBody: () => { jsonOverrideRef.current = null; jsonBaseRef.current = buildRequestPreview(draft); setJsonDraft(JSON.stringify(jsonBaseRef.current, null, 2)); toast(t("chat.jsonReset")); },
 				openJsonBody: () => openJsonPreview(),
 				applyJsonBody: () => applyJsonDraft(),
 				toast,
@@ -11872,13 +11658,17 @@ h(
 				/* ---- 对话（会话）：新建不带记忆，每个会话的历史互相隔离 ---- */
 				switchConversation: async (id) => {
 					if (!id || id === conversationId) return;
-					setConversationId(id);
+					activateConversation(id);
+					setJobs([]);
+					setPending(0);
 					setDraft("");
 					setReferences([]);
 					setEditMode(false);
 					try {
 						const payload = await call(`/jobs?limit=40&conversationId=${encodeURIComponent(id)}`);
+						if (conversationIdRef.current !== id) return;
 						setJobs(payload.items || []);
+						for (const job of payload.items || []) if (["queued", "running"].includes(job.status)) watchJob(job.id);
 						setPending(payload.pending || 0);
 					} catch (error) {
 						toast(String(error?.message ?? error), "err");
@@ -11888,7 +11678,7 @@ h(
 					try {
 						const payload = await call("/conversations", { method: "POST", body: {} });
 						setConversations(payload.items || []);
-						setConversationId(payload.item?.id || "");
+						activateConversation(payload.item?.id || "");
 						setJobs([]);
 						setPending(0);
 						setDraft("");
@@ -11917,8 +11707,12 @@ h(
 						const items = payload.items || [];
 						setConversations(items);
 						const next = items[0]?.id || "";
-						setConversationId(next);
+						activateConversation(next);
+						setDraft("");
+						setReferences([]);
+						setEditMode(false);
 						const jobsPayload = next ? await call(`/jobs?limit=40&conversationId=${encodeURIComponent(next)}`) : { items: [], pending: 0 };
+						if (conversationIdRef.current !== next) return;
 						setJobs(jobsPayload.items || []);
 						setPending(jobsPayload.pending || 0);
 						toast(t("chat.deletedConv"));
@@ -11942,13 +11736,13 @@ h(
 				generate: async () => {
 					const rawPrompt = draft.trim();
 					if (rawPrompt.length === 0) return;
-					return enqueueSend(rawPrompt, true);
+					return enqueueSend(rawPrompt);
 				},
 				/** 强制生成：跳过 agent，直接把这句话交给生图流程（输入框旁的「生成图片」按钮）。 */
 				forceGenerate: async () => {
 					const rawPrompt = draft.trim();
 					if (rawPrompt.length === 0) return;
-					return enqueueSend(rawPrompt, true);
+					return enqueueSend(rawPrompt);
 				},
 				/** 局部改图：框选/画笔产出的 mask（白=重画）+ 一句指令 → 图生图局部重画。 */
 				maskEdit: async ({ imageDataUrl, maskDataUrl, prompt, referenceUrl }) => {
@@ -11972,7 +11766,7 @@ h(
 								conversationId,
 								model: config.defaultModel,
 								providerId: providerIdForModel(providers, config),
-								size: config.defaultSize,
+								...generationSize({ size: config.defaultSize }, sizeRaw, config.defaultSize),
 								quality: config.defaultQuality,
 								n: 1,
 								endpoint: "images_edits",
@@ -12013,6 +11807,8 @@ h(
 								// 重试也要按模型挑供应商：老任务记的 providerId 可能正是当初打错的那条
 								providerId: providerIdForModel(providers, config, retryModel) || job.providerId || config.activeProviderId,
 								size: job.size || config.defaultSize,
+								...(job.aspectRatio ? { aspect_ratio: job.aspectRatio } : {}),
+								...(job.seconds ? { seconds: job.seconds } : {}),
 								quality: job.quality || config.defaultQuality,
 								n: job.count || config.defaultCount,
 								endpoint: job.protocol || config.defaultEndpoint || "auto",
@@ -12482,7 +12278,7 @@ h(
 				setJsonOpen,
 				setJsonDraft,
 				sizeRaw,
-				setSizeRawPersist,
+				toggleJsonSize,
 				chatModels
 			};
 			const navItems = [
@@ -12503,16 +12299,6 @@ h(
 							: view === "ps"
 								? h(PsView, { state, actions, initialUrl: psImage, onConsumeInitialUrl: actions.clearPsImage })
 								: h(ProvidersView, { state, actions });
-
-			/* 会话隔离：switchConversation / newConversation 之后，把该会话自己的配置恢复回来。 */
-			useEffect(() => {
-				if (!conversationId) return;
-				const stored = readConvSettings()[conversationId] || initialConfigRef.current;
-				if (!stored) return;
-				const current = pickConfigFields(config);
-				if (JSON.stringify(stored) === JSON.stringify(current)) return;
-				void actions.saveConfig(stored);
-			}, [conversationId]);
 
 			return h(
 				"div",
@@ -13412,8 +13198,11 @@ h(
 			setHostCapabilities,
 			// 尺寸 = 比例 × 像素（下拉文案与兜底项）
 			SIZE_OPTIONS,
-		resolveSizeExpression,
-		sizePartsFor,
+			resolveSizeExpression,
+			sizePartsFor,
+			buildGenerationRequest,
+			normalizeGenerationBody,
+			requestOverrides,
 			sizeOptionsFor,
 			sizeOptionLabel,
 			sizeOptionTitle,

@@ -170,7 +170,7 @@ export const state = {  config: {
   ],
   pending: 1,
   draft: "再来一张同风格的产品场景图，背景换成浅灰",
-  reference: preview ? { name: "工作台线稿.jpg", dataUrl: preview } : null,
+  references: preview ? [{ name: "工作台线稿.jpg", dataUrl: preview }] : [],
   editMode: false,
   generating: true,
   pickOpen: false,
@@ -435,7 +435,7 @@ export function toastMarkup(ui) {
       pending: 0,
       generating: false,
       draft: "",
-      reference: { name: "粘贴的图片-2026-10-18T16-47-17.png", dataUrl: preview }
+      references: [{ name: "粘贴的图片-2026-10-18T16-47-17.png", dataUrl: preview }]
     },
     actions
   });
@@ -542,5 +542,5 @@ export function page(title, inner, { width, compact = false, css = "", frame = {
 </style>
 <style>${css}</style>
 </head>
-<body><div class="frame"><div class="vig-root"${compact ? ' data-compact="1"' : ""}>${inner}</div></div></body></html>`;
+<body><div class="frame"><div class="vig-root" data-compact="${compact ? "1" : "0"}">${inner}</div></div></body></html>`;
 }

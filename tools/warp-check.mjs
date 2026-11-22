@@ -5,7 +5,7 @@
 //   A. 算法：造一张「梯形 + 四角色块」的图，按四点拉平，量输出的尺寸与四角颜色
 //      （还专门验一条：原图左上角是白的，拉平之后那个位置必须是内容 —— 说明几何真的动了）
 //   B. 交互：在真画布上派 pointerdown / pointermove / pointerup 拖角点，看参数栏读数怎么变、
-//      点空白处不动、变形方式下取图四角拖不动、Esc 能撤回、按「应用」之后画面真的变小/变形成功
+//      乱序取点 / 重置 / 退化 / Esc / 切工具不提交，显式确认后检查像素和撤销
 //
 //   node tools/warp-check.mjs
 //
@@ -210,191 +210,37 @@ const pointer = (type, x, y) => {
 		button: type === "pointermove" ? -1 : 0, buttons: type === "pointerup" ? 0 : 1
 	}, toClient(x, y))));
 };
-const srcPx = (canvas, x, y) => px(canvas, Math.round(Math.max(0, Math.min(canvas.width - 1, x))), Math.round(Math.max(0, Math.min(canvas.height - 1, y))));
-const diff = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) + Math.abs(a[3] - b[3]);
-/* 原图这一侧的实时结果：框里必须是「按计划重采样过的内容」，框外一个像素都不能动 */
-const inPlace = (plan) => {
-	const quad = ui.psQuadPoints(plan.from);
-	const box = ui.psQuadBounds(plan.from);
-	const cx = quad.reduce((sum, point) => sum + point.x, 0) / 4;
-	const cy = quad.reduce((sum, point) => sum + point.y, 0) / 4;
-	const probes = [{ x: cx, y: cy }].concat(quad.map((point) => ({ x: (point.x + cx) / 2, y: (point.y + cy) / 2 })));
-	let warped = 0;
-	let raw = 0;
-	const rows = [];
-	for (const probe of probes) {
-		// 画布上这个点画的是结果的哪个像素（结果被贴进蓝四点的外接矩形里）
-		const outX = ((probe.x - box.x) * plan.size.w) / box.w;
-		const outY = ((probe.y - box.y) * plan.size.h) / box.h;
-		const at = ui.psApplyH(plan.inverse, { x: outX, y: outY });
-		const got = srcPx(view, probe.x, probe.y);
-		const want = srcPx(stage, at.x, at.y);
-		const own = srcPx(stage, probe.x, probe.y);
-		warped += diff(want, got);
-		raw += diff(own, got);
-		rows.push(Math.round(probe.x) + "," + Math.round(probe.y) + "→" + Math.round(at.x) + "," + Math.round(at.y));
-	}
-			const outside = [{ x: 2, y: 2 }, { x: 100, y: 2 }, { x: 2, y: 90 }].map((point) => diff(srcPx(stage, point.x, point.y), srcPx(view, point.x, point.y)));
-	return {
-		warped: Math.round(warped / probes.length),
-		raw: Math.round(raw / probes.length),
-		outside: Math.max.apply(null, outside),
-		detail: rows.join(" ") + " | 框外最大差 " + Math.max.apply(null, outside)
-	};
+const button = (sel) => host.querySelector(sel);
+const confirm = () => button("[data-warp-confirm]");
+const click = async (el) => { el.click(); await wait(60); };
+const aim = async (x,y) => { pointer("pointerdown",x,y); await wait(40); pointer("pointerup",x,y); await wait(40); };
+const drag = async (x,y,u,v,cancel=false) => {
+  pointer("pointerdown",x,y); await wait(40); pointer("pointermove",u,v); await wait(40);
+  if(cancel){window.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true}));await wait(40);}
+  pointer("pointerup",u,v); await wait(40);
 };
-const zoom = (() => {
-	const box = rect();
-	return box.width / Math.max(1, view.width);
-})();
-
-/* 用户原话「实时小窗口不要，直接在画布实时才对」：面板里不该再有那张小图 */
-check("面板里没有实时小窗口（结果直接出在主画布上）", !host.querySelector(".vig-ps-live") && !host.querySelector(".vig-ps-live-canvas"), host.querySelector(".vig-ps-live") ? "还在" : "没有");
-
-/* 初值：四点贴着图片最外圈（0,0)(200,0)(200,100)(0,100)，所以一进来输出就是整张图 */
-check("初值四点贴图片最外圈：读数就是整图尺寸 200 × 100", readout() === "输出 200 × 100", readout() || "(空)");
-const identityPlan = ui.psWarpPlan({ mode: "flat", src: ui.psQuadCorners(200, 100), width: 200, height: 100 });
-const identityShot = inPlace(identityPlan);
-check("没动过的时候画布就是原图（框里框外都没被重采样）", identityShot.warped <= 8 && identityShot.outside === 0, JSON.stringify(identityShot));
-
-/* 拖左上角 (0,0) → (60,40)：拖动中途读数就该变（这就是「移动实时」） */
-const expectFlat = (src) => ui.psWarpPlan({ mode: "flat", src, width: 200, height: 100 }).size;
-const afterDrag = expectFlat([{ x: 60, y: 40 }, { x: 200, y: 0 }, { x: 200, y: 100 }, { x: 0, y: 100 }]);
-const afterPlan = ui.psWarpPlan({ mode: "flat", src: [{ x: 60, y: 40 }, { x: 200, y: 0 }, { x: 200, y: 100 }, { x: 0, y: 100 }], width: 200, height: 100 });
-pointer("pointerdown", 0, 0);
-await wait(60);
-pointer("pointermove", 60, 40);
-await wait(140);
-const midDrag = readout();
-check("还在拖（没松手）读数就已经变了 —— 不用等应用", midDrag === "输出 " + afterDrag.w + " × " + afterDrag.h, midDrag + " / 期望 输出 " + afterDrag.w + " × " + afterDrag.h);
-/* 关键一条：还没松手，画布里框住的那块已经是拉平后的内容了 */
-const midShot = inPlace(afterPlan);
-check("拖到一半画布上就已经是拉平后的画面（框里 = 重采样过的内容，框外没动）", midShot.warped <= 60 && midShot.raw > 40 && midShot.warped * 4 < midShot.raw && midShot.outside === 0, JSON.stringify(midShot));
-pointer("pointerup", 60, 40);
-await wait(140);
-check("松手之后读数保持不变（就是刚才拖出来的那个尺寸）", readout() === "输出 " + afterDrag.w + " × " + afterDrag.h, readout() || "(空)");
-const afterShot = inPlace(afterPlan);
-check("松手之后框里还是那张拉平后的画面（没回弹）", afterShot.warped <= 60 && afterShot.raw > 40 && afterShot.warped * 4 < afterShot.raw && afterShot.outside === 0, JSON.stringify(afterShot));
-
-/* 点空白处不该动：远离所有角 */
-pointer("pointerdown", 100, 50);
-await wait(60);
-pointer("pointermove", 140, 70);
-await wait(60);
-pointer("pointerup", 140, 70);
-await wait(80);
-check("点空白处不拖角（不该乱动）", readout() === midDrag, readout() || "(空)");
-
-/* Esc 撤回这次拖拽：把角拖走再按 Esc，读数必须回到 Drag 之前 */
-pointer("pointerdown", 60, 40);
-await wait(50);
-pointer("pointermove", 120, 80);
-await wait(50);
-window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-await wait(80);
-pointer("pointerup", 120, 80);
-await wait(80);
-check("拖着的时候 Esc：那个角放回原位，读数不变", readout() === midDrag, readout() + " / 期望 " + midDrag);
-
-/* 面板上不该再有「应用」这个按钮 */
-const applyButton = Array.prototype.slice.call(host.querySelectorAll("button")).filter((button) => button.textContent.trim() === "应用")[0];
-check("参数栏里没有「应用」按钮（拖完就是结果）", !applyButton);
-
-/* 切到「结果」这一侧：主画布直接显示实时结果，按屏幕比例出图 */
-const undo = Array.prototype.slice.call(host.querySelectorAll(".vig-toolbar .vig-icon-btn")).filter((button) => (button.getAttribute("title") || "").indexOf("撤销") === 0)[0];
-check("还没落定的时候撤销是空的（拖来拖去不该凭空多出历史）", !!undo && undo.disabled === true, undo ? "disabled=" + undo.disabled : "没有撤销按钮");
-const dstSide = segButton("结果");
-check("视图切换里有「结果」那一侧", !!dstSide);
-if (dstSide) dstSide.click();
-const expectDstW = Math.round(afterDrag.w * zoom);
-// 屏幕比例（zoom）是拿「宿主宽 / 画布宽」反推的，只有画布没被容器夹住时才等于真比例。
-// 容器比方框窄（这个真机页偶尔会多出一条竖向滚动条，正好差 10px）时，结果侧会贴住容器宽，
-// 所以断言写成这条不变量：装得下就 1:1，装不下就正好贴住容器。
-// 容器宽度每轮重新量 —— 滚动条是在渲染过程中冒出来的，只量一次会把「贴住容器」误判成错。
-let dstBox = Math.round(rect().width);
-let expectShown = Math.min(expectDstW, dstBox);
-let dstWidth = view.width;
-for (let attempt = 0; attempt < 30; attempt += 1) {
-	dstBox = Math.round(rect().width);
-	expectShown = Math.min(expectDstW, dstBox);
-	dstWidth = view.width;
-	if (Math.abs(dstWidth - expectShown) <= 1) break;
-	await wait(60);
-}
-check(
-	"结果侧主画布贴的是实时结果（拉平尺寸 × 屏幕比例；容器装不下时贴住容器，不裁不留白）",
-	Math.abs(dstWidth - expectShown) <= 1,
-	dstWidth + " / 期望 " + expectShown + "（拉平 " + expectDstW + " / 容器 " + dstBox + "）| zoom=" + zoom + " 显示宽=" + Math.round(view.getBoundingClientRect().width) + " 读数=" + readout()
-);
-check(
-	"结果侧画布上真的有内容（不是空白，也不是还在画原图）",
-	px(view, Math.round(view.width / 2), Math.round(view.height / 2))[3] === 255 && !near(px(view, 1, 1), [255, 255, 255], 4),
-	RGBA(view, Math.round(view.width / 2), Math.round(view.height / 2)) + " " + RGBA(view, 1, 1)
-);
-const srcSide = segButton("原图");
-if (srcSide) srcSide.click();
-await wait(180);
-check("切回原图侧：画布又变回原图尺寸（两边各看各的，不互相污染）", view.width === 200, String(view.width));
-
-/* 换工具自动落定：切到裁切，画面真的变成拉平后的尺寸，而且进历史了（撤销可用） */
-const cropTool = toolButton("裁切");
-check("工具箱里能找到「裁切」用来切走", !!cropTool);
-if (cropTool) cropTool.click();
-await wait(360);
-const toolbar = host.querySelector(".vig-toolbar");
-const afterLeave = toolbar ? toolbar.textContent : "";
-check("切走工具自动落定：工具栏尺寸变成拉平后的 " + afterDrag.w + "×" + afterDrag.h, new RegExp(afterDrag.w + "×" + afterDrag.h).test(afterLeave), afterLeave.slice(0, 90));
-check("落定真的写进了历史（撤销变成可用）", !!undo && undo.disabled === false, undo ? "disabled=" + undo.disabled : "没有撤销按钮");
-
-/* 切回「透视矫正」：落定之后新画布就是底图，再换方式继续调 */
-const warpTool = toolButton("透视矫正");
-check("工具箱里能切回「透视矫正」", !!warpTool);
-if (warpTool) warpTool.click();
-await wait(280);
-
-/* 切到「变形」：只拖目标四点（自动切到结果那一侧），画面实时跟着形状走 */
-const modeButton = segButton("变形");
-check("方式切换里能找到「变形」", !!modeButton);
-if (modeButton) modeButton.click();
-await wait(260);
-const distortRead = readout();
-const beforeTL = px(view, 0, 0);
-const overlay = host.querySelector(".vig-ps-overlay");
-const sideOn = () => {
-	const all = Array.prototype.slice.call(host.querySelectorAll(".vig-ps-seg-btn.is-on")).map((button) => button.textContent.trim());
-	return all.join("+") + "|overlay=" + (overlay ? overlay.width + "x" + overlay.height + " " + px(overlay, 0, 0).join(",") : "无") + "|view=" + view.width + "x" + view.height + "|read=" + readout();
-};
-check("变形方式自动切到「结果」那一侧（主画布直接就是结果）", !host.querySelector(".vig-ps-live"), sideOn());
-/* 结果侧的画布 1:1 摆，图片坐标要乘上「屏幕像素/图片像素」再派指针 */
-const fitDst = view.width / afterDrag.w;
-check("结果侧画布是 1:1 摆的（画布像素 = 屏幕像素）", Math.abs(rect().width - view.width) <= 1, rect().width + " vs " + view.width);
-pointer("pointerdown", 0, 0);
-await wait(70);
-pointer("pointermove", 60 * fitDst, 25 * fitDst);
-await wait(130);
-pointer("pointerup", 60 * fitDst, 25 * fitDst);
-await wait(180);
-check(
-	"变形方式：结果侧拖橙色四点，取图四点固定贴图片四角（输出尺寸还是外接矩形那么大）",
-	readout() === distortRead && readout() === "输出 " + afterDrag.w + " × " + afterDrag.h,
-	distortRead + " → " + readout()
-);
-check(
-	"变形方式：形状真的被拉走了 —— 图左上角那块内容挪到 (60,25)，画布左上角反过来变透明",
-	beforeTL[3] === 255 && px(view, 2, 2)[3] === 0 && px(view, Math.round(view.width / 2), Math.round(view.height / 2))[3] === 255,
-	"之前 " + beforeTL.join(",") + " → 现在 left-top alpha " + px(view, 2, 2)[3] + " / 中间 alpha " + px(view, Math.round(view.width / 2), Math.round(view.height / 2))[3] + " / " + sideOn()
-);
-/* 把角拖进对面那个三角形里 = 凹四边形：单应矩阵会把画面翻到四边形外面，必须判死而不是硬算 */
-pointer("pointerdown", 60 * fitDst, 25 * fitDst);
-await wait(70);
-pointer("pointermove", 100 * fitDst, 80 * fitDst);
-await wait(110);
-pointer("pointerup", 100 * fitDst, 80 * fitDst);
-await wait(180);
-check(
-	"凹进去 / 交叉的四点判死（不给出翻到外面去的乱图），面板直接说清楚",
-	/挪一下再试/.test(readout()) && view.width === afterDrag.w,
-	readout() + " / view=" + view.width
-);
+const undo = button('.vig-toolbar button[title="撤销"]');
+check("平面模式初始无点、无可确认结果", readout()==="已选 0 / 4" && confirm().disabled);
+for(const pt of [[20,10],[180,90],[180,10],[20,90]]) await aim(...pt);
+check("乱序四角的合法框选能确认",readout()==="输出 160 × 80" && !confirm().disabled,readout());
+await drag(20,10,60,35,true);
+check("Esc 取消一次拖角且不改底图",readout()==="输出 160 × 80" && view.toDataURL()===stage.toDataURL() && undo.disabled,readout());
+await click(button("[data-warp-pick]"));
+for(const pt of [[1,1],[10,10],[20,20],[30,30]])await aim(...pt);
+check("退化四点不可提交且说明原因",confirm().disabled&&readout().includes("挪一下再试"),readout());
+await click(toolButton("裁切"));
+check("退出草稿不改像素和历史",view.toDataURL()===stage.toDataURL()&&undo.disabled);
+await click(toolButton("透视矫正"));await click(segButton("自由拉伸"));
+check("自由拉伸可分别选择取图点和目标点", !!segButton("取图点") && !!segButton("目标点"));
+await click(segButton("目标点"));await drag(0,0,25,20);
+check("拖目标点仅改草稿，原图逐像素不变",view.toDataURL()===stage.toDataURL() && !confirm().disabled);
+await click(confirm());
+check("确认自由拉伸后目标外侧透明",px(view,1,1)[3]===0 && px(view,100,50)[3]===255 && !undo.disabled);
+await click(undo);await click(segButton("变形"));
+check("变形模式只提供目标点",!segButton("取图点") && !!segButton("目标点"));
+await drag(0,0,45,25);await click(confirm());
+check("变形显式提交后形状改变、可撤回",px(view,1,1)[3]===0 && px(view,120,60)[3]===255);
+await click(undo);check("撤回变形恢复原始像素",stage.toDataURL()===view.toDataURL());
 
 const pre = document.createElement("pre");
 pre.id = "vig-warp-out";

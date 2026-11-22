@@ -193,7 +193,7 @@ const PS_PROBE = `<script>
 	window.addEventListener("load", () => {
 		const box = (selector) => {
 			const element = document.querySelector(selector);
-			return element ? { cw: element.clientWidth, sw: element.scrollWidth, ow: element.offsetWidth } : null;
+			return element ? { cw: element.clientWidth, sw: element.scrollWidth, ow: element.offsetWidth, scrollable: ["scroll", "auto"].includes(getComputedStyle(element).overflowX) } : null;
 		};
 		const node = document.createElement("pre");
 		node.id = "PROBE";
@@ -232,7 +232,7 @@ try {
     }
     const report = JSON.parse(match[1].replace(/&quot;/g, '"'));
     const overflow = (value) => (value ? Math.max(0, value.sw - value.cw) : 0);
-    const worst = Math.max(overflow(report.root), overflow(report.ps), overflow(report.tools), overflow(report.stage), overflow(report.params));
+    const worst = Math.max(overflow(report.root), overflow(report.ps), (report.tools?.scrollable ? 0 : overflow(report.tools)), overflow(report.stage), overflow(report.params));
     const columns = report.ps && report.stage ? Math.round((report.ps.ow - (report.tools?.ow ?? 0) - (report.params?.ow ?? 0)) / 10) : 0;
     const ok = worst <= 1;
     if (!ok) psFailures += 1;

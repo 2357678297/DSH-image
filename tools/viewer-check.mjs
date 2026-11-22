@@ -134,6 +134,11 @@ const providers = [
 	},
 	{ id: "pv_gpt", name: "GPT", baseUrl: "https://api.velapi.cc/v1", enabled: true, keyMask: "sk-••••yDNa", usesRuntimeKey: false, models: ["gpt-image-2.5-c"], modelMeta: { "gpt-image-2.5-c": { kind: "image" } }, note: "", createdAt: "" }
 ];
+// 非对称、非方形像素基准，验证裁切、翻转不靠事件次数。
+const sample = document.createElement("canvas"); sample.width = 480; sample.height = 240;
+const sc = sample.getContext("2d");
+["#ff0000", "#00ff00", "#0000ff", "#ffff00"].forEach((color, i) => { sc.fillStyle = color; sc.fillRect(i % 2 * 240, Math.floor(i / 2) * 120, 240, 120); });
+const sampleBlob = await new Promise((resolve) => sample.toBlob(resolve));
 const posts = [];
 const json = (payload) => new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
 window.fetch = async (url, init) => {
@@ -154,7 +159,7 @@ window.fetch = async (url, init) => {
 		const files = Array.isArray(body?.files) ? body.files : [];
 		return json({ ok: true, dir: "C:/x/exports", items: files.map((file) => ({ name: file, path: "C:/x/exports/" + file })) });
 	}
-	if (pathname.includes("/asset/") || raw.startsWith("data:")) return new Response(PNG, { status: 200, headers: { "content-type": "image/png" } });
+	if (pathname.includes("/asset/") || raw.startsWith("data:")) return new Response(new URLSearchParams(location.search).get("ps") === "pick" ? sampleBlob : PNG, { status: 200, headers: { "content-type": "image/png" } });
 	// 验证「选中视频模型 → 参数区跟视频走」：?model=omni-flash 让初始 defaultModel 就是视频模型
 	const modelOverride = new URLSearchParams(location.search).get("model");
 	if (pathname === "/status" && modelOverride) config = { ...config, defaultModel: modelOverride };
@@ -416,6 +421,23 @@ if (!new URLSearchParams(location.search).get("model")) {
 		JSON.stringify({ first: optionLabels.slice(0, 3), size: sizePost ? sizePost.body.defaultSize : null })
 	);
 }
+if (new URLSearchParams(location.search).get("audit") === "json") {
+	const el = (sel) => host.querySelector(sel), click = (sel) => flushSync(() => el(sel).click());
+	const fill = (sel,value) => flushSync(()=>{const box=el(sel);Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value").set.call(box,value);box.dispatchEvent(new Event("input",{bubbles:true}));});
+	const compose=".vig-composer textarea", editor="[data-json-editor]";
+	fill(compose,"first"); click("[data-json-body]");
+	const initial=JSON.parse(el(editor).value);check("JSON 默认预览是 1K / 16:9",initial.size==="1K"&&initial.aspect_ratio==="16:9");
+	fill(editor,JSON.stringify({...initial,size:"4K",aspect_ratio:"21:9",quality:"HIGH"})); click("[data-size-raw]");
+	const pixels=JSON.parse(el(editor).value);check("切像素保留其它编辑且移除比例字段",pixels.size==="8192x3456"&&pixels.quality==="HIGH"&&!("aspect_ratio" in pixels));
+	click("[data-size-raw]");const wanted=JSON.parse(el(editor).value);click("[data-json-apply]");click(".vig-send");
+	await waitFor(()=>posts.some(p=>p.path==="/generate"),2000);
+	const body=posts.find(p=>p.path==="/generate")?.body;
+	check("编辑预览与真正 POST /generate 逐字段一致",body&&Object.keys(wanted).length===Object.keys(body).length&&Object.entries(wanted).every(([k,v])=>JSON.stringify(body[k])===JSON.stringify(v)));
+	fill(compose,"second");click(".vig-send");await waitFor(()=>posts.filter(p=>p.path==="/generate").length===2,2000);
+	const next=posts.filter(p=>p.path==="/generate")[1]?.body;
+	check("下一次提交不继承上次 JSON 覆盖，也不经过聊天端点",next?.prompt==="second"&&next?.size==="1K"&&next?.aspect_ratio==="16:9"&&next?.quality==="LOW"&&!posts.some(p=>p.path.startsWith("/chat/")));
+	const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
 /* 截图入口：?hold=library|notes|ps|providers 先切到那一页再停下（UI 审计/对比截图用） */
 {
 	const holdView = new URLSearchParams(location.search).get("hold");
@@ -507,36 +529,47 @@ if (!new URLSearchParams(location.search).get("model")) {
 				JSON.stringify({ w: params ? params.offsetWidth : 0 })
 			);
 		}
-		// 透视矫正点选实测：&ps=pick 在画布 25%/75% 位置点四角，截图看四边形是否覆盖画面一半
 		if (holdView === "ps" && psMode === "pick") {
-			try {
-				const pickTile = await waitFor(() => host.querySelector(".vig-ps-recent-tile"), 5000);
-				if (pickTile) {
-					flushSync(() => pickTile.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-					await wait(1200);
-				}
-				const pickWarp = Array.from(host.querySelectorAll(".vig-ps-tool")).find((node) => String(node.getAttribute("title") || "").includes("透视矫正"));
-				if (pickWarp) {
-					flushSync(() => pickWarp.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-					await wait(500);
-				}
-				const pickCanvas = host.querySelector("canvas");
-				let clicked = 0;
-				if (pickCanvas) {
-					const rect = pickCanvas.getBoundingClientRect();
-					for (const [fx, fy] of [[0.25, 0.25], [0.75, 0.25], [0.75, 0.75], [0.25, 0.75]]) {
-						const x = rect.left + rect.width * fx;
-						const y = rect.top + rect.height * fy;
-						const target = document.elementFromPoint(x, y) || pickCanvas;
-						flushSync(() => target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: x, clientY: y, pointerId: 1, button: 0 })));
-						clicked += 1;
-						await wait(150);
-					}
-				}
-				check("点选四点：点击事件已发到画布", clicked === 4, JSON.stringify({ clicked }));
-			} catch (error) {
-				debug.push("ps pick: " + String(error && error.message));
+			const click = (el) => flushSync(() => el.click());
+			const tool = (name) => Array.from(host.querySelectorAll(".vig-ps-tool")).find(el => el.title.includes(name));
+			click(await waitFor(() => host.querySelector(".vig-ps-recent-tile"), 4000));
+			const cv = await waitFor(() => host.querySelector("canvas.vig-ps-canvas"), 4000);
+			check("测试底图有真实 480×240 非对称像素", cv.width === 480 && cv.height === 240, [cv.width,cv.height]);
+			click(tool("透视矫正"));
+			const rectOf = sel => host.querySelector(sel).getBoundingClientRect();
+			let tallStage = 0;
+			for (const [w,h] of [[320,460],[375,660],[375,300],[720,420],[1280,800],[375,520]]) {
+				host.style.width=w+"px"; host.style.height=h+"px"; await wait(140);
+				const stage = rectOf(".vig-ps-stage"), params = rectOf(".vig-ps-params"), rootBox=host.getBoundingClientRect();
+				if (w===375 && h===660) tallStage=stage.height;
+				if (h===300) check("同宽缩短宿主也会缩短画布",stage.height < tallStage, [tallStage,stage.height]);
+				const docked = getComputedStyle(host.querySelector(".vig-ps-params")).position === "static";
+				check("宿主实时伸缩 "+w+"×"+h+"：画布保留宽度，参数在宿主内", stage.width >= Math.min(220,w*.55) && params.left >= rootBox.left-1 && params.right <= rootBox.right+1 && (w>720 || (docked && params.top>=stage.bottom-1)), JSON.stringify({stage:stage.width,params:params.width,docked}));
 			}
+			const confirm = () => host.querySelector("[data-warp-confirm]"), horizontal = host.querySelector("[data-warp-fliph]"), vertical = host.querySelector("[data-warp-flipv]");
+			function pick(fx,fy){
+				cv.scrollIntoView({block:"center"}); const r=cv.getBoundingClientRect(); const x=r.left+r.width*fx, y=r.top+r.height*fy;
+				const target=document.elementFromPoint(x,y);
+				check("坐标命中画布 "+fx+","+fy, target===cv, target?.className);
+				if(target) flushSync(()=>target.dispatchEvent(new PointerEvent("pointerdown",{bubbles:true,pointerId:1,button:0,clientX:x,clientY:y})));
+			}
+			check("初始不可确认或翻转", confirm().disabled && horizontal.disabled && vertical.disabled);
+			pick(.25,.25); pick(.75,.75);
+			check("两点仍是草稿", confirm().disabled && text(host.querySelector(".vig-ps-readout")).includes("2 / 4"));
+			click(tool("旋转"));
+			check("未确认切工具不改原图和历史", cv.width===480 && cv.height===240 && host.querySelectorAll(".vig-ps-chip:not(.is-base):not(.is-add)").length===0 && host.querySelector('.vig-toolbar button[title="撤销"]').disabled);
+			click(tool("透视矫正"));
+			pick(.25,.25); pick(.75,.75); pick(.75,.25); pick(.25,.75);
+			check("乱序四点后得到 240×120 输出", !confirm().disabled && text(host.querySelector(".vig-ps-readout")).includes("240 × 120"),text(host.querySelector(".vig-ps-readout")));
+			click(host.querySelector("[data-warp-confirm]")); await wait(60);
+			const pixel = () => Array.from(cv.getContext("2d").getImageData(10,10,1,1).data).join(",");
+			check("确认只新建一层，结果尺寸和左上像素正确", cv.width===240 && cv.height===120 && pixel()==="255,0,0,255" && host.querySelectorAll(".vig-ps-chip:not(.is-base):not(.is-add)").length===1,[cv.width,cv.height,pixel()]);
+			click(host.querySelector("[data-warp-fliph]")); await wait(40);
+			check("手动水平翻转采样为右上绿",pixel()==="0,255,0,255",pixel());
+			click(host.querySelector("[data-warp-flipv]")); await wait(40);
+			check("再垂直翻转采样为右下黄",pixel()==="255,255,0,255",pixel());
+			for(let i=0;i<3;i++){click(host.querySelector('.vig-toolbar button[title="撤销"]'));await wait(30);}
+			check("撤销两次翻转和矫正恢复原图层栈",cv.width===480 && cv.height===240 && host.querySelectorAll(".vig-ps-chip:not(.is-base):not(.is-add)").length===0);
 		}
 		// 图库布局密度：&density=compact|standard|large（截图/审计用）
 		const densityText = { compact: "小图", standard: "标准", large: "大图" }[new URLSearchParams(location.search).get("density")];
@@ -948,7 +981,7 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			await wait(400);
 		}
 	}
-	// 更新通道两段式：&behind=1&update=2 → 第一次点检查到 behind，第二次点拉取 + 重启
+	// 更新通道两段式：&behind=1&update=2 → 第一次点检查到 behind，第二次点只拉取
 	if (new URLSearchParams(location.search).get("update") === "2") {
 		const btn = host.querySelector(".vig-update-btn");
 		if (btn) {
@@ -960,8 +993,8 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 		const applyPost = posts.filter((item) => item.path.startsWith("/update/apply")).pop();
 		const restartPost = posts.filter((item) => item.path.startsWith("/update/restart")).pop();
 		check(
-			"更新通道两段式：第一次检查到 behind，第二次拉取（/update/apply）并重启（/update/restart）",
-			Boolean(applyPost) && Boolean(restartPost),
+			"更新通道两段式：第一次检查到 behind，第二次拉取（/update/apply）且不重启",
+			Boolean(applyPost) && !restartPost,
 			JSON.stringify({ apply: Boolean(applyPost), restart: Boolean(restartPost), posts: posts.filter((item) => item.path.startsWith("/update")).map((item) => item.path) })
 		);
 	}
@@ -1451,7 +1484,10 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 	});
 	await wait(400);
 	check("切到另一个会话：只显示它自己的历史（这里是空的）", host.querySelectorAll(".vig-turn.is-user").length === 0, String(host.querySelectorAll(".vig-turn.is-user").length));
-	check("切会话：恢复该会话自己的生图配置（POST /config）", posts.filter((item) => item.path === "/config").length > 0, JSON.stringify({ configCalls: posts.filter((item) => item.path === "/config").length }));
+	const oldSize = host.querySelector(".vig-tools select.vig-sel").value;
+	flushSync(()=>host.querySelector('[data-conv="conv_default"]').click());await wait(100);
+	check("切回 A 恢复 1536x864，B 保持初始尺寸", oldSize === "1024x1024" && host.querySelector(".vig-tools select.vig-sel").value === "1536x864",oldSize);
+	flushSync(()=>host.querySelector('[data-conv="conv_old"]').click());await wait(100);
 	// 新建对话
 	const newBtn = host.querySelector('.vig-conv .vig-icon-btn[title="新建对话"]');
 	flushSync(() => newBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
@@ -1621,6 +1657,7 @@ const query = getArg("--query", hold ? `hold=${encodeURIComponent(hold)}` : "");
 const url = `file:///${page.replace(/\\/g, "/")}${query ? `?${query}` : ""}`;
 const args = ["--headless=new", "--disable-gpu", "--no-sandbox", "--virtual-time-budget=30000"];
 if (shotPath) args.push("--hide-scrollbars", "--window-size=1040,900", `--screenshot=${shotPath}`);
+if (!shotPath && /ps=pick|audit=json/.test(query)) args.push("--window-size=1440,1000");
 args.push("--dump-dom", url);
 const dom = execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 
@@ -1646,4 +1683,4 @@ if (debug && debug.length) {
   for (const item of results) if (!item.pass && item.detail.length > 200) console.log("  stack: " + item.detail.slice(0, 500));
 }
 console.log(`\n真机查看器 / 拖拽 / 素材目录 ${pass}/${pass + fail} 通过`);
-process.exitCode = fail === 0 ? 0 : 1;
+process.exitCode = fail === 0 && !debug?.length ? 0 : 1;

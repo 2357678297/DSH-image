@@ -62,12 +62,8 @@ window.__ModuleLoader__.load({
 			const even = (value) => Math.max(2, Math.round(value / 2) * 2);
 			return `${even(width)}x${even(height)}`;
 		}
-		// 上下文「对话式」设置的本地键：限制上下文模型自作主张直接改图/调用供应商出图（默认限制）
-		const CONTEXT_NO_IMAGE_KEY = "dsh.velapi-image-go.context-noauto";
 		// 右侧检查器（图片 / 预设卡 / 供应商）收没收起：默认展开，用户收起过才记住（存 "0"）
 		const SIDE_KEY = "dsh.velapi-image-go.side";
-		// 对话上下文管理开不开：默认开（存 "0" = 关）
-		const CONTEXT_KEY = "dsh.velapi-image-go.context";
 		// 当前在哪个对话里（会话 id）；每个会话的历史互相隔离
 		const CONV_KEY = "dsh.velapi-image-go.conv";
 // 会话级生图配置：每个会话独立记住模型/尺寸/质量/数量/协议/视频参数
@@ -203,6 +199,8 @@ function writeConvSetting(id, settings) {
 		 * ------------------------------------------------------------------ */
 
 		const zh = {
+			"chat.requestInfo": "本次生成",
+			"chat.directHint": "发送会直接生图，不会让对话模型改写提示词。可在 JSON 请求体中核对本次参数。",
 			"tab.title": "生图工作台",
 			"guide.desc": "对话生图 · 图库 · 供应商",
 			"nav.title": "API 对话生图工作台",
@@ -600,7 +598,8 @@ function writeConvSetting(id, settings) {
 			"prov.baseUrl": "接口地址",
 			"prov.key": "API Key",
 			"prov.keyEnv": "环境变量名",
-			"prov.chatModel": "对话模型（上下文管理）",
+			"prov.chatModel": "对话模型",
+			"prov.chatOnlyHint": "对话模型和上下文轮数仅供独立对话接口使用，工作台发送不会读取。",
 			"prov.chatModelAuto": "自动（目录里第一个对话模型）",
 			"prov.contextTurns": "上下文轮数（0~12）",
 			"prov.keyHint": "留空表示沿用当前配置里的密钥",
@@ -727,6 +726,8 @@ function writeConvSetting(id, settings) {
 		};
 
 		const en = {
+			"chat.requestInfo": "Generation settings",
+			"chat.directHint": "Send generates directly without rewriting your prompt. Open the JSON request to review the parameters.",
 			"tab.title": "Image workbench",
 			"guide.desc": "Chat to image · library · providers",
 			"nav.title": "API Chat-to-Image Workbench",
@@ -1039,7 +1040,8 @@ function writeConvSetting(id, settings) {
 			"prov.baseUrl": "Base URL",
 			"prov.key": "API key",
 			"prov.keyEnv": "Env var",
-			"prov.chatModel": "Chat model (context manager)",
+			"prov.chatModel": "Chat model",
+			"prov.chatOnlyHint": "The chat model and context turns apply only to standalone chat endpoints, not to workbench generation.",
 			"prov.chatModelAuto": "Auto (first chat model in the catalog)",
 			"prov.contextTurns": "Context turns (0–12)",
 			"prov.keyHint": "Leave blank to reuse the configured key",
@@ -1643,7 +1645,7 @@ body[data-ds-dark-theme] .vig-toast.is-err{background:rgba(48,26,30,.96)}
 /* 右侧停靠面板：内缩，不再盖住窗口标题栏与控制按钮 */
 .vig-dock{
 	position:fixed;top:46px;right:10px;bottom:10px;z-index:40;
-	width:var(--vig-dock-w,min(430px,42vw));display:flex;gap:0;padding:8px 8px 8px 0;
+	width:var(--vig-dock-w,min(430px,42vw));max-width:calc(100vw - 20px);box-sizing:border-box;display:flex;gap:0;padding:8px 8px 8px 0;
 	background:var(--vig-surface-soft);border:1px solid var(--vig-line);
 	border-radius:var(--vig-r-card);box-shadow:0 18px 48px rgba(16,24,40,.18);
 }
@@ -1653,7 +1655,7 @@ body[data-ds-dark-theme] .vig-toast.is-err{background:rgba(48,26,30,.96)}
 .vig-pane-host{display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;height:100%}
 .vig-dock-grip{
 	position:absolute;left:-3px;top:50%;width:6px;height:74px;margin-top:-37px;border-radius:999px;
-	cursor:ew-resize;background:transparent;
+	cursor:ew-resize;touch-action:none;background:transparent;
 }
 .vig-dock-grip:hover{background:var(--vig-accent-soft)}
 
@@ -2275,7 +2277,8 @@ body[data-ds-dark-theme] .vig-tools-pop{background:rgba(20,20,22,.96)}
 .vig-update-bar>i{display:block;height:100%;width:0;background:var(--vig-accent);transition:width 260ms var(--vig-ease)}
 .vig-update-bar.is-err>i{background:var(--vig-danger)}
 .vig-update-bar.is-ok>i{background:var(--vig-ok)}
-.vig-root[data-compact="1"] .vig-update{display:none}
+.vig-root[data-compact="1"] .vig-update{padding:0;justify-content:center}
+.vig-root[data-compact="1"] .vig-update-tag{display:none}
 /* ============================================================
    设计系统 v2.19 · 上下文管理「对话式」浮层
    ============================================================ */
@@ -2439,6 +2442,49 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
  .vig-ps-params-head{cursor:default!important;touch-action:auto!important}
 }
 .vig-json-modal{width:min(560px,100%);max-height:min(90dvh,100%)}
+/* 表单、图库和管理列表按工作区本身重排；查看器仍是独立全屏工具。 */
+.vig-dialog-frame{box-sizing:border-box;inset:auto;margin:0;border:0;max-width:none;max-height:none;color:var(--vig-text);padding:clamp(6px,2%,18px);overflow:hidden}
+.vig-viewer.vig-dialog-frame{container:vig-viewer / inline-size}
+.vig-viewer.vig-dialog-frame .vig-viewer-body{max-height:100%;min-width:0}
+.vig-viewer-body .vig-viewer-stage{min-height:0}
+.vig-viewer-body .vig-viewer-foot{max-height:32%;overflow:auto}
+@container vig-viewer (max-width:600px){.vig-viewer-head{flex-wrap:wrap;gap:4px}.vig-viewer-title{max-width:100%}.vig-viewer-head .vig-spacer{flex-basis:100%;height:0}}
+.vig-dialog-frame .vig-toasts{position:absolute;top:6px;max-width:calc(100% - 12px);pointer-events:none}
+.vig-dialog-frame[data-anchored]{top:max(0px,anchor(top));left:max(0px,anchor(left));right:max(0px,anchor(right));bottom:max(0px,anchor(bottom));width:auto;height:auto;align-self:stretch;justify-self:stretch}
+.vig-dialog-frame::backdrop{background:transparent}
+.vig-dialog-frame>.vig-modal{min-width:0;max-width:100%;max-height:100%;overscroll-behavior:contain}
+.vig-dialog-frame>.vig-modal>*{flex-shrink:0}
+.vig-dialog-frame label,.vig-dialog-frame input,.vig-dialog-frame textarea{min-width:0;max-width:100%}
+.vig-dialog-frame .vig-modal-title,.vig-prov-test,.vig-item-title,.vig-tag,.vig-block .vig-muted{overflow-wrap:anywhere}
+.vig-item-head{flex-wrap:wrap}.vig-item-head .vig-tag{max-width:100%}
+.vig-root{container:vig-workbench / inline-size}
+/* 主布局只看宿主宽度；不等 ResizeObserver / React 下一帧才给窄栏腾位置。 */
+@container vig-workbench (width < 660px){
+ .vig-root .vig-shell{flex-direction:column;gap:10px}
+ .vig-root .vig-shell>.vig-nav{width:auto;flex:none;flex-flow:row wrap;gap:2px;padding:5px}
+ .vig-root .vig-nav-item{width:auto;flex:none;height:auto;padding:7px 10px}
+ .vig-root .vig-nav-foot{display:none}
+ .vig-root .vig-shell>.vig-side:not(.is-collapsed){width:auto;flex:none}
+ .vig-root .vig-main-head{flex-wrap:wrap}
+}
+.vig-main{container:vig-page / inline-size}
+@container vig-page (max-width: 580px){
+ .vig-main-head{flex-wrap:wrap;gap:5px 8px;padding:8px 10px}
+ .vig-main-head .vig-conv{flex:1 1 160px;max-width:100%}
+ .vig-main-head .vig-conv-tabs{max-width:100%}
+ .vig-toolbar{gap:5px 8px;padding:8px 10px}.vig-toolbar .vig-in{max-width:100%}
+ .vig-prov{flex-direction:column;align-items:stretch}.vig-prov-acts{margin-left:0;justify-content:flex-start}
+ .vig-prov-name,.vig-prov-line{overflow-wrap:anywhere}.vig-prov-acts .vig-btn{flex-shrink:0}
+ .vig-stage-view{min-height:clamp(290px,calc(var(--vig-host-height,100vh)*.68),520px)}
+ .vig-stage-view .vig-stage-main{padding:6px;min-height:140px;flex-direction:column}
+ .vig-stage-frame{min-height:0;flex:0 1 auto}.vig-stage-view.is-painting .vig-stage-frame{max-height:calc(100% - 66px)}
+ .vig-stage-bar,.vig-mask-pill{position:static;transform:none;align-self:stretch;max-width:100%;margin:4px;flex-wrap:wrap;justify-content:flex-start;border-radius:var(--vig-r-tile);padding:4px 8px;gap:4px}
+ .vig-stage-bar .vig-stage-name,.vig-stage-bar .vig-stage-meta{flex:1 1 80px;min-width:0}.vig-stage-acts{max-width:100%;flex-wrap:wrap;padding-left:0;border-left:0}
+ .vig-mask-input{flex:1 1 100px;min-width:64px;max-width:100%}.vig-mask-pill .vig-brush-range{width:64px}
+ .vig-strip-item{width:48px;height:48px}.vig-strip{padding:5px 8px}
+}
+.vig-tiles[data-density="large"]{grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr))}
+@media (hover:none){.vig-stage-nav{opacity:1;pointer-events:auto}.vig-stage-view.is-painting .vig-stage-nav{display:none}}
 .vig-json-editor{box-sizing:border-box;width:100%;height:clamp(100px,36dvh,320px);max-height:56dvh;font:12px ui-monospace,monospace;resize:vertical}
 
 `;
@@ -2894,6 +2940,69 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		 * 通用小组件
 		 * ------------------------------------------------------------------ */
 
+		// 单次保存：React 更新按钮之前也不能再提交同一份草稿。
+		function useSubmitLock() {
+			const lock = useRef(false);
+			const [busy, setBusy] = useState(false);
+			const run = async (submit) => {
+				if (lock.current) return false;
+				lock.current = true;
+				setBusy(true);
+				try { return await submit(); }
+				finally { lock.current = false; setBusy(false); }
+			};
+			return { busy, run };
+		}
+
+		function splitFieldList(text, limit = Infinity) {
+			return [...new Set(String(text ?? '').split(/[,，\n]/).map((v) => v.trim()).filter(Boolean))].slice(0, limit);
+		}
+
+		// 使用浏览器模态焦点栈，但将表单限制在当前工作台和视口的交集，不盖到另一个面板。
+		let dialogAnchorId = 0;
+		const FeedbackContext = react.createContext?.(null);
+		function WorkbenchDialog({ onDismiss, label, children, fullscreen = false }) {
+			const feedback = FeedbackContext ? react.useContext(FeedbackContext) : null;
+			const ref = useRef(null);
+			useMeasureEffect(() => {
+				const dialog = ref.current;
+				if (!dialog) return;
+				const root = dialog.closest('.vig-root');
+				const opener = document.activeElement;
+				// 锚点由布局引擎逐帧更新，滚动和拖动宿主时即刻定位。旧版 Chromium 退回测量。
+				const anchored = !fullscreen && root && window.CSS?.supports('position-anchor: --vig') && window.CSS.supports('top: max(0px, anchor(top))');
+				if (anchored) {
+					const anchor = root.style.anchorName || `--vig-dialog-${++dialogAnchorId}`;
+					root.style.anchorName = anchor;
+					dialog.style.positionAnchor = anchor;
+					dialog.dataset.anchored = '1';
+				}
+				const measure = () => {
+					if (anchored) return;
+					const r = fullscreen ? null : root?.getBoundingClientRect();
+					const w = document.documentElement.clientWidth, h = document.documentElement.clientHeight;
+					const left = Math.max(0, r?.left ?? 0), top = Math.max(0, r?.top ?? 0);
+					Object.assign(dialog.style, {left: `${left}px`, top: `${top}px`, width: `${Math.max(0, Math.min(w, r?.right ?? w) - left)}px`, height: `${Math.max(0, Math.min(h, r?.bottom ?? h) - top)}px`});
+				};
+				measure();
+				dialog.showModal();
+				const observer = !anchored && !fullscreen && root && typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+				if (observer) observer.observe(root);
+				window.addEventListener('resize', measure);
+				window.addEventListener('scroll', measure, true);
+				return () => {
+					observer?.disconnect(); window.removeEventListener('resize', measure); window.removeEventListener('scroll', measure, true);
+					dialog.close();
+					if (opener?.isConnected) opener.focus?.({preventScroll:true});
+				};
+			}, []);
+			return h('dialog', {className:fullscreen ? 'vig-viewer vig-dialog-frame' : 'vig-modal-mask vig-dialog-frame', ref, 'aria-label':label, 'aria-modal':'true',
+				onCancel: (e) => { e.preventDefault(); onDismiss(); },
+				onKeyDown: (e) => { if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); onDismiss(); } },
+				onClick: (e) => { if (e.target === e.currentTarget) onDismiss(); }
+			}, children, feedback);
+		}
+
 		function Pill({ tone, children }) {
 			return h("span", { className: `vig-pill${tone ? ` is-${tone}` : ""}` }, h("i", { className: "vig-dot" }), children);
 		}
@@ -2905,7 +3014,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				{ className: "vig-block" },
 				h(
 					"div",
-					{ className: "vig-block-head", onClick: () => setOpen((value) => !value) },
+					{ className: "vig-block-head", role:"button", tabIndex:0, "aria-expanded":open, onKeyDown:(e)=>{if(e.target===e.currentTarget && (e.key==="Enter" || e.key===" ")){e.preventDefault();setOpen(v=>!v);}}, onClick: () => setOpen((value) => !value) },
 					h(Icon, { name: icon }),
 					h("span", { className: "vig-block-title" }, title),
 					h("div", { className: "vig-spacer" }),
@@ -2920,7 +3029,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		function ToastHost({ items }) {
 			return h(
 				"div",
-				{ className: "vig-toasts" },
+				{ className: "vig-toasts", role:"status", "aria-live":"polite" },
 				(items ?? []).map((item) =>
 					h(
 						"div",
@@ -3199,6 +3308,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			// 键盘：Esc 关、←/→ 翻页、+/- 缩放、0 适应
 			useEffect(() => {
 				const onKey = (event) => {
+					const mine = stageRef.current?.closest("dialog");
+					if (!mine?.open || !mine.contains(document.activeElement) || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
 					if (event.key === "Escape") {
 						// 变形模式里 Esc 只退模式，不关查看器
 						if (quadModeRef.current) exitQuad();
@@ -3239,8 +3350,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const metaLine = [current.model, current.size, current.width && current.height ? `${current.width}×${current.height}` : ""].filter(Boolean).join(" · ");
 
 			return h(
-				"div",
-				{ className: "vig-viewer", role: "dialog", "aria-modal": "true", "aria-label": t("viewer.title"), onClick: () => onClose?.() },
+				WorkbenchDialog,
+				{ fullscreen:true, label:t("viewer.title"), onDismiss:() => quadModeRef.current ? exitQuad() : onClose?.() },
 				h(
 					"div",
 					{ className: "vig-viewer-body", onClick: (event) => event.stopPropagation() },
@@ -3255,7 +3366,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						h("span", { className: "vig-viewer-zoom" }, `${Math.round(zoom * 100)}%`),
 						h("button", { className: "vig-icon-btn", title: t("viewer.zoomIn"), onClick: () => step(1.25) }, h(Icon, { name: "zoomIn", size: 14 })),
 						h("button", { className: "vig-icon-btn", title: t("viewer.fit"), onClick: fit }, h(Icon, { name: "fit", size: 14 })),
-						h("button", { className: "vig-icon-btn", title: t("viewer.hint"), onClick: () => void 0 }, h(Icon, { name: "move", size: 14 })),
+						h("button", { className: "vig-icon-btn", title: t("viewer.hint"), "aria-label": t("viewer.hint"), onClick: () => onToast?.(t("viewer.hint")) }, h(Icon, { name: "move", size: 14 })),
 						h(
 							"button",
 							{
@@ -3717,19 +3828,19 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function ChatView({ state, actions }) {
-			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, contextOn, contextNoAutoImage, isVideoEndpoint, chatModels, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft, sizeRaw, toggleJsonSize } = state;
+			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, isVideoEndpoint, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft, sizeRaw, toggleJsonSize } = state;
 			const [overLimit, setOverLimit] = useState(false);
-			// 上下文管理改成「对话式」：点 ✨ 打开一块设置浮层（自动整理 / 轮数 / 限制直接出图 / 已读取配置）
-			const [contextPanelOpen, setContextPanelOpen] = useState(false);
-			const contextBoxRef = useRef(null);
+			// 浮层只展示直出参数；编辑通过同一个 JSON 入口。
+			const [summaryOpen, setSummaryOpen] = useState(false);
+			const summaryBoxRef = useRef(null);
 			useEffect(() => {
-				if (!contextPanelOpen) return undefined;
+				if (!summaryOpen) return undefined;
 				const onDown = (event) => {
-					const box = contextBoxRef.current;
-					if (box && !box.contains(event.target)) setContextPanelOpen(false);
+					const box = summaryBoxRef.current;
+					if (box && !box.contains(event.target)) setSummaryOpen(false);
 				};
 				const onKey = (event) => {
-					if (event.key === "Escape") setContextPanelOpen(false);
+					if (event.key === "Escape") setSummaryOpen(false);
 				};
 				window.addEventListener("pointerdown", onDown);
 				window.addEventListener("keydown", onKey);
@@ -3737,7 +3848,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					window.removeEventListener("pointerdown", onDown);
 					window.removeEventListener("keydown", onKey);
 				};
-			}, [contextPanelOpen]);
+			}, [summaryOpen]);
 			const inputRef = useRef(null);
 			const dropRef = useRef(null);
 			const bodyRef = useRef(null);
@@ -3928,8 +4039,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const onPasteImage = async (file) => {
 				try {
 					const dataUrl = await fileToDataUrl(file);
-					await actions.attachReference({ name: pastedImageName(file), dataUrl });
-					actions.toast?.(t("chat.pasted"));
+					if (await actions.attachReference({ name: pastedImageName(file), dataUrl })) actions.toast?.(t("chat.pasted"));
 				} catch (error) {
 					actions.toast?.(String(error?.message ?? error), "err");
 				}
@@ -3983,11 +4093,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				},
 				/* 编辑当前会话的下一次请求。 */
 				jsonOpen ? h(
-					"div",
-					{ className: "vig-modal-mask", onClick: () => setJsonOpen(false) },
+					WorkbenchDialog,
+					{ label: t("chat.jsonBody"), onDismiss: () => setJsonOpen(false) },
 					h(
 						"div",
-						{ className: "vig-modal vig-json-modal", role: "dialog", "aria-label": t("chat.jsonBody"), onClick: (event) => event.stopPropagation() },
+						{ className: "vig-modal vig-json-modal", onClick: (event) => event.stopPropagation() },
 						h("span", { className: "vig-modal-title" }, t("chat.jsonBody")),
 						h("p", { className: "vig-muted", style: { fontSize: 12, margin: "4px 0 10px" } }, t("chat.jsonHint")),
 						h(
@@ -4150,100 +4260,16 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					h(
 						"div",
 						{ className: `vig-tools${toolsOpen ? " is-open" : ""}` },
-						// 上下文管理：点 ✨ 打开「对话式」设置浮层（不再是简单的一键开关）
-						h(
-							"div",
-							{ className: "vig-ctx-wrap" },
-							h(
-								"button",
-								{
-									className: `vig-tool${contextOn ? " is-on" : ""}${contextPanelOpen ? " is-open" : ""}`,
-									title: `${t("chat.contextPanel")} · ${contextOn ? t("chat.contextOnShort") : t("chat.contextOffShort")}`,
-									"aria-expanded": contextPanelOpen ? "true" : "false",
-									"data-context-toggle": "1",
-									onClick: () => setContextPanelOpen((value) => !value)
-								},
-								h(Icon, { name: "spark", size: 14 })
-							),
-							contextPanelOpen
-								? h(
-										"div",
-										{ className: "vig-ctx-pop", ref: contextBoxRef, role: "dialog", "aria-label": t("chat.contextPanel") },
-										h(
-											"div",
-											{ className: "vig-ctx-head" },
-											h("span", { className: "vig-ctx-title" }, t("chat.contextPanel")),
-											h("span", { className: "vig-ctx-note" }, t("chat.dialogDesc"))
-										),
-										h(
-											"label",
-											{ className: "vig-ctx-row" },
-											h("input", { type: "checkbox", className: "vig-ctx-check", checked: contextOn, "data-context-auto": "1", onChange: () => actions.toggleContext() }),
-											h("span", null, t("chat.contextAuto"))
-										),
-										/* 对话优先：勾上后消息先当聊天处理（对话模型直接回答），明确出图指令才生图 */
-										h(
-											"div",
-											{ className: "vig-ctx-row" },
-											h("span", { className: "vig-ctx-label" }, t("chat.contextTurns")),
-											h("input", {
-												type: "range",
-												className: "vig-range vig-ctx-range",
-												min: 0,
-												max: 12,
-												step: 1,
-												value: Number(config.contextTurns) || 0,
-												onChange: (event) => void actions.saveConfig({ contextTurns: Number(event.target.value) })
-											}),
-											h("span", { className: "vig-ctx-val" }, String(Number(config.contextTurns) || 0))
-										),
-										h(
-											"label",
-											{ className: "vig-ctx-row vig-ctx-hot" },
-											h("input", {
-												type: "checkbox",
-												className: "vig-ctx-check",
-												checked: contextNoAutoImage,
-												onChange: () => actions.toggleContextNoAutoImage()
-											}),
-											h("span", null, t("chat.contextNoAuto")),
-											h("span", { className: "vig-ctx-hint" }, t("chat.contextNoAutoHint"))
-										),
-										/* 对话模型只用于「把历史整理成提示词」，不是生图模型 ——
-										   它不出现在生图模型下拉里，而是在这里单独选（列表来自 /status 的 chatModels）。 */
-										h(
-											"div",
-											{ className: "vig-ctx-row" },
-											h("span", { className: "vig-ctx-label" }, t("chat.contextChatModel")),
-											h(
-												"select",
-												{
-													className: "vig-ctx-select",
-													value: config.chatModel || "",
-													title: t("chat.contextChatModelHint"),
-													onChange: (event) => void actions.saveConfig({ chatModel: event.target.value })
-												},
-												[
-													h("option", { key: "auto", value: "" }, t("chat.contextAutoChat")),
-													...(chatModels || []).map((item) =>
-														h("option", { key: item.id, value: item.id }, `${item.id}${item.providerName ? ` · ${item.providerName}` : ""}`)
-													)
-												]
-											)
-										),
-										h(
-											"div",
-											{ className: "vig-ctx-row is-wired" },
-											t("chat.contextWired", {
-												chat: config.chatModel || t("chat.contextAutoChat"),
-												image: config.defaultModel || "-",
-												size: isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize || "-"
-											})
-										)
-									)
-								: null
-						),
-						
+						// 沿用原来的 ✨ 入口，但展示真正会提交的参数，而不是无效的聊天开关。
+						h("div", {className:"vig-ctx-wrap", ref: summaryBoxRef},
+							h("button", {className:`vig-tool${summaryOpen ? " is-open" : ""}`, title:t("chat.requestInfo"), "aria-label":t("chat.requestInfo"), "aria-expanded":summaryOpen, "data-context-toggle":"1", onClick:()=>setSummaryOpen(v=>!v)}, h(Icon,{name:"spark",size:14})),
+							summaryOpen ? h("div", {className:"vig-ctx-pop", role:"dialog", "aria-label":t("chat.requestInfo")},
+								h("div",{className:"vig-ctx-title"}, t("chat.requestInfo")),
+								h("p",{className:"vig-muted"},t("chat.directHint")),
+								h("div",{className:"vig-ctx-row"},config.defaultModel || "—"),
+								h("div",{className:"vig-ctx-row"}, isVideoEndpoint ? config.videoSize : config.defaultSize),
+								h("button",{className:"vig-btn",onClick:()=>{setSummaryOpen(false); actions.openJsonBody();}},t("chat.jsonBody"))
+							) : null),
 						// 工具展开器：一块悬浮面板收纳全部次要参数（上传 / 图库 / 信息卡 / 张数 / 协议 / 计数）
 						h(
 							"div",
@@ -4828,11 +4854,18 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				}
 			};
 			const [activeId, setActiveId] = useState("");
-			const items = state.library.filter((asset) => {
+			const items = useMemo(() => state.library.filter((asset) => {
 				if (model && asset.model !== model) return false;
 				if (!query) return true;
 				return `${asset.name} ${asset.prompt} ${asset.model}`.toLowerCase().includes(query.toLowerCase());
-			});
+			}), [state.library, model, query]);
+			const visibleIds = useMemo(() => new Set(items.map((item) => item.id)), [items]);
+			const visibleSelected = selected.filter((id) => visibleIds.has(id));
+			const deletingRef = useRef(false);
+			const [deleting, setDeleting] = useState(false);
+			useEffect(() => {
+				setSelected((list) => list.every((id) => visibleIds.has(id)) ? list : list.filter((id) => visibleIds.has(id)));
+			}, [visibleIds]);
 			const models = [...new Set(state.library.map((asset) => asset.model).filter(Boolean))].sort();
 			// 图库里的模型 id 也要用目录元数据分组：供应商记录里那份 modelMeta
 			const meta = useMemo(() => {
@@ -4860,7 +4893,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if (Math.abs(delta) < 1) return undefined;
 				strip.scrollTo({ left: Math.max(0, strip.scrollLeft + delta), behavior: "smooth" });
 				return undefined;
-			}, [mode, activeId, items.length]);
+			}, [mode, current?.id, items.length]);
+			const lastWheelSwitch = useRef(-Infinity);
 			/* 切上一张 / 下一张（箭头、键盘、滚轮共用） */
 			const stepActive = (direction) => {
 				if (items.length === 0) return;
@@ -4868,37 +4902,33 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				const nextId = items[(index + direction + items.length) % items.length]?.id || "";
 				setActiveId(nextId);
 			};
-			/* 大图模式：←/→ 切上一张/下一张（和查看器同一套键位习惯） */
-			useEffect(() => {
-				if (mode !== "stage" || items.length === 0) return undefined;
-				const onKey = (event) => {
-					if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-					event.preventDefault();
-					stepActive(event.key === "ArrowRight" ? 1 : -1);
-				};
-				window.addEventListener("keydown", onKey);
-				return () => window.removeEventListener("keydown", onKey);
-			}, [mode, items.length, activeId]); // eslint-disable-line react-hooks/exhaustive-deps
+			const onStageKey = (event) => {
+				if (event.target !== event.currentTarget || event.defaultPrevented || items.length < 2 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.nativeEvent?.isComposing) return;
+				if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+				event.preventDefault();
+				event.stopPropagation();
+				stepActive(event.key === "ArrowRight" ? 1 : -1);
+			};
 			/* 大图模式：滚轮切图 —— 累积 + 节流，避免普通鼠标一滚就跳好几张 */
 			useEffect(() => {
 				if (mode !== "stage") return undefined;
 				const node = stageRef.current;
 				if (!node) return undefined;
 				let accumulated = 0;
-				let lastSwitch = -1e9; // 首次滚轮必须能切（time origin 附近 now 可能 <200）
 				const onWheel = (event) => {
+					if (items.length < 2 || event.ctrlKey || drawRef.current || event.target?.closest?.(".vig-mask-pill")) return;
 					event.preventDefault();
 					const now = Date.now();
-					if (now - lastSwitch < 200) return;
+					if (now - lastWheelSwitch.current < 200) return;
 					accumulated += event.deltaY;
 					if (Math.abs(accumulated) < 40) return;
-					lastSwitch = now;
+					lastWheelSwitch.current = now;
 					stepActive(accumulated > 0 ? 1 : -1);
 					accumulated = 0;
 				};
 				node.addEventListener("wheel", onWheel, { passive: false });
 				return () => node.removeEventListener("wheel", onWheel);
-			}, [mode, items.length, activeId]); // eslint-disable-line react-hooks/exhaustive-deps
+			}, [mode, items, current]);
 
 			/* ---- 局部改图：框选（矩形）+ 画笔（自由笔迹）都产出 mask（白=重画）---- */
 			const [tool, setTool] = useState("");
@@ -4911,18 +4941,29 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const canvasRef = useRef(null);
 			const stageImgRef = useRef(null);
 			const drawRef = useRef(null);
+			const maskOwner = useRef(null);
+			const maskRequest = useRef(null);
 			const painting = tool === "marquee" || tool === "brush";
 			const hasMask = Boolean((marquee && marquee.w > 2 && marquee.h > 2) || strokes.length > 0);
+			const canSubmitMask = painting && hasMask && Boolean(maskPrompt.trim()) && !maskBusy;
 			const clearMask = () => {
+				drawRef.current = null;
 				setMarquee(null);
 				setStrokes([]);
 				setMaskPrompt("");
 			};
+			// 键盘、滚轮、筛选和刷新都会改变实际展示的图；在显示新帧前丢弃旧草稿。
+			useMeasureEffect(() => {
+				maskOwner.current = mode === "stage" && current?.id ? { id: current.id, url: current.url } : null;
+				clearMask();
+				setTool("");
+				setMaskBusy(false);
+				return () => { maskOwner.current = null; maskRequest.current = null; drawRef.current = null; };
+			}, [mode, current?.id, current?.url]);
 			const toNatural = (event) => {
-				const frame = frameRef.current;
 				const img = stageImgRef.current;
-				if (!frame || !img || !img.naturalWidth) return null;
-				const rect = frame.getBoundingClientRect();
+				if (!img?.naturalWidth || !img.naturalHeight) return null;
+				const rect = img.getBoundingClientRect();
 				if (rect.width < 2 || rect.height < 2) return null;
 				return {
 					x: Math.min(img.naturalWidth, Math.max(0, ((event.clientX - rect.left) / rect.width) * img.naturalWidth)),
@@ -4930,7 +4971,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				};
 			};
 			const onInkDown = (event) => {
-				if (!painting || !current) return;
+				if (!painting || !current || maskOwner.current?.id !== current.id || maskRequest.current || drawRef.current || event.button !== 0) return;
 				const point = toNatural(event);
 				if (!point) return;
 				event.preventDefault();
@@ -4941,16 +4982,16 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					/* 忽略 */
 				}
 				if (tool === "marquee") {
-					drawRef.current = { mode: "marquee", start: point };
+					drawRef.current = { mode: "marquee", pointerId: event.pointerId, start: point };
 					setMarquee({ x: point.x, y: point.y, w: 0, h: 0 });
 				} else {
-					drawRef.current = { mode: "brush" };
+					drawRef.current = { mode: "brush", pointerId: event.pointerId };
 					setStrokes((list) => [...list, { size: brushSize, points: [point] }]);
 				}
 			};
 			const onInkMove = (event) => {
 				const drag = drawRef.current;
-				if (!drag) return;
+				if (!drag || drag.pointerId !== event.pointerId) return;
 				const point = toNatural(event);
 				if (!point) return;
 				if (drag.mode === "marquee") {
@@ -4968,8 +5009,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					});
 				}
 			};
-			const onInkUp = () => {
+			const onInkUp = (event) => {
 				const drag = drawRef.current;
+				if (!drag || event.pointerId !== drag.pointerId) return;
 				drawRef.current = null;
 				if (drag?.mode === "marquee") setMarquee((box) => (box && (box.w < 3 || box.h < 3) ? null : box));
 			};
@@ -5012,15 +5054,16 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			/* 提交：mask（白=要改的区域）+ 一句指令 → 走图生图局部重画 */
 			const submitMask = async () => {
 				const prompt = maskPrompt.trim();
-				if (!prompt) {
-					actions.toast?.(t("lib.maskEmpty"), "err");
-					return;
-				}
-				if (!current || !stageImgRef.current || maskBusy) return;
+				const owner = maskOwner.current;
+				const img = stageImgRef.current;
+				if (!canSubmitMask || !owner || owner.id !== current?.id || maskRequest.current || drawRef.current || !img?.naturalWidth || !img.naturalHeight) return;
+				const request = {};
+				maskRequest.current = request;
+				const stillHere = () => maskOwner.current === owner && maskRequest.current === request;
 				setMaskBusy(true);
 				try {
-					const naturalW = stageImgRef.current.naturalWidth;
-					const naturalH = stageImgRef.current.naturalHeight;
+					const naturalW = img.naturalWidth;
+					const naturalH = img.naturalHeight;
 					const maskCanvas = document.createElement("canvas");
 					maskCanvas.width = naturalW;
 					maskCanvas.height = naturalH;
@@ -5043,14 +5086,18 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						ctx.stroke();
 					}
 					const maskDataUrl = maskCanvas.toDataURL("image/png");
-					const imageDataUrl = await urlToDataUrl(new URL(current.url, window.location.origin).toString());
+					const imageDataUrl = await urlToDataUrl(new URL(owner.url, window.location.origin).toString());
+					if (!stillHere()) return;
 					if (!imageDataUrl) throw new Error(t("viewer.missing"));
-					const result = await actions.maskEdit({ imageDataUrl, maskDataUrl, prompt, referenceUrl: current.url });
-					if (result?.ok) clearMask();
+					const result = await actions.maskEdit({ imageDataUrl, maskDataUrl, prompt, referenceUrl: owner.url });
+					if (stillHere() && result?.ok) {
+						clearMask();
+						if (result.showJob) actions.setView("chat");
+					}
 				} catch (error) {
-					actions.toast?.(String(error?.message ?? error), "err");
+					if (stillHere()) actions.toast?.(String(error?.message ?? error), "err");
 				} finally {
-					setMaskBusy(false);
+					if (stillHere()) { maskRequest.current = null; setMaskBusy(false); }
 				}
 			};
 
@@ -5117,16 +5164,19 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								)
 							)
 						: null,
-					selected.length > 0 ? h("span", { className: "vig-muted" }, t("lib.selected", { n: selected.length })) : null,
-					selected.length > 0
+					visibleSelected.length > 0 ? h("span", { className: "vig-muted" }, t("lib.selected", { n: visibleSelected.length })) : null,
+					visibleSelected.length > 0
 						? h(
 								"button",
 								{
-									className: "vig-btn is-danger",
+									className: "vig-btn is-danger", disabled: deleting,
 									onClick: async () => {
-										if (!window.confirm(t("lib.confirmDelete", { n: selected.length }))) return;
-										await actions.deleteAssets(selected);
-										setSelected([]);
+										if (deletingRef.current || !window.confirm(t("lib.confirmDelete", { n: visibleSelected.length }))) return;
+										deletingRef.current = true;
+										setDeleting(true);
+										try {
+											if (await actions.deleteAssets(visibleSelected)) setSelected((list) => list.filter((id) => !visibleSelected.includes(id)));
+										} finally { deletingRef.current = false; setDeleting(false); }
 									}
 								},
 								h(Icon, { name: "trash" }),
@@ -5148,12 +5198,14 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								{ className: `vig-stage-view${painting ? " is-painting" : ""}` },
 								h(
 									"div",
-									{ className: "vig-stage-main", ref: stageRef },
+									{ className: "vig-stage-main", ref: stageRef, tabIndex: 0, role: "region", "aria-label": t("lib.view.stage"), onKeyDown: onStageKey },
 									current
 										? h(
 												"div",
 												{
+													key: `${current.id}:${current.url}`,
 													className: "vig-stage-frame",
+													style: painting ? { touchAction: "none" } : undefined,
 													ref: frameRef,
 													onPointerDown: onInkDown,
 													onPointerMove: onInkMove,
@@ -5171,7 +5223,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 														if (painting) return;
 														actions.openViewer(items, Math.max(0, activeIndex), "library");
 													},
-													...imageDragProps(current)
+													...(painting ? { draggable: false } : imageDragProps(current))
 												}),
 												h("canvas", { className: "vig-stage-ink", ref: canvasRef, "aria-hidden": "true" })
 											)
@@ -5229,6 +5281,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 													className: "vig-mask-input",
 													placeholder: t("lib.maskHint"),
 													value: maskPrompt,
+													readOnly: maskBusy,
 													onChange: (event) => setMaskPrompt(event.target.value),
 													onKeyDown: (event) => {
 														if (event.key === "Enter" && !event.nativeEvent?.isComposing) {
@@ -5244,6 +5297,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 																className: "vig-mask-tool",
 																title: t("lib.maskClear"),
 																"aria-label": t("lib.maskClear"),
+																disabled: maskBusy,
 																onClick: clearMask
 															},
 															h(Icon, { name: "trash", size: 13 })
@@ -5253,6 +5307,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 													"button",
 													{
 														className: "vig-mask-tool",
+														disabled: maskBusy,
 														title: t("chat.cancel"),
 														"aria-label": t("chat.cancel"),
 														onClick: () => {
@@ -5268,7 +5323,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 														className: "vig-mask-send",
 														title: t("lib.maskSend"),
 														"aria-label": t("lib.maskSend"),
-														disabled: maskBusy,
+														disabled: !canSubmitMask,
 														onClick: () => void submitMask()
 													},
 													maskBusy ? h("span", { className: "vig-spin" }) : h(Icon, { name: "send", size: 14 })
@@ -5382,10 +5437,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												className: `vig-strip-item${current && asset.id === current.id ? " is-on" : ""}`,
 												title: asset.name,
 												"aria-pressed": Boolean(current && asset.id === current.id),
-												onClick: () => {
-													clearMask();
-													setActiveId(asset.id);
-												},
+												onClick: () => setActiveId(asset.id),
 												...imageDragProps(asset)
 											},
 											h("img", { src: asset.url, alt: asset.name, loading: "lazy", draggable: false })
@@ -5489,6 +5541,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 
 		function NotesView({ state, actions }) {
 			const [editing, setEditing] = useState(null);
+			const saving = useSubmitLock();
 			const blank = { id: "", title: "", prompt: "", meta: "", tags: [] };
 			const current = editing ?? blank;
 			const setField = (patch) => setEditing({ ...current, ...patch });
@@ -5531,10 +5584,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										{ className: "vig-mini", onClick: () => actions.insertNote(note) },
 										t("notes.insert")
 									),
-									h("button", { className: "vig-mini", onClick: () => setEditing({ ...note }) }, t("notes.save")),
+									h("button", { className: "vig-mini", onClick: () => setEditing({ ...note }) }, t("prov.edit")),
 									h(
 										"button",
-										{ className: "vig-mini", onClick: () => void actions.deleteNote(note.id) },
+										{ className: "vig-mini", onClick: () => { if (window.confirm(`${t("lib.delete")} ${note.title}?`)) void actions.deleteNote(note.id); } },
 										t("notes.delete")
 									)
 								),
@@ -5546,17 +5599,17 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				),
 				editing
 					? h(
-							"div",
-							{ className: "vig-modal-mask", onClick: () => setEditing(null) },
+							WorkbenchDialog,
+							{ label: t("nav.notes"), onDismiss: () => { if (!saving.busy) setEditing(null); } },
 							h(
-								"div",
-								{ className: "vig-modal", onClick: (event) => event.stopPropagation() },
+								"fieldset",
+								{ className: "vig-modal", disabled: saving.busy, "aria-busy": saving.busy, onClick: (event) => event.stopPropagation() },
 								h(
 									"div",
 									{ className: "vig-row" },
 									h("span", { className: "vig-modal-title" }, current.id ? t("notes.title") : t("notes.new")),
 									h("div", { className: "vig-spacer" }),
-									h("button", { className: "vig-icon-btn", onClick: () => setEditing(null) }, h(Icon, { name: "close" }))
+									h("button", { className: "vig-icon-btn", "aria-label": t("prov.close"), onClick: () => setEditing(null) }, h(Icon, { name: "close" }))
 								),
 								h(
 									"label",
@@ -5582,9 +5635,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									h("span", { className: "vig-label" }, t("notes.tags")),
 									h("input", {
 										className: "vig-in",
-										value: (current.tags || []).join(", "),
-										onChange: (event) =>
-											setField({ tags: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })
+										value: current.tagsText ?? (current.tags || []).join(", "),
+										onChange: (event) => setField({ tagsText: event.target.value })
 									})
 								),
 								h(
@@ -5594,10 +5646,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									h(
 										"button",
 										{
-											className: "vig-btn is-primary",
+											className: "vig-btn is-primary", disabled: saving.busy,
 											onClick: async () => {
-												const ok = await actions.saveNote(current);
-												if (ok) setEditing(null);
+												const { tagsText, ...note } = current;
+												const ok = await saving.run(() => actions.saveNote({ ...note, tags: splitFieldList(tagsText ?? (note.tags || []).join(',')) }));
+												if (ok) setEditing((active) => active === current ? null : active);
 											}
 										},
 										t("notes.save")
@@ -5615,25 +5668,28 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 
 		function ProvidersView({ state, actions, initialDialog = null }) {
 			// initialDialog 只有预览/测试会传：真跑起来永远是空手打开（点「编辑」才弹）。
-			const [dialog, setDialog] = useState(initialDialog);
-			// 「测试连接」的结果留在弹窗里（成功 / 失败 + 上游原话 + 「key 和地址不是一家」的解释），
-			// 一闪而过的 toast 撑不住这种要对着改的信息。
+			const toDraft = (provider) => provider && ({ ...provider, apiKey: "", useRuntimeKey: Boolean(provider.useRuntimeKey ?? provider.usesRuntimeKey), modelsText: (provider.models || []).join(", ") });
+			const [dialog, setDialog] = useState(() => toDraft(initialDialog));
 			const [testInfo, setTestInfo] = useState(null);
-			// 初值直接取配置：只靠 useEffect 回填的话首帧是空输入框（会闪一下，SSR 更是直接空白）
-			const [runtime, setRuntime] = useState(() => ({ baseUrl: state.config.baseUrl, apiKeyEnv: state.config.apiKeyEnv, dir: state.config.stateDir || "", chatModel: state.config.chatModel || "", contextTurns: state.config.contextTurns ?? 6 }));
+			const draftRevision = useRef(0);
+			const testingRevision = useRef(-1);
+			const [pendingTest, setPendingTest] = useState(-1);
+			const saveLock = useSubmitLock();
+			const runtimeLock = useSubmitLock();
+			const changeDialog = (next) => {
+				draftRevision.current += 1;
+				setTestInfo(null);
+				setDialog(next);
+			};
+			const closeDialog = () => changeDialog(null);
+			// 只保留改过的运行期字段：重载宿主配置时不会覆盖用户未保存的输入。
+			const [runtimeEdits, setRuntimeEdits] = useState({});
+			const runtime = { baseUrl: state.config.baseUrl, apiKeyEnv: state.config.apiKeyEnv, dir: state.config.stateDir || "", chatModel: state.config.chatModel || "", contextTurns: state.config.contextTurns ?? 6, ...runtimeEdits };
+			const runtimeRevision = useRef(0);
+			const editRuntime = (key, value) => { runtimeRevision.current += 1; setRuntimeEdits((prev) => ({ ...prev, [key]: value })); };
 			const [runtimeKey, setRuntimeKey] = useState("");
 
-			useEffect(() => {
-				setRuntime({
-					baseUrl: state.config.baseUrl,
-					apiKeyEnv: state.config.apiKeyEnv,
-					dir: state.config.stateDir || "",
-					chatModel: state.config.chatModel || "",
-					contextTurns: state.config.contextTurns ?? 6
-				});
-			}, [state.config.baseUrl, state.config.apiKeyEnv, state.config.stateDir, state.config.chatModel, state.config.contextTurns]);
-
-			const blank = { id: "", name: "", baseUrl: state.config.baseUrl, apiKey: "", useRuntimeKey: true, models: [], note: "" };
+			const blank = { id: "", name: "", baseUrl: state.config.baseUrl, apiKey: "", useRuntimeKey: false, models: [], note: "" };
 
 			return h(
 				"div",
@@ -5647,7 +5703,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					h("div", { className: "vig-spacer" }),
 					h(
 						"button",
-						{ className: "vig-btn", onClick: () => { setTestInfo(null); setDialog({ ...blank }); } },
+						{ className: "vig-btn", onClick: () => changeDialog(toDraft(blank)) },
 						h(Icon, { name: "plus", size: 14 }),
 						t("prov.add")
 					)
@@ -5666,16 +5722,16 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								"label",
 								{ className: "vig-field" },
 								h("span", { className: "vig-label" }, t("prov.baseUrl")),
-								h("input", { className: "vig-in", value: runtime.baseUrl, onChange: (event) => setRuntime({ ...runtime, baseUrl: event.target.value }) })
+								h("input", { className: "vig-in", value: runtime.baseUrl, onChange: (event) => editRuntime("baseUrl", event.target.value) })
 							),
 							h(
 								"label",
 								{ className: "vig-field" },
 								h("span", { className: "vig-label" }, t("prov.keyEnv")),
-								h("input", { className: "vig-in", value: runtime.apiKeyEnv, onChange: (event) => setRuntime({ ...runtime, apiKeyEnv: event.target.value }) })
+								h("input", { className: "vig-in", value: runtime.apiKeyEnv, onChange: (event) => editRuntime("apiKeyEnv", event.target.value) })
 							)
 						),
-						// 对话上下文管理：用哪个对话模型整理多轮消息、喂它最近几轮
+						h("p", { className: "vig-muted" }, t("prov.chatOnlyHint")),
 						h(
 							"div",
 							{ className: "vig-form-grid" },
@@ -5688,7 +5744,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									{
 										className: "vig-in",
 										value: runtime.chatModel || "",
-										onChange: (event) => setRuntime({ ...runtime, chatModel: event.target.value })
+										onChange: (event) => editRuntime("chatModel", event.target.value)
 									},
 									h("option", { value: "" }, t("prov.chatModelAuto")),
 									(state.chatModels || []).map((item) => h("option", { key: item.id, value: item.id }, `${item.id} · ${item.providerName}`))
@@ -5704,7 +5760,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									min: 0,
 									max: 12,
 									value: runtime.contextTurns ?? 6,
-									onChange: (event) => setRuntime({ ...runtime, contextTurns: Number(event.target.value) })
+									onChange: (event) => editRuntime("contextTurns", Number(event.target.value))
 								})
 							)
 						),
@@ -5717,7 +5773,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								type: "password",
 								placeholder: t("prov.keyHint"),
 								value: runtimeKey,
-								onChange: (event) => setRuntimeKey(event.target.value)
+								onChange: (event) => { runtimeRevision.current += 1; setRuntimeKey(event.target.value); }
 							})
 						),
 						h(
@@ -5727,15 +5783,16 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								"button",
 								{
 									className: "vig-btn is-primary",
-									onClick: async () => {
-										const patch = { baseUrl: runtime.baseUrl, apiKeyEnv: runtime.apiKeyEnv };
-									// 对话上下文管理：用哪个对话模型、喂最近几轮
-									patch.chatModel = runtime.chatModel || "";
-									patch.contextTurns = Number(runtime.contextTurns) || 0;
-									if (runtimeKey.trim()) patch.apiKey = runtimeKey.trim();
-										await actions.saveConfig(patch);
-										setRuntimeKey("");
-									}
+									disabled: runtimeLock.busy,
+									onClick: () => runtimeLock.run(async () => {
+										const rev = runtimeRevision.current;
+										const patch = { baseUrl: runtime.baseUrl, apiKeyEnv: runtime.apiKeyEnv, chatModel: runtime.chatModel || "", contextTurns: Number(runtime.contextTurns) || 0 };
+										if (runtimeKey.trim()) patch.apiKey = runtimeKey.trim();
+										if (await actions.saveConfig(patch) && rev === runtimeRevision.current) {
+											setRuntimeKey("");
+											setRuntimeEdits((prev) => prev.dir === undefined ? {} : { dir: prev.dir });
+										}
+									})
 								},
 								t("prov.save")
 							),
@@ -5743,10 +5800,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								"button",
 								{
 									className: "vig-btn",
-									onClick: async () => {
-										await actions.testProvider({ id: state.config.activeProviderId, baseUrl: runtime.baseUrl, apiKey: runtimeKey.trim() });
-										setRuntimeKey("");
-									}
+									"data-runtime-test": "1", disabled: runtimeLock.busy,
+									onClick: () => runtimeLock.run(() => actions.testProvider({ scope: "runtime", baseUrl: runtime.baseUrl, apiKey: runtimeKey.trim() }))
 								},
 								t("prov.test")
 							)
@@ -5764,7 +5819,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									className: "vig-in",
 									value: runtime.dir || "",
 									placeholder: state.config.stateDir || "",
-									onChange: (event) => setRuntime({ ...runtime, dir: event.target.value })
+									onChange: (event) => editRuntime("dir", event.target.value)
 								})
 							),
 							h("div", { className: "vig-muted", style: { fontSize: 12 } }, t("prov.storageHint")),
@@ -5793,7 +5848,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											if (picked == null) return;
 											const next = picked.trim();
 											if (!next || next === (state.config.stateDir || "")) return;
-											setRuntime({ ...runtime, dir: next });
+											editRuntime("dir", next);
 											await actions.saveStateDir(next);
 										}
 									},
@@ -5833,7 +5888,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												h(
 													"div",
 													{ className: "vig-prov-line" },
-													`${t("prov.keyMask")} ${provider.keyMask || t("prov.keyRuntime")}`,
+													`${t("prov.keyMask")} ${provider.keyMask || (provider.usesRuntimeKey ? t("prov.keyRuntime") : t("common.empty"))}`,
 													h("span", { className: "vig-sep" }, "·"),
 													`${t("prov.modelsLabel")} ${modelsText}`,
 													provider.note ? h("span", { className: "vig-sep" }, "·") : null,
@@ -5845,7 +5900,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												{ className: "vig-prov-acts" },
 												on ? null : h("button", { className: "vig-btn is-ghost is-sm", onClick: () => void actions.setActiveProvider(provider.id) }, t("prov.makeActive")),
 												h("button", { className: "vig-btn is-ghost is-sm", onClick: () => void actions.refreshModels(provider.id) }, t("prov.refresh")),
-												h("button", { className: "vig-btn is-ghost is-sm", onClick: () => { setTestInfo(null); setDialog({ ...provider, apiKey: "" }); } }, t("prov.edit")),
+												h("button", { className: "vig-btn is-ghost is-sm", onClick: () => changeDialog(toDraft(provider)) }, t("prov.edit")),
 												h(
 													"button",
 													{
@@ -5865,29 +5920,29 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				),
 				dialog
 					? h(
-							"div",
-							{ className: "vig-modal-mask", onClick: () => setDialog(null) },
+							WorkbenchDialog,
+							{ onDismiss: closeDialog, label: dialog.id ? dialog.name : t("prov.add") },
 							h(
 								"div",
-								{ className: "vig-modal", onClick: (event) => event.stopPropagation() },
+								{ className: "vig-modal", "data-provider-editor": "1" },
 								h(
 									"div",
 									{ className: "vig-row" },
 									h("span", { className: "vig-modal-title" }, dialog.id ? dialog.name : t("prov.add")),
 									h("div", { className: "vig-spacer" }),
-									h("button", { className: "vig-icon-btn", onClick: () => setDialog(null) }, h(Icon, { name: "close" }))
+									h("button", { className: "vig-icon-btn", "aria-label": t("prov.close"), onClick: closeDialog }, h(Icon, { name: "close" }))
 								),
 								h(
 									"label",
 									{ className: "vig-field" },
 									h("span", { className: "vig-label" }, t("prov.name")),
-									h("input", { className: "vig-in", value: dialog.name, onChange: (event) => setDialog({ ...dialog, name: event.target.value }) })
+									h("input", { className: "vig-in", value: dialog.name, onChange: (event) => changeDialog({ ...dialog, name: event.target.value }) })
 								),
 								h(
 									"label",
 									{ className: "vig-field" },
 									h("span", { className: "vig-label" }, t("prov.baseUrl")),
-									h("input", { className: "vig-in", value: dialog.baseUrl, onChange: (event) => setDialog({ ...dialog, baseUrl: event.target.value }) })
+									h("input", { className: "vig-in", value: dialog.baseUrl, onChange: (event) => changeDialog({ ...dialog, baseUrl: event.target.value }) })
 								),
 								h(
 									"label",
@@ -5898,19 +5953,22 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										type: "password",
 										placeholder: t("prov.keyHint"),
 										value: dialog.apiKey || "",
-										onChange: (event) => setDialog({ ...dialog, apiKey: event.target.value, useRuntimeKey: event.target.value.length === 0 })
+										onChange: (event) => changeDialog({ ...dialog, apiKey: event.target.value })
 									})
 								),
 								h(
 									"label",
 									{ className: "vig-field" },
 									h("span", { className: "vig-label" }, t("prov.models")),
-									h("input", {
-										className: "vig-in",
-										value: (dialog.models || []).join(", "),
-										onChange: (event) =>
-											setDialog({ ...dialog, models: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })
+									h("textarea", {
+										className: "vig-in", rows: 2, style: { resize: "vertical", minHeight: 42 },
+										"data-provider-models": "1", value: dialog.modelsText,
+										onChange: (event) => changeDialog({ ...dialog, modelsText: event.target.value })
 									})
+								),
+								h("label", { className: "vig-field" },
+									h("span", null, h("input", { type: "checkbox", "data-provider-runtime-key": "1", disabled: Boolean(dialog.apiKey.trim()), checked: !dialog.apiKey.trim() && dialog.useRuntimeKey,
+										onChange: (event) => changeDialog({ ...dialog, useRuntimeKey: event.target.checked }) }), " ", t("prov.key"), " · ", t("prov.keyRuntime"))
 								),
 								// 端点协议不在这里选：它在「对话生图」输入框那一行（跟着每次生成走）。
 								// 供应商这条记录只负责地址 / 密钥 / 模型，别让同一件事有两个家。
@@ -5918,20 +5976,29 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									"label",
 									{ className: "vig-field" },
 									h("span", { className: "vig-label" }, t("prov.note")),
-									h("input", { className: "vig-in", value: dialog.note || "", onChange: (event) => setDialog({ ...dialog, note: event.target.value }) })
+									h("input", { className: "vig-in", value: dialog.note || "", onChange: (event) => changeDialog({ ...dialog, note: event.target.value }) })
 								),
 								h(
 									"div",
 									{ className: "vig-row", style: { justifyContent: "flex-end" } },
-									h("button", { className: "vig-btn", onClick: () => setDialog(null) }, t("prov.close")),
+									h("button", { className: "vig-btn", onClick: closeDialog }, t("prov.close")),
 									h(
 										"button",
 										{
 											className: "vig-btn",
+											"data-provider-test": "1", disabled: saveLock.busy || pendingTest === draftRevision.current,
 											onClick: async () => {
+												const rev = draftRevision.current;
+												if (testingRevision.current === rev) return;
+												testingRevision.current = rev;
+												setPendingTest(rev);
 												setTestInfo(null);
-												const payload = await actions.testProvider({ id: dialog.id, baseUrl: dialog.baseUrl, apiKey: dialog.apiKey });
-												setTestInfo(payload ?? null);
+												try {
+													const payload = await actions.testProvider({ scope: "provider", id: dialog.id, baseUrl: dialog.baseUrl, apiKey: dialog.apiKey, useRuntimeKey: !dialog.apiKey.trim() && dialog.useRuntimeKey });
+													if (rev === draftRevision.current) setTestInfo(payload ?? null);
+												} finally {
+													if (testingRevision.current === rev) { testingRevision.current = -1; setPendingTest(-1); }
+												}
 											}
 										},
 										t("prov.test")
@@ -5940,10 +6007,13 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										"button",
 										{
 											className: "vig-btn is-primary",
-											onClick: async () => {
-												await actions.saveProvider(dialog);
-												setDialog(null);
-											}
+											"data-provider-save": "1", disabled: saveLock.busy,
+											onClick: () => saveLock.run(async () => {
+												const rev = draftRevision.current;
+												const { id, name, baseUrl, apiKey, note, modelsText, useRuntimeKey } = dialog;
+												const saved = await actions.saveProvider({ id, name, baseUrl, apiKey: apiKey.trim(), note, useRuntimeKey: !apiKey.trim() && useRuntimeKey, models: splitFieldList(modelsText) });
+												if (saved && rev === draftRevision.current) closeDialog();
+											})
 										},
 										t("prov.save")
 									)
@@ -5996,7 +6066,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				"div",
 				{ className: "vig-preset-grid" },
 				items.map((preset) => {
-					const cover = preset.image && !broken[preset.id] ? preset.image : "";
+					const cover = preset.image && broken[preset.id] !== preset.image ? preset.image : "";
 					return h(
 						"div",
 						{ className: "vig-preset-card", key: preset.id, title: preset.prompt || preset.title },
@@ -6008,7 +6078,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										src: cover,
 										alt: preset.title,
 										loading: "lazy",
-										onError: () => setBroken((value) => ({ ...value, [preset.id]: true }))
+										onError: () => setBroken((value) => ({ ...value, [preset.id]: preset.image }))
 									})
 								: h("span", { className: "vig-preset-blank" }, h(Icon, { name: "image" }), t("preset.cover"))
 						),
@@ -6057,16 +6127,21 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		/** 预设卡编辑器：标题 / 提示词 / 参考图（上传或从图库拿）/ 标签。 */
 		function PresetDialog({ preset, library, onClose, onSave, onUpload }) {
 			const [draftCard, setDraftCard] = useState(() => ({ ...preset }));
+			const saving = useSubmitLock();
+			const [tagsText, setTagsText] = useState(() => (preset.tags || []).join(", "));
+			const imageRevision = useRef(0);
+			const [uploading, setUploading] = useState(false);
+			const chooseImage = (image) => { ++imageRevision.current; setUploading(false); setField({ image }); };
 			const [picking, setPicking] = useState(false);
 			const fileRef = useRef(null);
 			const setField = (patch) => setDraftCard((value) => ({ ...value, ...patch }));
 			const items = Array.isArray(library) ? library : [];
 			return h(
-				"div",
-				{ className: "vig-modal-mask", onClick: onClose },
+				WorkbenchDialog,
+				{ label: t("preset.edit"), onDismiss: () => { if (!saving.busy) onClose(); } },
 				h(
-					"div",
-					{ className: "vig-modal", onClick: (event) => event.stopPropagation() },
+					"fieldset",
+					{ className: "vig-modal", disabled:saving.busy, "aria-busy":saving.busy, onClick: (event) => event.stopPropagation() },
 					h(
 						"div",
 						{ className: "vig-row" },
@@ -6089,7 +6164,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								{ className: "vig-preset-ref-actions" },
 								h("button", { className: "vig-mini", onClick: () => fileRef.current?.click() }, t("preset.upload")),
 								h("button", { className: "vig-mini", onClick: () => setPicking((value) => !value) }, t("preset.fromLibrary")),
-								draftCard.image ? h("button", { className: "vig-mini", onClick: () => setField({ image: "" }) }, t("preset.clearImage")) : null
+								draftCard.image ? h("button", { className: "vig-mini", onClick: () => chooseImage("") }, t("preset.clearImage")) : null
 							)
 						),
 						h("input", {
@@ -6101,8 +6176,12 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								const file = event.target.files?.[0];
 								event.target.value = "";
 								if (!file) return;
-								const url = await onUpload(file);
-								if (url) setField({ image: url });
+								const token = ++imageRevision.current;
+								setUploading(true);
+								try {
+									const url = await onUpload(file);
+									if (url && token === imageRevision.current) setField({ image: url });
+								} finally { if (token === imageRevision.current) setUploading(false); }
 							}
 						}),
 						picking
@@ -6114,7 +6193,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										: items.slice(0, 24).map((asset) =>
 												h(
 													"button",
-													{ className: "vig-preset-pick", key: asset.id, onClick: () => setField({ image: asset.url }) },
+													{ className: "vig-preset-pick", key: asset.id, onClick: () => chooseImage(asset.url) },
 													h("img", { src: asset.url, alt: asset.name })
 												)
 											)
@@ -6139,9 +6218,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						h("span", { className: "vig-label" }, t("preset.tags")),
 						h("input", {
 							className: "vig-in",
-							value: (draftCard.tags || []).join(", "),
-							onChange: (event) =>
-								setField({ tags: event.target.value.split(",").map((item) => item.trim()).filter(Boolean).slice(0, 6) })
+							value: tagsText,
+							onChange: (event) => setTagsText(event.target.value)
 						})
 					),
 					h(
@@ -6151,9 +6229,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						h(
 							"button",
 							{
-								className: "vig-btn is-primary",
+								className: "vig-btn is-primary", disabled: saving.busy || uploading,
 								onClick: async () => {
-									const ok = await onSave(draftCard);
+								const ok = await saving.run(() => onSave({ ...draftCard, tags: splitFieldList(tagsText, 6) }));
 									if (ok) onClose();
 								}
 							},
@@ -6164,14 +6242,19 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			);
 		}
 
+		function ReferencePicker({ library, onDismiss, onPick }) {
+			const pick = useSubmitLock();
+			return h(WorkbenchDialog, { label: t("panel.pick"), onDismiss }, h("div", { className: "vig-modal" },
+				h("div", { className: "vig-row" }, h("span", {className:"vig-modal-title"}, t("panel.pick")), h("div", {className:"vig-spacer"}),
+					h("button", {className:"vig-icon-btn", "aria-label":t("prov.close"), onClick:onDismiss}, h(Icon, {name:"close"}))),
+				library.length ? h("div", {className:"vig-grid"}, library.map((asset) => h("button", {key:asset.id, className:"vig-tile", disabled:pick.busy,
+					onClick:() => pick.run(async () => { if (await onPick(asset)) onDismiss(); })}, h("img", {src:asset.url, alt:asset.name, loading:"lazy"})))) : h("div", {className:"vig-empty"}, t("lib.empty"))
+			));
+		}
+
 		function Inspector({ state, actions, open = true, onToggle }) {
 			const { references, config, providers, presets, library } = state;
-			const [pickOpen, setPickOpen] = useState(false);
 			const [presetEditing, setPresetEditing] = useState(null);
-
-			useEffect(() => {
-				if (state.pickOpen) setPickOpen(true);
-			}, [state.pickOpen]);
 
 			const onFile = async (file) => {
 				if (!file) return;
@@ -6235,7 +6318,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					),
 					h(
 						"button",
-						{ className: "vig-btn", onClick: () => setPickOpen(true) },
+						{ className: "vig-btn", onClick: () => actions.setPickOpen(true) },
 						h(Icon, { name: "grid" }),
 						t("panel.pick")
 					),
@@ -6270,7 +6353,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						presets,
 						onUse: (preset) => void actions.applyPreset(preset),
 						onEdit: (preset) => setPresetEditing({ ...preset }),
-						onDelete: (id) => void actions.deletePreset(id)
+						onDelete: (id) => { const card = presets.find((item) => item.id === id); if (window.confirm(`${t("lib.delete")} ${card?.title || id}?`)) void actions.deletePreset(id); }
 					})
 				),
 				h(
@@ -6288,49 +6371,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					h(
 						"div",
 						{ className: "vig-muted", style: { fontSize: 12 } },
-						`${t("prov.baseUrl")}：${config.baseUrl}`
+						`${t("prov.baseUrl")}：${providers.find((p) => p.id === (config.activeProviderId || providerIdForModel(providers, config)))?.baseUrl || config.baseUrl}`
 					)
 					// 密钥与「供应商管理」跳转不在这里重复：密钥是工作区头部那颗胶囊的
 					// 活，跳转是左侧导航项的事，检查器只负责「当前用哪个供应商」。
 				),
-				pickOpen
-					? h(
-							"div",
-							{ className: "vig-modal-mask", onClick: () => { setPickOpen(false); actions.setPickOpen(false); } },
-							h(
-								"div",
-								{ className: "vig-modal", onClick: (event) => event.stopPropagation() },
-								h(
-									"div",
-									{ className: "vig-row" },
-									h("span", { className: "vig-modal-title" }, t("panel.pick")),
-									h("div", { className: "vig-spacer" }),
-									h("button", { className: "vig-icon-btn", onClick: () => { setPickOpen(false); actions.setPickOpen(false); } }, h(Icon, { name: "close" }))
-								),
-								state.library.length === 0
-									? h("div", { className: "vig-empty" }, t("lib.empty"))
-									: h(
-											"div",
-											{ className: "vig-grid" },
-											state.library.slice(0, 24).map((asset) =>
-												h(
-													"button",
-													{
-														key: asset.id,
-														className: "vig-tile",
-														onClick: async () => {
-															await actions.useAsReference(asset);
-															setPickOpen(false);
-															actions.setPickOpen(false);
-														}
-													},
-													h("img", { src: asset.url, alt: asset.name, loading: "lazy" })
-												)
-											)
-										)
-							)
-						)
-					: null,
 				presetEditing
 					? h(PresetDialog, {
 							preset: presetEditing,
@@ -9143,7 +9188,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				setBusy("上传");
 				try {
 					const dataUrl = toDataUrl();
-					await actions.attachReference({ name: `${source?.name || "image"}-处理.png`, dataUrl });
+					if (!await actions.attachReference({ name: `${source?.name || "image"}-处理.png`, dataUrl })) return;
 					notify(t("ps.toReference"));
 				} catch (error) {
 					notify(String(error?.message ?? error), "err");
@@ -9229,10 +9274,14 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			};
 
 			/** 键盘：字母切工具、组合键做动作，键位可改。存成 ref，永远拿到最新闭包。 */
+			const psOwnerRef = useRef(null);
 			const keyRunnerRef = useRef(null);
 			keyRunnerRef.current = (event) => {
-				// 弹层先吃 Esc：不管键位怎么改，Esc 都该能关掉浮层
-				if (psCombo(event) === "escape" && (keysOpen || pickOpen)) {
+				const owner = psOwnerRef.current;
+				const target = event.target?.nodeType === 1 ? event.target : document.activeElement;
+				if (!owner?.getClientRects().length || ((event.target !== window || target !== document.body) && target && !owner.contains(target)) || event.isComposing) return;
+				// Esc 在录制中只取消录制；其它弹层只响应关闭，不操作底下的画布。
+				if (!recording && psCombo(event) === "escape" && (keysOpen || pickOpen)) {
 					setKeysOpen(false);
 					setPickOpen(false);
 					event.preventDefault();
@@ -9277,6 +9326,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				const hit = psShortcut(event, overrides);
 				if (!hit) return;
 				const el = event.target;
+				if (keysOpen || pickOpen) return;
 				const tag = String(el?.tagName || "").toLowerCase();
 				const typing = tag === "input" || tag === "textarea" || tag === "select" || Boolean(el?.isContentEditable);
 				// 输入框里打字不拦键；但 Esc / Enter 这类「退出、确认」语义的键仍旧生效
@@ -9916,7 +9966,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 
 			return h(
 				"div",
-				{ className: "vig-main" },
+				{ className: "vig-main", ref: psOwnerRef, tabIndex: -1, onPointerDownCapture: (event) => {
+					if (!event.target.closest?.("button,input,select,textarea,a,dialog,[contenteditable=true]")) event.currentTarget.focus({preventScroll:true});
+				} },
 				h(
 					"div",
 					{ className: "vig-toolbar" },
@@ -10706,8 +10758,8 @@ h(
 				}),
 				pickOpen
 					? h(
-							"div",
-							{ className: "vig-modal-mask", onClick: () => setPickOpen(false) },
+							WorkbenchDialog,
+							{ label: t("panel.pick"), onDismiss: () => setPickOpen(false) },
 							h(
 								"div",
 								{ className: "vig-modal", onClick: (event) => event.stopPropagation() },
@@ -10757,8 +10809,8 @@ h(
 					: null,
 				keysOpen
 					? h(
-							"div",
-							{ className: "vig-modal-mask", onClick: () => setKeysOpen(false) },
+							WorkbenchDialog,
+							{ label: t("ps.keys"), onDismiss: () => setKeysOpen(false) },
 							h(
 								"div",
 								{ className: "vig-modal is-keys", onClick: (event) => event.stopPropagation() },
@@ -11178,17 +11230,6 @@ h(
 			// 对话（会话）：每个会话独立历史（新对话不继承记忆）；上下文管理默认开
 			const [conversations, setConversations] = useState([]);
 			const [conversationId, setConversationId] = useState(() => window.localStorage.getItem(CONV_KEY) || "");
-			// 「优化提示词」按需勾选：默认关（不勾就按原话直接生图，不额外调用对话模型）
-			const [contextOn, setContextOn] = useState(() => window.localStorage.getItem(CONTEXT_KEY) === "1");
-
-			// 「限制上下文模型直接调供应商出图」：默认限制（true）；存在本地，generate 与面板共用
-			const [contextNoAutoImage, setContextNoAutoImage] = useState(() => {
-				try {
-					return window.localStorage.getItem(CONTEXT_NO_IMAGE_KEY) !== "0";
-				} catch (error) {
-					return true;
-				}
-			});
 			const [chatModels, setChatModels] = useState([]);
 			const [config, setConfig] = useState({ baseUrl: "", apiKeyEnv: "", keyMask: "", hasKey: false, defaultModel: "", defaultSize: "1024x1024", videoSize: "1280x720", videoRatio: "16:9", videoResolution: "720p", videoSeconds: "4", defaultQuality: "LOW", defaultCount: 1, defaultEndpoint: window.localStorage.getItem(ENDPOINT_KEY) || "auto", activeProviderId: "", stateDir: "", chatModel: "", contextTurns: 6 });
 			const [providers, setProviders] = useState([]);
@@ -11319,7 +11360,9 @@ h(
 			const conversationIdRef = useRef(conversationId);
 			const initialConfigRef = useRef(null);
 			// 切换时只恢复本地设置，绝不把上一个会话的 render 快照写给新会话。
+			const inputEpoch = useRef(0);
 			const activateConversation = useCallback((id) => {
+				++inputEpoch.current;
 				conversationIdRef.current = id;
 				setConversationId(id);
 				jsonOverrideRef.current = null;
@@ -11330,18 +11373,16 @@ h(
 
 			const [pending, setPending] = useState(0);
 			const [draft, setDraft] = useState("");
-			const [references, setReferences] = useState([]);
-			// 参考图最多 4 张：上游 gpt-image 系多图编辑的实用上限，多了也是浪费 token
-			const MAX_REFERENCES = 4;
+			const [references, renderReferences] = useState([]);
+			const refsNow = useRef(references);
+			const setReferences = (next) => {
+				refsNow.current = typeof next === "function" ? next(refsNow.current) : next;
+				renderReferences(refsNow.current);
+			};
 			const appendReference = (entry) => {
-				let added = false;
-				setReferences((current) => {
-					if (current.length >= MAX_REFERENCES) return current;
-					added = true;
-					return [...current, entry];
-				});
-				if (!added) toast(t("chat.refLimit"), "err");
-				return added;
+				if (refsNow.current.length >= 4) { toast(t("chat.refLimit"), "err"); return false; }
+				setReferences([...refsNow.current, entry]);
+				return true;
 			};
 			/** 参考图留档：上传到宿主 uploads，换回本站 URL（缩略图 / 重试 / 编辑都靠它）。失败返回空串。 */
 			const uploadRefData = async (name, dataUrl) => {
@@ -11364,6 +11405,11 @@ h(
 			const [capsInfo, setCapsInfo] = useState(null);
 			// 图片查看器：{ items, index, source }；source = chat / library（决定给不给「删除」）
 			const [viewer, setViewer] = useState(null);
+			const deletingAssetIds = useRef(new Set());
+			const libraryIdFor = (image) => {
+				const id = image?.id || image?.assetId;
+				return id && library.some((asset) => asset.id === id) ? id : null;
+			};
 			// 「到图片处理」的入口：{ name, dataUrl }，PsView 载入后由它自己消化
 			const [psImage, setPsImage] = useState(null);
 			const fileRef = useRef(null);
@@ -11388,9 +11434,6 @@ h(
 				window.localStorage.setItem(CONV_KEY, conversationId || "");
 			}, [conversationId]);
 
-			useEffect(() => {
-				window.localStorage.setItem(CONTEXT_KEY, contextOn ? "1" : "0");
-			}, [contextOn]);
 
 			const reload = useCallback(async () => {
 				try {
@@ -11641,6 +11684,22 @@ h(
 				});
 			};
 
+			const addAssetReference = async (asset, goToChat) => {
+				const epoch = inputEpoch.current;
+				try {
+					if (refsNow.current.length >= 4) { toast(t("chat.refLimit"), "err"); return false; }
+					const dataUrl = String(asset.url).startsWith("data:image/") ? asset.url : await urlToDataUrl(new URL(asset.url, window.location.origin).toString());
+					if (epoch !== inputEpoch.current) return false;
+					if (!dataUrl) throw new Error(t("viewer.missing"));
+					const name = asset.name || "image.png";
+					if (!await actions.attachReference({ name, dataUrl })) return false;
+					if (epoch !== inputEpoch.current) return false;
+					setEditMode(true);
+					if (goToChat) setView("chat");
+					toast(t("chat.reuse"));
+					return true;
+				} catch (error) { toast(String(error?.message ?? error), "err"); return false; }
+			};
 			const actions = {
 				resetJsonBody: () => { jsonOverrideRef.current = null; jsonBaseRef.current = buildRequestPreview(draft); setJsonDraft(JSON.stringify(jsonBaseRef.current, null, 2)); toast(t("chat.jsonReset")); },
 				openJsonBody: () => openJsonPreview(),
@@ -11721,18 +11780,6 @@ h(
 						toast(message.includes("未知端点") ? t("prov.storageNeedRestart") : message, "err");
 					}
 				},
-				toggleContext: () => setContextOn((value) => !value),
-
-				toggleContextNoAutoImage: () =>
-					setContextNoAutoImage((value) => {
-						const next = !value;
-						try {
-							window.localStorage.setItem(CONTEXT_NO_IMAGE_KEY, next ? "1" : "0");
-						} catch (error) {
-							/* 隐私模式写不了就只活这次 */
-						}
-						return next;
-					}),
 				generate: async () => {
 					const rawPrompt = draft.trim();
 					if (rawPrompt.length === 0) return;
@@ -11779,12 +11826,14 @@ h(
 							}
 						});
 						const next = { ...payload.job, images: [] };
-						setJobs((list) => [next, ...list.filter((item) => item.id !== next.id)]);
-						setPending(payload.queue ?? 1);
-						watchJob(next.id);
-						setView("chat");
+						const showJob = conversationId === conversationIdRef.current;
+						if (showJob) {
+							setJobs((list) => [next, ...list.filter((item) => item.id !== next.id)]);
+							setPending(payload.queue ?? 1);
+							watchJob(next.id);
+						}
 						toast(t("lib.maskQueued"));
-						return { ok: true, jobId: next.id };
+						return { ok: true, jobId: next.id, showJob };
 					} catch (error) {
 						toast(String(error?.message ?? error), "err");
 						return { ok: false };
@@ -11848,6 +11897,9 @@ h(
 					const prompt = String(job?.userText || job?.prompt || "");
 					if (!prompt) return;
 					setDraft(prompt.slice(0, 500));
+					const epoch = ++inputEpoch.current;
+					setReferences([]);
+					setEditMode(false);
 					const urls = (Array.isArray(job?.referenceUrls) && job.referenceUrls.length > 0 ? job.referenceUrls : job?.referenceUrl ? [job.referenceUrl] : []).slice(0, 4);
 					if (urls.length > 0) {
 						// 参考图只存了本站 URL：dataUrl 先放 URL 让缩略图能显示；
@@ -11858,7 +11910,7 @@ h(
 						urls.forEach((url) => {
 							urlToDataUrl(url)
 								.then((dataUrl) => {
-									if (dataUrl) setReferences((current) => current.map((item) => (item.url === url ? { ...item, dataUrl } : item)));
+									if (dataUrl && epoch === inputEpoch.current) setReferences((current) => current.map((item) => (item.url === url ? { ...item, dataUrl } : item)));
 								})
 								.catch(() => {});
 						});
@@ -11867,44 +11919,25 @@ h(
 					toast(t("chat.edited"));
 				},
 				attachReference: async ({ name, dataUrl }) => {
-					appendReference({ name, dataUrl, url: "" });
+					if (!dataUrl || !appendReference({ name, dataUrl, url: "" })) return false;
+					const epoch = inputEpoch.current;
 					setEditMode(false);
 					// 上传同时留档 + 拿到一个本站 URL：任务记录里只存这个 URL，
 					// 「我发出去的那条消息」靠它显示缩略图（原始 base64 不进历史）。
 					const url = await uploadRefData(name, dataUrl);
-					if (url) setReferences((current) => current.map((item) => (item.dataUrl === dataUrl && !item.url ? { ...item, url } : item)));
+					if (url && epoch === inputEpoch.current) setReferences((current) => current.map((item) => (item.dataUrl === dataUrl && !item.url ? { ...item, url } : item)));
+					return epoch === inputEpoch.current;
 				},
 				clearReference: () => {
+					++inputEpoch.current;
 					setReferences([]);
 					setEditMode(false);
 				},
 				removeReference: (index) => {
 					setReferences((current) => current.filter((_, position) => position !== index));
 				},
-				useAsReference: async (asset) => {
-					try {
-						const dataUrl = await urlToDataUrl(asset.url);
-						// 留档拿 URL：多张参考图里少一张 URL，发出去就会变成单图
-						const url = await uploadRefData(asset.name, dataUrl);
-						appendReference({ name: asset.name, dataUrl, url });
-						setEditMode(true);
-						setView("chat");
-						toast(t("chat.reuse"));
-					} catch (error) {
-						toast(String(error?.message ?? error), "err");
-					}
-				},
-				switchToEdit: async (image) => {
-					try {
-						const dataUrl = await urlToDataUrl(image.url);
-						const url = await uploadRefData(image.name, dataUrl);
-						appendReference({ name: image.name, dataUrl, url });
-						setEditMode(true);
-						toast(t("chat.reuse"));
-					} catch (error) {
-						toast(String(error?.message ?? error), "err");
-					}
-				},
+				useAsReference: (asset) => addAssetReference(asset, true),
+				switchToEdit: (image) => addAssetReference(image, false),
 				/** 保存到本地：宿主把图库原图复制进「保存目录」，回一条可点的路径。 */
 				exportAsset: async (image) => {
 					const name = assetFileName(image);
@@ -11981,17 +12014,7 @@ h(
 				},
 				/** 查看器「用作参考图」：拿回字节挂成参考图，回对话生图。 */
 				viewerUseReference: async (image) => {
-					try {
-						const dataUrl = await urlToDataUrl(new URL(image.url, window.location.origin).toString());
-						const url = await uploadRefData(image.name || "image.png", dataUrl);
-						setViewer(null);
-						appendReference({ name: image.name || "image.png", dataUrl, url });
-						setEditMode(true);
-						setView("chat");
-						toast(t("chat.reuse"));
-					} catch (error) {
-						toast(String(error?.message ?? error), "err");
-					}
+					if (await addAssetReference(image, true)) setViewer(null);
 				},
 				/** 查看器里「图片处理」：把图读成 dataUrl 交给 PsView 载入。 */
 				viewerEdit: async (image) => {
@@ -12006,24 +12029,25 @@ h(
 				},
 				clearPsImage: () => setPsImage(null),
 				viewerDelete: async (image) => {
-					const id = image?.assetId;
-					if (!id) return;
+					const id = libraryIdFor(image);
+					if (viewer?.source !== "library" || !id || deletingAssetIds.current.has(id)) return;
 					if (!window.confirm(`${t("lib.delete")} ${image.name || ""}?`)) return;
-					try {
-						const payload = await call("/library/delete", { method: "POST", body: { ids: [id] } });
-						setLibrary(payload.items || []);
-						setViewer(null);
+					if (await actions.deleteAssets([id])) {
+						setViewer((open) => {
+							if (!open || open.items !== viewer.items) return open;
+							const shown = open.items[open.index];
+							if (libraryIdFor(shown) === id) return null;
+							const items = open.items.filter((item) => libraryIdFor(item) !== id);
+							return { ...open, items, index: Math.max(0, items.indexOf(shown)) };
+						});
 						toast(t("common.ok"));
-					} catch (error) {
-						toast(String(error?.message ?? error), "err");
 					}
 				},
 				/** 快捷拖拽落进输入区：先把 URL 读成字节，再走和粘贴/上传同一条路。 */
 				attachImageUrl: async (image) => {
 					try {
 						const dataUrl = await urlToDataUrl(new URL(image.url, window.location.origin).toString());
-						await actions.attachReference({ name: image.name || "image.png", dataUrl });
-						toast(t("chat.pasted"));
+						if (await actions.attachReference({ name: image.name || "image.png", dataUrl })) toast(t("chat.pasted"));
 					} catch (error) {
 						toast(String(error?.message ?? error), "err");
 					}
@@ -12071,22 +12095,12 @@ h(
 				},
 				/** 点一张预设卡：提示词进输入框，参考图挂上，回到对话生图。 */
 				applyPreset: async (preset) => {
+					const epoch = inputEpoch.current;
+					if (preset?.image && !await addAssetReference({url:preset.image, name:preset.title}, false)) return false;
+					if (epoch !== inputEpoch.current) return false;
 					const prompt = String(preset?.prompt || "").trim();
-					if (prompt) {
-						setDraft((value) => (value.trim().length === 0 ? prompt : `${value.replace(/\s+$/, "")}\n${prompt}`).slice(0, 500));
-					}
-					if (preset?.image) {
-						try {
-							const dataUrl = preset.image.startsWith("data:") ? preset.image : await urlToDataUrl(preset.image);
-							const url = await uploadRefData(preset.title || "preset", dataUrl);
-							appendReference({ name: preset.title || "preset", dataUrl, url });
-							setEditMode(true);
-						} catch (error) {
-							toast(String(error?.message ?? error), "err");
-						}
-					}
-					setView("chat");
-					toast(t("preset.used", { title: preset?.title || "" }));
+					if (prompt) setDraft((value) => (value.trim() ? `${value.trimEnd()}\n${prompt}` : prompt).slice(0, 500));
+					setView("chat"); toast(t("preset.used", { title: preset?.title || "" })); return true;
 				},
 				insertNote: (note) => {
 					const parts = [note.prompt, note.meta].filter(Boolean).join("\n");
@@ -12121,20 +12135,28 @@ h(
 					}
 				},
 				deleteAssets: async (ids) => {
+					const targets = [...new Set(ids)].filter((id) => library.some((asset) => asset.id === id));
+					if (!targets.length || targets.some((id) => deletingAssetIds.current.has(id))) return false;
+					targets.forEach((id) => deletingAssetIds.current.add(id));
 					try {
-						await call("/library/delete", { method: "POST", body: { ids } });
-						await actions.reloadLibrary();
+						await call("/library/delete", { method: "POST", body: { ids: targets } });
+						setLibrary((list) => list.filter((item) => !targets.includes(item.id)));
+						return true;
 					} catch (error) {
 						toast(String(error?.message ?? error), "err");
-					}
+						return false;
+					} finally { targets.forEach((id) => deletingAssetIds.current.delete(id)); }
 				},
 				saveProvider: async (provider) => {
 					try {
 						const payload = await call("/providers", { method: "POST", body: provider });
+						if (!payload?.ok) throw new Error(payload?.error || t("common.failed"));
 						setProviders(payload.items || []);
 						toast(t("common.ok"));
+						return true;
 					} catch (error) {
 						toast(String(error?.message ?? error), "err");
+						return false;
 					}
 				},
 				deleteProvider: async (id) => {
@@ -12145,17 +12167,18 @@ h(
 						toast(String(error?.message ?? error), "err");
 					}
 				},
-				testProvider: async ({ id, baseUrl, apiKey }) => {
+				testProvider: async ({ scope, id, baseUrl, apiKey, useRuntimeKey }) => {
+					let payload;
 					try {
-						const payload = await call("/providers/test", { method: "POST", body: { id, baseUrl, apiKey } });
-						if (payload.ok) toast(`${t("common.ok")} · ${payload.models.length} models · ${payload.elapsedMs}ms`);
-						// 有「key 和地址不是一家的」那句解释就优先摆它（否则只有一句 invalid access key）
-						else toast(payload.hint || payload.error || t("common.failed"), "err");
-						return payload;
+						payload = await call("/providers/test", { method: "POST", body: { scope, id, baseUrl, apiKey, useRuntimeKey } });
 					} catch (error) {
-						toast(String(error?.message ?? error), "err");
-						return null;
+						payload = { ok: false, error: String(error?.message ?? error) };
 					}
+					if (scope === "runtime") {
+						if (payload.ok) toast(`${t("common.ok")} · ${payload.models.length} models · ${payload.elapsedMs}ms`);
+						else toast(payload.hint || payload.error || t("common.failed"), "err");
+					}
+					return payload;
 				},
 				refreshModels: async (providerId) => {
 					try {
@@ -12270,8 +12293,6 @@ h(
 				sideOpen,
 				conversations,
 				conversationId,
-				contextOn,
-				contextNoAutoImage,
 				isVideoEndpoint,
 				jsonOpen,
 				jsonDraft,
@@ -12300,7 +12321,7 @@ h(
 								? h(PsView, { state, actions, initialUrl: psImage, onConsumeInitialUrl: actions.clearPsImage })
 								: h(ProvidersView, { state, actions });
 
-			return h(
+			return h(FeedbackContext?.Provider || react.Fragment, FeedbackContext ? {value:toasts} : null, h(
 				"div",
 				{ className: "vig-root", ref: rootRef, "data-compact": wide ? "0" : "1" },
 				h("style", null, CSS),
@@ -12441,6 +12462,7 @@ h(
 						await actions.attachReference({ name: file.name, dataUrl });
 					}
 				}),
+				pickOpen && view === "chat" ? h(ReferencePicker, { library, onDismiss: () => setPickOpen(false), onPick: actions.useAsReference }) : null,
 				// 图片查看器（大图 / 缩放 / 翻页 / 用作参考图 / 丢进图片处理）
 				viewer
 					? h(ImageViewer, {
@@ -12455,11 +12477,11 @@ h(
 							onCopy: actions.copyImage,
 							onDownload: actions.downloadAsset,
 							onQuadApply: actions.viewerQuadApply,
-							onDelete: viewer.source === "library" ? actions.viewerDelete : null
+							onDelete: viewer.source === "library" && libraryIdFor(viewer.items[viewer.index]) ? actions.viewerDelete : null
 						})
 					: null,
 				toasts
-			);
+			));
 		}
 
 		/* ------------------------------------------------------------------ *
@@ -12633,19 +12655,30 @@ h(
 				"div",
 				{ className: "vig-dock", style: { "--vig-dock-w": `${width}px` } },
 				h("span", {
-					className: "vig-dock-grip",
+					className: "vig-dock-grip", role: "separator", tabIndex: 0, "aria-orientation": "vertical", "aria-label": t("panel.params"),
+					"aria-valuemin": 320, "aria-valuemax": 900, "aria-valuenow": width,
+					onKeyDown: (e) => {
+						if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+						e.preventDefault(); setWidth((w) => e.key === "Home" ? 320 : e.key === "End" ? 900 : Math.max(320, Math.min(900, w + (e.key === "ArrowLeft" ? 16 : -16))));
+					},
 					title: t("panel.params"),
 					onPointerDown: (event) => {
 						event.preventDefault();
 						const startX = event.clientX;
-						const startWidth = width;
+						const grip = event.currentTarget;
+						psCapturePointer(grip,event.pointerId);
+						const startWidth = grip.parentElement.getBoundingClientRect().width;
 						const move = (moveEvent) => setWidth(Math.min(900, Math.max(320, startWidth + (startX - moveEvent.clientX))));
 						const stop = () => {
-							window.removeEventListener("pointermove", move);
-							window.removeEventListener("pointerup", stop);
+							grip.removeEventListener("pointermove", move);
+							grip.removeEventListener("pointerup", stop);
+							grip.removeEventListener("lostpointercapture", stop);
+							grip.removeEventListener("pointercancel", stop);
 						};
-						window.addEventListener("pointermove", move);
-						window.addEventListener("pointerup", stop);
+						grip.addEventListener("pointermove", move);
+						grip.addEventListener("pointerup", stop);
+						grip.addEventListener("lostpointercapture", stop);
+						grip.addEventListener("pointercancel", stop);
 					}
 				}),
 				h("div", { className: "vig-dock-body" }, h(PluginBoundary, null, h(Workbench, { onOpenInRightbar: null })))

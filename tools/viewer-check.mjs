@@ -9,6 +9,8 @@
 //   4. 把这坨拖拽数据丢进输入区 → 真走 /upload，挂成参考图；
 //   5. 供应商页的「素材目录」块：显示当前目录、保存时 POST /config(stateDir)、打开目录打 /state/reveal。
 
+import { auditGallery } from "../test/library-audit.test.mjs";
+import { auditWorkbench } from "./workbench-audit.mjs";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -364,6 +366,11 @@ flushSync(() => root.render(React.createElement(ui.Workbench, { onOpenInRightbar
 const shot = await waitFor(() => host.querySelector(".vig-grid.is-duo .vig-shot-img") ?? host.querySelector(".vig-shot-img"), 6000);
 check("结果卡挂起来了（有可点的图）", Boolean(shot), shot ? "" : "没有 .vig-shot-img");
 
+if (["workbench", "gallery"].includes(new URLSearchParams(location.search).get("audit"))) {
+ const audit=new URLSearchParams(location.search).get("audit") === "gallery" ? (${auditGallery.toString()}) : (${auditWorkbench.toString()});
+ await audit({host,check,wait,flushSync,posts});
+ const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
 /* ---- 结果图按张数给画面占比：单图最多一半宽，两张收敛 ---- */
 const singleGrid = host.querySelector(".vig-grid.is-single");
 const duoGrid = host.querySelector(".vig-grid.is-duo");
@@ -932,17 +939,8 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 			flushSync(() => ctxBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 			await wait(300);
 		}
-		check(
-			"上下文对话式浮层：点 ✨ 打开（自动整理 / 轮数滑块 / 限制直接出图 / 已读配置）",
-			Boolean(host.querySelector(".vig-ctx-pop")) && host.querySelectorAll(".vig-ctx-row").length >= 3 && Boolean(host.querySelector(".vig-ctx-range")),
-			JSON.stringify({ pop: Boolean(host.querySelector(".vig-ctx-pop")), rows: host.querySelectorAll(".vig-ctx-row").length })
-		);
-		check(
-			"对话模型在上下文浮层里单独选（不混进生图模型下拉）",
-			Boolean(host.querySelector(".vig-ctx-select")) &&
-				Array.from(host.querySelectorAll(".vig-ctx-select option")).some((option) => String(option.value) === "mock-chat"),
-			JSON.stringify(Array.from(host.querySelectorAll(".vig-ctx-select option")).map((option) => String(option.value)))
-		);
+		check("发送说明与真实执行路径一致",text(host.querySelector(".vig-ctx-pop")).includes("直接生图") && !host.querySelector(".vig-ctx-pop input"));
+		check("生成摘要能打开 JSON 核对参数",Boolean(host.querySelector(".vig-ctx-pop button")));
 	}
 	if (new URLSearchParams(location.search).get("popover") === "model") {
 		const pickBtn = host.querySelector(".vig-tools .vig-pick");
@@ -1657,7 +1655,7 @@ const query = getArg("--query", hold ? `hold=${encodeURIComponent(hold)}` : "");
 const url = `file:///${page.replace(/\\/g, "/")}${query ? `?${query}` : ""}`;
 const args = ["--headless=new", "--disable-gpu", "--no-sandbox", "--virtual-time-budget=30000"];
 if (shotPath) args.push("--hide-scrollbars", "--window-size=1040,900", `--screenshot=${shotPath}`);
-if (!shotPath && /ps=pick|audit=json/.test(query)) args.push("--window-size=1440,1000");
+if (!shotPath && /ps=pick|audit=/.test(query)) args.push("--window-size=1440,1000");
 args.push("--dump-dom", url);
 const dom = execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 

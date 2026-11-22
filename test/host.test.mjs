@@ -1282,27 +1282,53 @@ await call("/providers", {
   body: { id: mockProvider.id, name: mockProvider.name, baseUrl: mockProvider.baseUrl, models: mockProvider.models, apiKey: "sk-mock" }
 });
 
-/* B) 401 invalid access key 时，宿主拿这把 key 去问本地配置过的其它 baseUrl，
-   谁认它就把「该填哪个地址」说出来（只问本地已有的站）。 */
+/* B) 只访问所选本地假上游，401/403 不得引出额外请求。 */
 const mockKeySecret = "sk-mock";
+const deniedHits = [];
+let denyStatus = 401;
 const badKeyServer = http.createServer((request, response) => {
+  deniedHits.push({ url: request.url, auth: request.headers.authorization });
   const body = JSON.stringify({ error: { message: "invalid access key", code: "invalid_key", type: "auth" } });
-  response.writeHead(401, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+  response.writeHead(denyStatus, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
   response.end(body);
 });
 await new Promise((resolve) => badKeyServer.listen(0, "127.0.0.1", resolve));
 const badBase = `http://127.0.0.1:${badKeyServer.address().port}/v1`;
 const originalRuntime = (await call("/status")).body?.config?.baseUrl ?? "";
-await call("/config", { method: "POST", body: { baseUrl: mockBase } });
-const keyMismatch = await call("/providers/test", { method: "POST", body: { id: mockProvider.id, baseUrl: badBase, apiKey: mockKeySecret } });
+await call("/config", { method: "POST", body: { baseUrl: mockBase, apiKey: "runtime-fixture" } });
+const probe = (body) => call("/providers/test", { method: "POST", body });
+await probe({ scope: "runtime", id: mockProvider.id });
+check("运行期测试忽略供应商 id，只从运行期读取凭据", mockHits.at(-1)?.auth === "Bearer runtime-fixture");
+await probe({ scope: "provider", id: mockProvider.id, apiKey: "" });
+check("供应商测试留空使用其已存密钥", mockHits.at(-1)?.auth === "Bearer sk-mock");
+await probe({ scope: "provider", id: mockProvider.id, apiKey: "", useRuntimeKey: true });
+check("供应商测试显式切换可验证运行期密钥，不写回已存密钥", mockHits.at(-1)?.auth === "Bearer runtime-fixture");
+const previousCount = mockHits.length;
+const missing = await probe({ scope: "provider", baseUrl: mockBase, useRuntimeKey: false });
+check("新供应商未选运行期且没填 key 时不借用全局凭据", missing.status === 400 && missing.body?.code === "missing_api_key" && previousCount === mockHits.length);
+const unknownProviderProbe = await probe({ scope: "provider", id: "unknown-fixture" });
+check("找不到的供应商不会回落到运行期", unknownProviderProbe.status === 404 && previousCount === mockHits.length);
+const wrongOrigin = await probe({ scope: "provider", id: mockProvider.id, baseUrl: badBase });
+check("未保存的跨源地址不能带走旧供应商密钥", wrongOrigin.body?.code === "credential_origin_changed" && !deniedHits.length);
+const emptyProvider = (await call("/providers", { method: "POST", body: { name: "明确不继承", baseUrl: mockBase, models: ["missing-own-key"], useRuntimeKey: false } })).body.item;
+const emptyTest = await probe({ scope: "provider", id: emptyProvider.id });
+const emptyRefresh = await call("/models/refresh", { method: "POST", body: { providerId: emptyProvider.id } });
+const emptyGen = await call("/generate", { method: "POST", body: { prompt: "本地拒绝", model: "missing-own-key", providerId: emptyProvider.id } });
+const emptyJob = await pollJob(emptyGen.body.job?.id);
+check("明确不继承的供应商：投影不显示全局 key，测试/刷新/生成均缺凭据且零上游请求", !emptyProvider.usesRuntimeKey && !emptyProvider.keyMask && emptyTest.body.code === "missing_api_key" && emptyRefresh.body.code === "missing_api_key" && emptyJob?.errorCode === "missing_api_key" && mockHits.length === previousCount);
+const enabled = (await call("/providers", { method: "POST", body: { id: emptyProvider.id, useRuntimeKey: true } })).body.item;
+const enabledRefresh = await call("/models/refresh", { method: "POST", body: { providerId: enabled.id } });
+check("明确勾选后：公开状态与刷新使用的运行期凭据一致", enabled.usesRuntimeKey && enabled.keyMask && enabledRefresh.body.ok && mockHits.at(-1)?.auth === "Bearer runtime-fixture");
+await call("/providers/delete", { method: "POST", body: { id: enabled.id } });
+const otherHitsBefore = [mockHits.length, hitsB.length];
+const keyMismatch = await probe({ scope: "provider", id: mockProvider.id, baseUrl: badBase, apiKey: mockKeySecret });
 check(
-  "测试连接 401：原样报上游那句话，并解释「key 和地址不是一家的」",
-  keyMismatch.body?.ok === false &&
-    keyMismatch.body?.error === "invalid access key" &&
-    typeof keyMismatch.body?.hint === "string" &&
-    keyMismatch.body.hint.includes(mockBase) &&
-    keyMismatch.body.hint.includes("可用"),
-  JSON.stringify(keyMismatch.body ?? null)
+  "测试连接 401：原文及本地排查提示保留，不向其它源发送凭据",
+  keyMismatch.body?.ok === false && keyMismatch.body?.error === "invalid access key" &&
+    keyMismatch.body?.hint?.includes("未向其他地址") && !keyMismatch.body.hint.includes(mockKeySecret) &&
+    deniedHits.length === 1 && deniedHits[0].auth === "Bearer sk-mock" &&
+    mockHits.length === otherHitsBefore[0] && hitsB.length === otherHitsBefore[1],
+  JSON.stringify({ status: keyMismatch.body?.detail?.status, hint: keyMismatch.body?.hint })
 );
 check(
   "测试连接失败时带原始证据（GET /models 的地址与状态码）",
@@ -1323,12 +1349,16 @@ const badGen = await call("/generate", {
 });
 const badJob = await pollJob(badGen.body?.job?.id);
 check(
-  "生成 401：任务失败，errorDetail 里也带「key 和地址不是一家的」那句话",
-  badJob?.status === "failed" && String(badJob?.errorDetail?.hint ?? "").includes(mockBase) && badJob?.errorDetail?.status === 401,
-  JSON.stringify({ status: badJob?.status, hint: String(badJob?.errorDetail?.hint ?? "").slice(0, 120) })
+  "生成 401：记录原始 HTTP 状态和本地提示，不发任何伴随探测",
+  badJob?.status === "failed" && badJob.errorDetail?.status === 401 && badJob.errorDetail?.hint?.includes("未向其他地址") &&
+    deniedHits.length === 2 && deniedHits[1].url === "/v1/images/generations" && mockHits.length === otherHitsBefore[0] && hitsB.length === otherHitsBefore[1]
 );
+denyStatus = 403;
+const forbidden = await probe({ scope: "runtime", baseUrl: badBase, apiKey: "draft-fixture" });
+check("403 仅验证当前显式输入的运行期草稿，不发第二次请求", forbidden.body?.hint?.includes("HTTP 403") &&
+  deniedHits.length === 3 && deniedHits[2].auth === "Bearer draft-fixture" && mockHits.length === otherHitsBefore[0] && hitsB.length === otherHitsBefore[1]);
 await call("/providers/delete", { method: "POST", body: { id: badProvider?.id ?? "" } });
-await call("/config", { method: "POST", body: { baseUrl: originalRuntime } });
+await call("/config", { method: "POST", body: { baseUrl: originalRuntime, apiKey: KEY } });
 await new Promise((resolve) => badKeyServer.close(resolve));
 
 /* ---- 素材目录可配置：默认在本地，换目录时把现有素材复制过去 ------- */

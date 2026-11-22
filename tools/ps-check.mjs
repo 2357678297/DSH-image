@@ -34,7 +34,7 @@ const sec = (name, fn) => {
 };
 
 const record = window.__vigRecord;
-const stub = new Proxy({ createElement: () => null, Fragment: null }, { get: (t, k) => (k in t ? t[k] : () => null) });
+const stub = new Proxy({ createElement: () => null, Component: class {}, Fragment: null }, { get: (t, k) => (k in t ? t[k] : () => null) });
 let ui = null;
 try {
 	ui = record ? record.factory((request) => (request === "react" ? stub : {})).__internals : null;

@@ -387,7 +387,11 @@ for (const [view, needle] of [
   check("供应商页不再是 <table>", !html.includes("vig-table") && !html.includes("<table"));
   check(
     "运行期配置初值直接取配置（靠 effect 回填的话首帧是空输入框）",
-    /useState\(\(\) => \(\{ baseUrl: state\.config\.baseUrl, apiKeyEnv: state\.config\.apiKeyEnv, dir: state\.config\.stateDir \|\| "", chatModel: state\.config\.chatModel \|\| "", contextTurns: state\.config\.contextTurns \?\? 6 \}\)\)/.test(SOURCE)
+    (() => {
+      const { ProvidersView } = boot().module.__internals;
+      const markup = renderToStaticMarkup(React.createElement(ProvidersView, { state: { config: { baseUrl: "http://localhost:331/v1", apiKeyEnv: "FIXTURE_ENV", hasKey: false, stateDir: "fixture-dir" }, providers: [] }, actions: {} }));
+      return markup.includes('value="http://localhost:331/v1"') && markup.includes('value="FIXTURE_ENV"') && markup.includes('value="fixture-dir"') && markup.includes('data-runtime-test="1"');
+    })()
   );
 }
 
@@ -2150,7 +2154,7 @@ check(
 );
 {
   const start = SOURCE.indexOf('title: t("panel.provider")');
-  const card = SOURCE.slice(start, SOURCE.indexOf("vig-modal-mask", start));
+  const card = SOURCE.slice(start, SOURCE.indexOf("const PS_TOOLS", start));
   check("检查器里的供应商卡不再重复密钥与「供应商管理」跳转", start > 0 && !card.includes("status.key") && !card.includes('t("nav.providers")'));
 }
 {
@@ -2759,7 +2763,7 @@ check(
     );
     check(
       "查看器：标题 / 计数 / 提示词 / 元信息都在，大图铺在舞台里",
-      viewer.includes('class="vig-viewer"') &&
+      viewer.includes('<dialog class="vig-viewer vig-dialog-frame"') &&
         viewer.includes("cat.png") &&
         viewer.includes("1 / 2") &&
         viewer.includes("一只戴眼镜的橘猫") &&
@@ -2919,7 +2923,7 @@ check(
       /const dragged = readImageDrag\(event\.dataTransfer\);/.test(SOURCE) &&
         /if \(actions\.attachImageUrl\) await actions\.attachImageUrl\(dragged\);/.test(SOURCE) &&
         /attachImageUrl: async \(image\) => \{/.test(SOURCE) &&
-        /await actions\.attachReference\(\{ name: image\.name \|\| "image\.png", dataUrl \}\);/.test(SOURCE)
+        /if \(await actions\.attachReference\(\{ name: image\.name \|\| "image\.png", dataUrl \}\)\) toast/.test(SOURCE)
     );
     check(
       "结果卡与图库都能拖 / 都能开查看器（结果卡点击开 / 图库图片点击开 + 一个「图片查看器」按钮）",
@@ -3094,9 +3098,9 @@ check(
       (bubble.match(/vig-fail-chip/g) || []).length === 1,
     bubble.slice(0, 170)
   );
-  /* 「key 填得没错、地址不是这家」：宿主带回来的那句话要摆出来，别让人对着 401 干瞪眼 */
+  /* 回显宿主提供的本地排查提示，同时保留当前目标的原始错误。 */
   check(
-    "失败卡带上「key 和接口地址不是一家的」那句人话",
+    "失败卡展示本地鉴权提示，不声称这把 key 在其它源可用",
     (() => {
       const hinted = renderToStaticMarkup(
         React.createElement(w.JobTurn, {
@@ -3109,7 +3113,7 @@ check(
               method: "POST",
               url: "https://gank.velapi.cc/v1/images/generations",
               body: '{"error":{"message":"invalid access key"}}',
-              hint: "密钥和接口地址不是一家的：这把 key 在 https://api.velapi.cc/v1 上可用（61 个模型），在 https://gank.velapi.cc/v1 上被拒（HTTP 401 invalid access key）。"
+              hint: "当前接口拒绝了凭据（HTTP 401）。请核对密钥来源、地址和权限；未向其他地址测试此密钥。"
             }
           },
           onReuseImage: () => {},
@@ -3119,8 +3123,8 @@ check(
       );
       return (
         hinted.includes('class="vig-fail-hint"') &&
-        hinted.includes("不是一家的") &&
-        hinted.includes("api.velapi.cc") &&
+        hinted.includes("当前接口拒绝了凭据") &&
+        hinted.includes("未向其他地址测试此密钥") &&
         /\.vig-fail-hint\{[^}]*white-space:pre-wrap/.test(SOURCE)
       );
     })(),
@@ -3129,7 +3133,8 @@ check(
   check(
     "测试连接失败时把结果留在弹窗里（成功/失败 + 证据 + 那句人话），不是一闪而过的提示条",
     /const \[testInfo, setTestInfo\] = useState\(null\)/.test(SOURCE) &&
-      /const payload = await actions\.testProvider\(\{ id: dialog\.id, baseUrl: dialog\.baseUrl, apiKey: dialog\.apiKey \}\);[\s\S]{0,80}setTestInfo\(payload \?\? null\);/.test(SOURCE) &&
+      /if \(rev === draftRevision\.current\) setTestInfo\(payload \?\? null\)/.test(SOURCE) &&
+      /actions\.testProvider\(\{ scope: "provider", id: dialog\.id, baseUrl: dialog\.baseUrl/.test(SOURCE) &&
       /className: `vig-prov-test\$\{testInfo\.ok \? " is-ok" : " is-bad"\}`/.test(SOURCE) &&
       /testInfo\.hint \? h\("div", \{ className: "vig-prov-test-hint" \}, testInfo\.hint\) : null/.test(SOURCE) &&
       /provider\.keyMask|testInfo\.error \|\| t\("common\.failed"\)/.test(SOURCE)
@@ -3547,7 +3552,7 @@ check(
     /\.vig-toasts\{position:fixed;top:10px;left:50%;transform:translateX\(-50%\)/.test(css) &&
       /\.vig-toast\{[^}]*padding:0 3em/.test(css) &&
       /\.vig-toast\{[^}]*border-radius:999px/.test(css) &&
-      !/\.vig-toasts\{position:absolute/.test(css)
+      /\.vig-dialog-frame \.vig-toasts\{position:absolute/.test(css)
   );
   check(
     "提示条只有那一句话（成功/失败靠边框着色区分，不再是一条通栏）",

@@ -202,6 +202,10 @@ check(
 	openedTabs.includes("velapi-image-go"),
 	JSON.stringify(openedTabs)
 );
+const grip = launchDockHost.querySelector('.vig-dock-grip');
+const dockKey = key => flushSync(() => grip.dispatchEvent(new KeyboardEvent('keydown', {key,bubbles:true})));
+dockKey('End'); check('停靠条键盘到最大偏好宽度',grip.getAttribute('aria-valuenow')==='900');
+dockKey('Home'); dockKey('ArrowLeft'); check('停靠条可回最小并按步进微调',grip.getAttribute('aria-valuenow')==='336');
 flushSync(() => launchRoot.unmount());
 flushSync(() => launchDockRoot.unmount());
 await wait(80);

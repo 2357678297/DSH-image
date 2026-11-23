@@ -22,6 +22,7 @@
     "wiring": "node tools/verify-wiring.mjs",
     "audit:workbench": "node tools/viewer-check.mjs --query audit=workbench && node tools/viewer-check.mjs --query audit=gallery && node tools/dock-check.mjs",
     "audit:chat": "node tools/viewer-check.mjs --query audit=chatflow && node tools/viewer-check.mjs --query audit=chatscroll && node tools/viewer-check.mjs --query audit=convnav",
+    "audit:grid": "node tools/viewer-check.mjs --query audit=grid",
     "test:gallery-perf": "node test/gallery-perf.test.mjs",
     "test:live": "node test/host.test.mjs --live",
     "preview": "node tools/preview.mjs",

@@ -199,6 +199,37 @@ function writeConvSetting(id, settings) {
 		 * ------------------------------------------------------------------ */
 
 		const zh = {
+			"grid.title": "宫格拆分",
+			"grid.cell": "当前格", "grid.uploadLimit": "这格的 PNG 超出上传限制。请增加行列数，或改用纯文字生成。",
+			"grid.rows": "行",
+			"grid.cols": "列",
+			"grid.coord": "第 {r} 行 · 第 {c} 列",
+			"grid.fill": "填补方式",
+			"grid.edit": "以选中格重绘",
+			"grid.generate": "从文字新生一格",
+			"grid.prompt": "描述这一格要生成的画面或需要改动的细节…",
+			"grid.submit": "生成这一格",
+			"grid.cellPNG": "导出单格 PNG",
+			"grid.allZIP": "拆分全部 · ZIP",
+			"grid.sheetPNG": "下载填补后的整图",
+			"grid.apply": "确认填回选中格",
+			"grid.discard": "弃用候选",
+			"grid.preview": "候选预览 · 将居中裁切至原格比例",
+			"grid.sheet": "宫格工作副本",
+			"grid.safe": "生成会使用当前供应商额度。预览满意后再填回。",
+			"grid.dirty": "已更新工作副本，请下载整图；原图未修改。",
+			"grid.needModel": "当前不是可用的图片模型。可继续拆格导出，或先关闭并切换图片模型。",
+			"grid.busy.load": "正在读取原图…",
+			"grid.busy.generate": "正在生成候选，请稍候…",
+			"grid.busy.export": "正在打包或导出…",
+			"grid.leaveJob": "关闭预览？已提交的任务可能继续生成；不会自动填回。",
+			"grid.leaveDraft": "关闭并放弃未下载的整图修改或未应用的候选？原图不会改变。",
+			"grid.readError": "无法读取图片",
+			"grid.imageLimit": "图片过大：最长边须在 16,384 像素以内，总像素不超过约 5,000 万。",
+			"grid.encodeError": "无法导出 PNG，请检查浏览器内存后重试。",
+			"grid.waitTimeout": "等待超时。请先到原会话核对任务，不要重复提交。",
+			"grid.missingResult": "任务没有返回可用图片。",
+			"grid.close": "关闭宫格拆分",
 			"chat.noReceipt": "未收到任务编号", "chat.noReceiptHint": "没有收到提交回执。请先查看任务记录，避免重复生图。",
 			"chat.restorePrompt": "取回提示词", "chat.replaceForRecovery": "用这条提示词替换正在写的文字？参考图保持不变。", "chat.dismissRecovery": "忽略这条提示",
 			"chat.requestInfo": "本次生成",
@@ -729,6 +760,37 @@ function writeConvSetting(id, settings) {
 		};
 
 		const en = {
+			"grid.title": "Split grid",
+			"grid.cell": "Cell", "grid.uploadLimit": "This cell is too large to upload. Increase the row/column count or generate from text.",
+			"grid.rows": "Rows",
+			"grid.cols": "Columns",
+			"grid.coord": "Row {r} · Column {c}",
+			"grid.fill": "Fill mode",
+			"grid.edit": "Redraw selected cell",
+			"grid.generate": "New cell from text",
+			"grid.prompt": "Describe the image or the changes you want in this cell…",
+			"grid.submit": "Generate this cell",
+			"grid.cellPNG": "Export cell PNG",
+			"grid.allZIP": "Export all cells · ZIP",
+			"grid.sheetPNG": "Download edited sheet",
+			"grid.apply": "Apply to selected cell",
+			"grid.discard": "Discard preview",
+			"grid.preview": "Candidate preview · center-cropped to fit",
+			"grid.sheet": "Working copy of the grid",
+			"grid.safe": "Generation uses your provider quota. Apply the preview to change the sheet.",
+			"grid.dirty": "Working copy updated. Download the sheet to keep it; the original is unchanged.",
+			"grid.needModel": "Choose an image model in the composer to generate. Exporting cells is still available.",
+			"grid.busy.load": "Reading original…",
+			"grid.busy.generate": "Generating a candidate…",
+			"grid.busy.export": "Preparing download…",
+			"grid.leaveJob": "Close the preview? A submitted job can still finish; it will not change this sheet.",
+			"grid.leaveDraft": "Close and discard unexported changes or an unapplied candidate? The original stays unchanged.",
+			"grid.readError": "Cannot read image",
+			"grid.imageLimit": "Image exceeds canvas limits (16384px per side, 48 Mi pixels total).",
+			"grid.encodeError": "Could not export PNG. Check available browser memory.",
+			"grid.waitTimeout": "Timed out. Check the job in this conversation before sending again.",
+			"grid.missingResult": "No usable image was returned.",
+			"grid.close": "Close grid editor",
 			"chat.thinking": "Awaiting submission…",
 			"chat.noReceipt": "No job ID received", "chat.noReceiptHint": "No submission receipt. Check your history before sending again.",
 			"chat.restorePrompt": "Restore prompt", "chat.replaceForRecovery": "Replace the current text with this prompt? Reference images will not change.", "chat.dismissRecovery": "Dismiss notice",
@@ -2467,6 +2529,16 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-dialog-frame>.vig-modal{min-width:0;max-width:100%;max-height:100%;overscroll-behavior:contain}
 .vig-dialog-frame>.vig-modal>*{flex-shrink:0}
 .vig-dialog-frame label,.vig-dialog-frame input,.vig-dialog-frame textarea{min-width:0;max-width:100%}
+.vig-grid-editor{width:min(860px,100%);gap:10px}
+.vig-grid-editor .vig-grid-line{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;min-width:0}
+.vig-grid-editor label{display:inline-flex;align-items:center;gap:6px}.vig-grid-editor .vig-muted{overflow-wrap:anywhere;font-size:12px}
+.vig-grid-editor .vig-sel{width:auto}.vig-grid-editor textarea{width:100%;min-height:48px}
+.vig-grid-stage{position:relative;align-self:center;max-width:100%;overflow:hidden;background:var(--vig-surface-sunken);border-radius:8px}
+.vig-grid-raster,.vig-grid-raster canvas{display:block;width:100%;height:100%}
+.vig-grid-overlay{position:absolute;display:block;object-fit:cover;pointer-events:none;background:var(--vig-surface-sunken)}
+.vig-grid-editor .vig-grid-region{position:absolute;box-sizing:border-box;display:flex;align-items:flex-start;justify-content:flex-start;padding:0;background:transparent;border:0;border-radius:0;box-shadow:inset 0 0 0 1px #ffffffa6;cursor:pointer}
+.vig-grid-editor .vig-grid-region[aria-pressed=true]{box-shadow:inset 0 0 0 3px #00ae76;z-index:1}.vig-grid-region span{margin:3px;padding:1px 5px;border-radius:4px;color:#fff;background:#172026ce;font-size:11px;line-height:1.5;pointer-events:none}
+.vig-grid-editor .vig-grid-region:focus-visible{outline:2px dashed white;outline-offset:-5px}.vig-grid-candidate{width:110px;max-width:38%;max-height:150px;object-fit:cover;border-radius:8px}
 .vig-dialog-frame .vig-modal-title,.vig-prov-test,.vig-item-title,.vig-tag,.vig-block .vig-muted{overflow-wrap:anywhere}
 .vig-item-head{flex-wrap:wrap}.vig-item-head .vig-tag{max-width:100%}
 .vig-root{container:vig-workbench / inline-size}
@@ -3097,7 +3169,43 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		 * 对话生图
 		 * ------------------------------------------------------------------ */
 
-		function Shot({ image, onReuse, onToast, onPreview, onSave }) {
+		/** 以源像素为单位，复用编辑器的舍入边界；拒绝空格，不用裁剪或拉伸去补齐。 */
+		function psGridLayout(width, height, rows, cols) {
+			if (![width, height, rows, cols].every(Number.isSafeInteger) || width < 1 || height < 1 ||
+				width > 0xffffffff || height > 0xffffffff || rows < 1 || cols < 1 ||
+				rows > Math.min(6, height) || cols > Math.min(6, width)) throw new RangeError("无效的宫格尺寸或行列数");
+			return psSplitTiles(width, height, cols, rows).map(({ x, y, w, h }) => ({ x, y, w, h }));
+		}
+
+		function psGridCheckRect(canvas, rect) {
+			if (!canvas || typeof canvas.getContext !== "function") throw new TypeError("需要源画布");
+			const { x, y, w, h } = rect || {};
+			if (![canvas.width, canvas.height, x, y, w, h].every(Number.isSafeInteger) || x < 0 || y < 0 ||
+				w < 1 || h < 1 || x > canvas.width - w || y > canvas.height - h) throw new RangeError("宫格区域超出源画布");
+		}
+
+		function psGridCrop(sourceCanvas, rect) {
+			psGridCheckRect(sourceCanvas, rect);
+			return psSlice(sourceCanvas, rect);
+		}
+
+		function psGridReplace(sourceCanvas, rect, patch) {
+			psGridCheckRect(sourceCanvas, rect);
+			const pw = patch?.naturalWidth ?? patch?.width, ph = patch?.naturalHeight ?? patch?.height;
+			if (![pw, ph].every(Number.isSafeInteger) || pw < 1 || ph < 1) throw new RangeError("需要已解码的替换图");
+			const { x, y, w, h } = rect;
+			const out = psCanvas(sourceCanvas.width, sourceCanvas.height);
+			const ctx = out.getContext("2d");
+			ctx.drawImage(sourceCanvas, 0, 0);
+			// 先清除目标格，透明像素也要替换旧内容；九参 drawImage 只写这个整数矩形。
+			ctx.clearRect(x, y, w, h);
+			const scale = Math.max(w / pw, h / ph);
+			const sw = Math.min(pw, w / scale), sh = Math.min(ph, h / scale);
+			ctx.drawImage(patch, (pw - sw) / 2, (ph - sh) / 2, sw, sh, x, y, w, h);
+			return out;
+		}
+
+		function Shot({ image, onReuse, onToast, onPreview, onSave, onGrid }) {
 			const [busy, setBusy] = useState(false);
 			const safeName = (image.name || "image").replace(/[\\/:*?"<>|]+/g, "_");
 			return h(
@@ -3118,6 +3226,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				h(
 					"figcaption",
 					{ className: "vig-shot-bar" },
+					onGrid ? h("button", {type:"button", className:"vig-mini vig-shot-act", title:t("grid.title"), "aria-label":t("grid.title"), "data-grid-open":"1", onClick:()=>onGrid(image)}, h(Icon,{name:"grid",size:14})) : null,
 					h(
 						"button",
 						{
@@ -3176,6 +3285,167 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					)
 				)
 			);
+		}
+
+		// 宫格编辑：只在打开时解码，不预先为对话流中的每张图创建画布。
+		async function gridLoadImage(url, signal) {
+			const res = await fetch(url, { signal, cache: "no-store", credentials: "same-origin" });
+			if (!res.ok) throw new Error(`${t("grid.readError")} (HTTP ${res.status})`);
+			const blobUrl = URL.createObjectURL(await res.blob());
+			try {
+				const img = new Image(); img.src = blobUrl; await img.decode(); signal.throwIfAborted();
+				if (!img.naturalWidth || !img.naturalHeight || img.naturalWidth * img.naturalHeight > 48 * 1024 * 1024 || Math.max(img.naturalWidth, img.naturalHeight) > 16384) throw new Error(t("grid.imageLimit"));
+				return { img, url: blobUrl };
+			} catch (err) { URL.revokeObjectURL(blobUrl); throw err; }
+		}
+		const gridPNG = (canvas) => new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error(t("grid.encodeError"))), "image/png"));
+		function gridDownload(blob, filename) {
+			const url = URL.createObjectURL(blob), a = document.createElement("a");
+			try { a.href = url; a.download = filename; document.body.append(a); a.click(); }
+			finally { a.remove(); setTimeout(() => URL.revokeObjectURL(url), 30000); }
+		}
+		// PNG 已压缩，ZIP 使用 STORE。逐格编码，不同时为几十格分配位图。
+		async function gridPack(sheet, cells, cols, signal) {
+			const files = [], directory = []; let offset = 0, dirBytes = 0;
+			const record = (size, fields) => {
+				const bytes = new Uint8Array(size), v = new DataView(bytes.buffer);
+				for (const [at, n, value] of fields) n === 4 ? v.setUint32(at, value, true) : v.setUint16(at, value, true);
+				return bytes;
+			};
+			for (const [i, rect] of cells.entries()) {
+				signal.throwIfAborted(); const tile = psGridCrop(sheet, rect); let png;
+				try { png = await gridPNG(tile); } finally { tile.width = tile.height = 1; }
+				const bytes = new Uint8Array(await png.arrayBuffer()), name = new TextEncoder().encode(`r${Math.floor(i / cols) + 1}-c${i % cols + 1}.png`);
+				const crc = psCrc32(bytes), size = png.size;
+				const local = record(30, [[0,4,0x04034b50],[4,2,20],[12,2,33],[14,4,crc],[18,4,size],[22,4,size],[26,2,name.length]]);
+				const center = record(46, [[0,4,0x02014b50],[4,2,20],[6,2,20],[14,2,33],[16,4,crc],[20,4,size],[24,4,size],[28,2,name.length],[42,4,offset]]);
+				files.push(local, name, png); directory.push(center, name); dirBytes += 46 + name.length; offset += 30 + name.length + size;
+			}
+			const end = record(22, [[0,4,0x06054b50],[8,2,cells.length],[10,2,cells.length],[12,4,dirBytes],[16,4,offset]]);
+			return new Blob([...files, ...directory, end], {type:"application/zip"});
+		}
+		function gridOutputSize(rect, configSize, raw) {
+			// 保留当前分辨率档位，在支持的比例中选最接近这一格的；不能沿用整幅宫格的比例。
+			const closest = SIZE_BASE.reduce((a, b) => Math.abs(Math.log(b.w / b.h / (rect.w / rect.h))) < Math.abs(Math.log(a.w / a.h / (rect.w / rect.h))) ? b : a);
+			const tier = SIZE_TIERS.find((t) => t.id === sizePartsFor(configSize).tier || t.id === configSize) || SIZE_TIERS[0];
+			return raw ? {size:tier.id, aspect_ratio:closest.ratio} : { size:`${closest.w * tier.scale}x${closest.h * tier.scale}` };
+		}
+		async function gridWaitJob(job, signal) {
+			const id = job?.id, until = Date.now() + 6 * 60 * 1000;
+			if (!id) throw new Error(t("chat.noReceipt"));
+			while (["queued", "running"].includes(job.status)) {
+				if (Date.now() >= until) throw new Error(t("grid.waitTimeout"));
+				await new Promise((resolve, reject) => {
+					signal.throwIfAborted();
+					const stop = () => { clearTimeout(timer); reject(signal.reason); };
+					const timer = setTimeout(() => { signal.removeEventListener("abort", stop); resolve(); }, 1100);
+					signal.addEventListener("abort", stop, {once:true});
+				});
+				const res = await call(`/job?id=${encodeURIComponent(id)}`, {signal});
+				if (!res?.job || res.job.id !== id) throw new Error(t("grid.missingResult"));
+				job = res.job;
+			}
+			return job;
+		}
+
+		function GridEditor({ target, onClose, onJob, onHandoff }) {
+			const { image, config, providerId, conversationId, sizeRaw, canGenerate } = target;
+			const [rows, setRows] = useState(2), [cols, setCols] = useState(3), [index, setIndex] = useState(0);
+			const [dimensions, setDimensions] = useState(null), [prompt, setPrompt] = useState(""), [mode, setMode] = useState("edit");
+			const [hasEdits, setHasEdits] = useState(false);
+			const [busy, setBusy] = useState("load"), [error, setError] = useState(""), [patch, setPatch] = useState(null), [dirty, setDirty] = useState(false);
+			const mount = useRef(null), sheet = useRef(null), lifecycle = useRef(null), lock = useRef(false), candidate = useRef(null);
+			const tracking = useRef(null);
+			const handoff = () => { if (tracking.current) { onHandoff(tracking.current); tracking.current = null; } };
+			const putSheet = (next) => {
+				next.dataset.gridCanvas = "1"; next.setAttribute("aria-label", t("grid.sheet"));
+				mount.current.replaceChildren(next); const old = sheet.current; sheet.current = next;
+				if (old) old.width = old.height = 1;
+			};
+			const releasePatch = () => { if (candidate.current) URL.revokeObjectURL(candidate.current.url); candidate.current = null; };
+			useEffect(() => {
+				const controller = new AbortController(); lifecycle.current = controller;
+				(async () => {
+					const asset = await gridLoadImage(image.url, controller.signal);
+					try {
+						controller.signal.throwIfAborted(); const w = asset.img.naturalWidth, h = asset.img.naturalHeight;
+						const original = psCanvas(w, h); original.getContext("2d").drawImage(asset.img, 0, 0); putSheet(original);
+						setRows(Math.min(h, 2)); setCols(Math.min(w, 3)); setDimensions({w,h});
+					} finally { URL.revokeObjectURL(asset.url); }
+				})().catch((e) => { if (!controller.signal.aborted) setError(String(e.message || e)); })
+					.finally(() => { if (!controller.signal.aborted) setBusy(""); });
+				return () => { controller.abort(); releasePatch(); if (sheet.current) sheet.current.width = sheet.current.height = 1; sheet.current = null; };
+			}, [image.url]);
+			const cells = useMemo(() => dimensions ? psGridLayout(dimensions.w, dimensions.h, rows, cols) : [], [dimensions, rows, cols]);
+			const rect = cells[index], blocked = !rect || !!busy || !!patch;
+			const boxStyle = (cell) => ({left:`${cell.x/dimensions.w*100}%`, top:`${cell.y/dimensions.h*100}%`, width:`${cell.w/dimensions.w*100}%`, height:`${cell.h/dimensions.h*100}%`});
+			const cellName = (i) => t("grid.coord", {r:Math.floor(i / cols) + 1, c:i % cols + 1});
+			const stem = String(image.name || "sheet").replace(/\.[^.]+$/, "").replace(/[\\/:*?"<>|]+/g, "_");
+			const transact = async (kind, fn) => {
+				if (lock.current || !rect || !lifecycle.current || lifecycle.current.signal.aborted) return;
+				lock.current = true; setBusy(kind); setError(""); const {signal} = lifecycle.current;
+				try { await fn(signal); } catch (e) { if (!signal.aborted) setError(String(e?.message || e)); }
+				finally { lock.current = false; if (!signal.aborted) setBusy(""); }
+			};
+			const dismiss = () => {
+				if ((dirty || patch || busy === "generate") && !window.confirm(t(busy === "generate" ? "grid.leaveJob" : "grid.leaveDraft"))) return;
+				lifecycle.current?.abort(); handoff(); onClose();
+			};
+			const generate = () => {
+				if (blocked || !prompt.trim() || !canGenerate) return;
+				void transact("generate", async (signal) => {
+					const body = { prompt:prompt.trim(), userText:prompt.trim(), conversationId, providerId, model:config.defaultModel,
+						quality:config.defaultQuality, n:1, mode, endpoint:mode === "edit" ? "images_edits" : "images_generations", source:"ui", ...gridOutputSize(rect, config.defaultSize, sizeRaw) };
+					if (mode === "edit") {
+						const tile = psGridCrop(sheet.current, rect);
+						let blob;
+						try { blob = await gridPNG(tile); } finally { tile.width = tile.height = 1; }
+						// 宿主重试依赖 referenceUrls。只上传裁下的这一格，入队时不再重复附带图片字节。
+						if (blob.size > 17 * 1024 * 1024) throw new Error(t("grid.uploadLimit"));
+						const data = await fileToDataUrl(blob); signal.throwIfAborted();
+						const uploaded = await call("/upload", {method:"POST", signal, body:{name:`${stem}-${index+1}.png`,data}});
+						const ref = uploaded?.item?.url;
+						if (!/^\/api\/velapi-image-go\/upload\/[A-Za-z0-9._-]+$/.test(ref || "")) throw new Error(t("grid.readError"));
+						body.referenceUrl = ref; body.referenceUrls = [ref];
+					}
+					signal.throwIfAborted(); const res = await call("/generate", {method:"POST",body,signal});
+					signal.throwIfAborted(); if (res?.job?.id) { tracking.current = res.job.id; onJob(res.job); }
+					let done;
+					try { done = await gridWaitJob(res?.job, signal); } catch (e) { if (!signal.aborted) handoff(); throw e; }
+					signal.throwIfAborted(); tracking.current = null; onJob(done);
+					if (done.status !== "succeeded" || !done.images?.[0]?.url) throw new Error(String(done.error || t("grid.missingResult")));
+					const loaded = await gridLoadImage(done.images[0].url, signal);
+					if (signal.aborted) { URL.revokeObjectURL(loaded.url); return; }
+					candidate.current = { ...loaded, rect, index }; setPatch(candidate.current);
+				});
+			};
+			const applyPatch = () => {
+				if (busy || !patch || patch !== candidate.current || patch.index !== index) return;
+				try { putSheet(psGridReplace(sheet.current, patch.rect, patch.img)); setDirty(true); setHasEdits(true); releasePatch(); setPatch(null); setError(""); }
+				catch (e) { setError(String(e.message || e)); }
+			};
+			const download = (what) => void transact("export", async (signal) => {
+				let file;
+				if (what === "all") file = await gridPack(sheet.current, cells, cols, signal);
+				else if (what === "sheet") file = await gridPNG(sheet.current);
+				else { const tile = psGridCrop(sheet.current, rect); try { file = await gridPNG(tile); } finally { tile.width = tile.height = 1; } }
+				signal.throwIfAborted(); const name = what === "cell" ? `r${Math.floor(index / cols)+1}-c${index % cols+1}.png` : what === "all" ? `${rows}x${cols}.zip` : "grid.png";
+				gridDownload(file, `${stem}-${name}`); if (what === "sheet") setDirty(false);
+			});
+			const button = (key, label, action, disabled, primary=false) => h("button", {type:"button", className:`vig-btn${primary ? " is-primary" : ""}`, [`data-grid-${key}`]:"1", disabled, onClick:action}, t(label));
+			const dimSelect = (key, val, max, set) => h("label", null, t(`grid.${key}`), h("select", {className:"vig-sel", value:val, [`data-grid-${key}`]:"1", disabled:blocked, onChange:(e)=>{set(Number(e.target.value));setIndex(0);setError("");}}, Array.from({length:Math.min(6,max)},(_,i)=>h("option",{key:i+1,value:i+1},i+1))));
+			return h(WorkbenchDialog, {label:t("grid.title"), onDismiss:dismiss}, h("section", {className:"vig-modal vig-grid-editor", "data-grid-editor":"1"},
+				h("div", {className:"vig-grid-line"}, h("strong", {className:"vig-modal-title"}, t("grid.title")), h("span", {className:"vig-spacer"}), h("button", {type:"button", className:"vig-icon-btn", title:t("grid.close"), "aria-label":t("grid.close"), "data-grid-close":"1", onClick:dismiss},h(Icon,{name:"close"}))),
+				h("div", {className:"vig-grid-line"}, dimSelect("rows",rows,dimensions?.h || 2,setRows), dimSelect("cols",cols,dimensions?.w || 3,setCols), rect && h("label",null,t("grid.cell"),h("select",{className:"vig-sel",disabled:blocked,value:index,onChange:(e)=>{setIndex(Number(e.target.value));setError("");}},cells.map((_,i)=>h("option",{key:i,value:i},cellName(i))))), rect && h("span", {className:"vig-muted"}, `${rect.w} × ${rect.h}`)),
+				h("div", {className:"vig-grid-stage", style:dimensions ? {width:`min(100%, ${Math.min(820, 300 * dimensions.w / dimensions.h)}px)`,aspectRatio:`${dimensions.w}/${dimensions.h}`} : undefined},
+					h("div", {className:"vig-grid-raster",ref:mount}),
+					patch && h("img", {className:"vig-grid-overlay", src:patch.url, alt:"", style:boxStyle(patch.rect)}),
+					dimensions && cells.map((cell,i)=>h("button",{key:i,type:"button",className:"vig-grid-region", "data-grid-cell":String(i), "aria-label":cellName(i), "aria-pressed":index===i, title:cellName(i), disabled:blocked, onClick:()=>{setIndex(i);setError("");}, style:boxStyle(cell)},h("span", null, i+1)))),
+				h("div",{className:"vig-grid-line"}, button("export-cell","grid.cellPNG",()=>download("cell"),blocked), button("export-all","grid.allZIP",()=>download("all"),blocked), button("export-sheet","grid.sheetPNG",()=>download("sheet"),blocked || !hasEdits)),
+				h("div",{className:"vig-grid-line"},h("label",null,t("grid.fill"),h("select",{className:"vig-sel","data-grid-mode":"1", value:mode,disabled:blocked,onChange:(e)=>setMode(e.target.value)},h("option",{value:"edit"},t("grid.edit")),h("option",{value:"generate"},t("grid.generate")))),h("span",{className:"vig-muted"},config.defaultModel)),
+				h("textarea",{className:"vig-input", rows:2,maxLength:2000, "aria-label":t("grid.prompt"),placeholder:t("grid.prompt"),"data-grid-prompt":"1",value:prompt,disabled:blocked,onChange:(e)=>setPrompt(e.target.value)}),
+				patch ? h("div",{className:"vig-grid-line"}, h("img", {className:"vig-grid-candidate","data-grid-candidate":"1", src:patch.url, alt:t("grid.preview"),style:{width:`min(38%, ${Math.min(130, 150*rect.w/rect.h)}px)`,aspectRatio:`${rect.w}/${rect.h}`}}),h("span",{className:"vig-muted"},t("grid.preview")),button("apply","grid.apply",applyPatch,false,true),button("discard","grid.discard",()=>{releasePatch();setPatch(null);},false)) : h("div",{className:"vig-grid-line"}, button("generate","grid.submit",generate,blocked || !prompt.trim() || !canGenerate,true),h("span",{role:"status",className:"vig-muted"},busy ? t(`grid.busy.${busy}`) : !canGenerate ? t("grid.needModel") : t(dirty ? "grid.dirty" : "grid.safe"))),
+				error && h("div",{role:"alert",className:"vig-error"},error)));
 		}
 
 		/* ------------------------------------------------------------------ *
@@ -3649,7 +3919,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		 * 以前只渲染回复，翻记录时看不出「当时让它做了什么」—— 提示词是这条任务的一部分，
 		 * 不能只活在输入框里。任务的 prompt 就是发出去的那句话，所以直接用它。
 		 */
-		function JobTurn({ job, onReuseImage, onToast, onRetry, onRefresh, onPreview, onSave, onDelete, onEdit }) {
+		function JobTurn({ job, onReuseImage, onToast, onRetry, onRefresh, onPreview, onSave, onDelete, onEdit, onGrid }) {
 			const pending = job.status === "queued" || job.status === "running";
 			const prompt = typeof job.prompt === "string" ? job.prompt.trim() : "";
 			// 气泡里显示用户原话（对话模型改写后的提示词单独留一行，见下面 planNote）
@@ -3825,6 +4095,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												key: image.assetId,
 												image,
 												onReuse: onReuseImage,
+												onGrid,
 												onToast,
 												onPreview: () => onPreview?.(previewItems, position, "chat"),
 												onSave: onSave ? () => onSave(image) : null
@@ -4097,6 +4368,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						onPreview: actions.openViewer,
 						onSave: actions.exportAsset,
 						onDelete: actions.deleteJob,
+						onGrid: actions.openGrid,
 						onEdit: editInComposer
 					})
 				);
@@ -11611,7 +11883,7 @@ h(
 				renderEditMode(editNow.current = next.edit);
 				jsonOverrideRef.current = next.override;
 				if (!prev && next === current) persistComposer(id, next.text, next.refs, next.edit);
-				setJsonOpen(false); setPickOpen(false);
+				setJsonOpen(false); setPickOpen(false); setGridTarget(null);
 				const saved = readConvSettings()[id] || initialConfigRef.current;
 				if (saved) setConfig((previous) => ({ ...previous, ...saved }));
 			}, []);
@@ -11648,6 +11920,7 @@ h(
 			const [capsInfo, setCapsInfo] = useState(null);
 			// 图片查看器：{ items, index, source }；source = chat / library（决定给不给「删除」）
 			const [viewer, setViewer] = useState(null);
+			const [gridTarget, setGridTarget] = useState(null);
 			const deletingAssetIds = useRef(new Set());
 			const libraryIdFor = (image) => {
 				const id = image?.id || image?.assetId;
@@ -12286,6 +12559,13 @@ h(
 					}
 				},
 				/* ---- 图片查看器 ---- */
+				openGrid: (image) => {
+					const model = config.defaultModel;
+					const known = providers.some((provider) => provider.enabled !== false && provider.models?.includes(model));
+					const kind = modelKindOf(model, providers);
+					setGridTarget({image, config:{defaultModel:model, defaultQuality:config.defaultQuality, defaultSize:config.defaultSize},
+						conversationId, sizeRaw, providerId:providerIdForModel(providers,config,model), canGenerate:known && (!kind || kind === "image")});
+				},
 				openViewer: (items, index = 0, source = "chat") => setViewer({ items: Array.isArray(items) ? items : [], index, source }),
 				closeViewer: () => setViewer(null),
 				setViewerIndex: (index) => setViewer((current) => (current ? { ...current, index } : current)),
@@ -12751,6 +13031,13 @@ h(
 					}
 				}),
 				pickOpen && view === "chat" ? h(ReferencePicker, { library, onDismiss: () => setPickOpen(false), onPick: actions.useAsReference }) : null,
+				gridTarget && view === "chat" && gridTarget.conversationId === conversationId ? h(GridEditor, {
+					key:`${gridTarget.conversationId}:${gridTarget.image.assetId || gridTarget.image.url}`, target:gridTarget, onClose:()=>setGridTarget(null), onHandoff:watchJob, onJob:(job)=>{
+						if (conversationIdRef.current !== gridTarget.conversationId) return;
+						setJobs(list=>list.some(item=>item.id===job.id) ? list.map(item=>item.id===job.id ? {...item,...job} : item) : [job,...list]);
+						if (job.status === "succeeded") void actions.reloadLibrary().catch(()=>{});
+					}
+				}) : null,
 				// 图片查看器（大图 / 缩放 / 翻页 / 用作参考图 / 丢进图片处理）
 				viewer
 					? h(ImageViewer, {
@@ -13440,6 +13727,7 @@ h(
 			psRectFrom,
 			psResizeRect,
 			psSplitTiles,
+			psGridLayout, psGridCrop, psGridReplace,
 			psInscribedSize,
 			psAnchorOffset,
 			psDeskewAngle,

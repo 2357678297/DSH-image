@@ -9,6 +9,8 @@
 //   4. 把这坨拖拽数据丢进输入区 → 真走 /upload，挂成参考图；
 //   5. 供应商页的「素材目录」块：显示当前目录、保存时 POST /config(stateDir)、打开目录打 /state/reveal。
 
+import { auditGridUI, runGridPage } from "../test/grid-ui.test.mjs";
+import { auditGridPixels } from "../test/grid-pixels.test.mjs";
 import { auditChatScroll } from "../test/chat-scroll.test.mjs";
 import { auditChatFlow } from "../test/chat-flow.test.mjs";
 import { auditGallery } from "../test/library-audit.test.mjs";
@@ -371,6 +373,11 @@ flushSync(() => root.render(React.createElement(ui.Workbench, { onOpenInRightbar
 const shot = await waitFor(() => host.querySelector(".vig-grid.is-duo .vig-shot-img") ?? host.querySelector(".vig-shot-img"), 6000);
 check("结果卡挂起来了（有可点的图）", Boolean(shot), shot ? "" : "没有 .vig-shot-img");
 
+if (new URLSearchParams(location.search).get("audit")==="grid") {
+ await (${auditGridPixels.toString()})({ui,check});
+ await (${auditGridUI.toString()})({host,check,wait,flushSync,posts});
+ const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
 if (new URLSearchParams(location.search).get("audit")==="convnav") {
  const get=s=>host.querySelector(s), page=id=>get('[data-page="'+id+'"]'), list=()=>get('nav .vig-conv-tabs');
  const click=el=>flushSync(()=>el.click()), last=()=>get('[data-conv="conv_48"]');
@@ -1690,7 +1697,7 @@ const args = ["--headless=new", "--disable-gpu", "--no-sandbox", "--virtual-time
 if (shotPath) args.push("--hide-scrollbars", "--window-size=1040,900", `--screenshot=${shotPath}`);
 if (!shotPath && /ps=pick|audit=/.test(query)) args.push("--window-size=1440,1000");
 args.push("--dump-dom", url);
-const dom = execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+const dom = query === "audit=grid" ? await runGridPage(page, CHROME, query) : execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 
 const match = dom.match(/<pre id="vig-viewer-out">([\s\S]*?)<\/pre>/);
 if (!match) {

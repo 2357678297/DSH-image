@@ -3,7 +3,10 @@
 export async function auditGridUI({host, check, wait, flushSync, posts}) {
   const W = 360, H = 144, cols = 3, rows = 2, target = 4;
   const cw = W / cols, ch = H / rows, x0 = target % cols * cw, y0 = Math.floor(target / cols) * ch;
-  const resultUrl = '/api/velapi-image-go/asset/grid-qa-candidate.png';
+  const base='/api/velapi-image-go/asset/grid-qa-', small=base+'source.png', big=base+'8k.png', broken=base+'retry.png', stale=base+'stale.png';
+  const resultUrl=base+'candidate.png', fixture=window.__gridQAControl;
+  const shot = path=>[...host.querySelectorAll('figure.vig-shot')].find(fig=>fig.querySelector('.vig-shot-img img')?.getAttribute('src')===path);
+  const shotButton = path=>shot(path)?.querySelector('[data-grid-open]');
   const q = (sel) => host.querySelector(sel), ctrl = key => q('[data-grid-'+key+']');
   const until = async (predicate, label, timeout=5000) => {
     const end=Date.now()+timeout;
@@ -36,7 +39,8 @@ export async function auditGridUI({host, check, wait, flushSync, posts}) {
   const origFetch=window.fetch, origConfirm=window.confirm;
   const origCreate=URL.createObjectURL, origRevoke=URL.revokeObjectURL, origClick=HTMLAnchorElement.prototype.click;
   const objects=new Map(), downloads=[], calls=[], polls=[], writes=[];
-  let delayPoll=false, release=null, sourceRead=0, candidateRead=0, failNext=false;
+  let delayPoll=false, release=null, sourceRead=0, bigFetch=0, brokenFetch=0, failNext=false, fault='deny', finishStale=null;
+  const drawing=CanvasRenderingContext2D.prototype.drawImage; let traceSource=null, traced=0;
   const uploads=[], refUrls=[];
   const resp = (body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json'}});
   const png = b=>new Response(b,{headers:{'content-type':'image/png'}});
@@ -50,17 +54,20 @@ export async function auditGridUI({host, check, wait, flushSync, posts}) {
     const url=origCreate.call(URL,d.blob);try{return await decode(url);}finally{origRevoke.call(URL,url);}
   };
   let opener;
-  const open = async () => {opener=await until(()=>q('.vig-shot [data-grid-open]'),'结果卡编辑入口');opener.focus({preventScroll:true});click(opener);await until(()=>ctrl('editor') && ctrl('canvas')?.width===W && ctrl('canvas')?.height===H,'按原图实际尺寸载入');};
+  const open = async () => {opener=await until(()=>shotButton(small),'结果卡编辑入口');opener.focus({preventScroll:true});click(opener);await until(()=>ctrl('editor') && ctrl('canvas')?.width===W && ctrl('canvas')?.height===H,'按原图实际尺寸载入');};
   try {
     window.confirm=()=>true;
+    CanvasRenderingContext2D.prototype.drawImage=function(image,...rest){if(image===traceSource)traced++;return drawing.call(this,image,...rest);};
     // Capture the actual Blob before download URLs are revoked; never write to the user's downloads directory.
     URL.createObjectURL=function(blob){const url=origCreate.call(URL,blob);objects.set(url,blob);return url;};
     URL.revokeObjectURL=function(url){objects.delete(url);return origRevoke.call(URL,url);};
     HTMLAnchorElement.prototype.click=function(){if(this.download){downloads.push({name:this.download,blob:objects.get(this.href)});return;}return origClick.call(this);};
     window.fetch=async(input,init={})=>{
       const raw=typeof input==='string'?input:input.url||String(input), u=new URL(raw,location.href), route=u.pathname.replace(/^.*?\/api\/velapi-image-go/,'');
-      if(u.pathname===resultUrl){candidateRead++;return png(candidateBlob);}
-      if(/^data:image\/svg/i.test(raw) || route.startsWith('/asset/') && !init.body){sourceRead++;return png(sourceBlob);}
+      if(u.pathname===resultUrl) return png(candidateBlob); // also served by native <img> from loopback
+      if(u.pathname===big){bigFetch++;return resp({ok:false,error:'8K already displayed; secondary read is offline'},503);}
+      if(u.pathname===small){sourceRead++;return png(sourceBlob);}
+      if(u.pathname===broken || u.pathname===stale){brokenFetch++;if(fault==='delay')await new Promise(end=>{finishStale=end;});return fault==='allow' ? png(candidateBlob) : resp({ok:false,error:'本地模拟找不到原图文件'},404);}
       if(route==='/upload' && init.method==='POST') {
         const body=JSON.parse(init.body);uploads.push(body);const url='/api/velapi-image-go/upload/grid-qa-'+uploads.length+'.png';refUrls.push(url);
         return resp({ok:true,item:{url,name:body.name}});
@@ -79,8 +86,17 @@ export async function auditGridUI({host, check, wait, flushSync, posts}) {
       if((init.method||'GET').toUpperCase()!=='GET') writes.push(route);
       return origFetch(input,init); // original is already viewer-check's local mock, not network fetch.
     };
+    // Actual large result PNG: the first request may load the card; prohibit all subsequent network reads.
+    const largeImg=await until(()=>shot(big)?.querySelector('img'),'8192 卡片出现'); await largeImg.decode();
+    const cold=(await fixture('lock')).bigReads; traceSource=largeImg; traced=0; click(shotButton(big));
+    await until(()=>ctrl('canvas')?.width===8192 || ctrl('editor')?.querySelector('[role=alert]'),'断网后8K宫格显示',10000);
+    const large=ctrl('canvas'), colors=[[231,45,61],[15,160,90],[39,81,202],[227,151,20],[158,64,222],[20,153,189]];
+    const pixels=large?.width===8192 && colors.every((rgb,i)=>{const x=Math.floor((i%3+.5)*8192/3),y=Math.floor((Math.floor(i/3)+.5)*3456/2);const rgba=large.getContext('2d').getImageData(x,y,1,1).data;return rgb.every((v,n)=>v===rgba[n]) && rgba[3]===255;});
+    const hot=(await fixture('stats')).bigReads;
+    check('8192×3456 六宫格断网打开：直接绘制卡片自身、无二次HTTP或fetch，6处实际像素正确',largeImg.naturalWidth===8192 && largeImg.naturalHeight===3456 && cold>0 && cold===hot && bigFetch===0 && traced>0 && large?.height===3456 && pixels && host.querySelectorAll('[data-grid-cell]').length===6,JSON.stringify({w:large?.width,h:large?.height,cold,hot,bigFetch,draws:traced,pixels}));
+    click(ctrl('close'));traceSource=null;
     await open();
-    check('宫格从结果卡打开，使用解码像素而不是任务元数据',sourceRead>0 && isWorkingSheet(ctrl('canvas')) && !ctrl('candidate'));
+    check('宫格从真实 PNG 结果卡打开，使用解码像素而不是任务元数据',sourceRead===0 && isWorkingSheet(ctrl('canvas')) && !ctrl('candidate'));
     setValue(ctrl('rows'),rows);setValue(ctrl('cols'),cols);await until(()=>host.querySelectorAll('[data-grid-cell]').length===6,'2 行 3 列');
     click(q('[data-grid-cell="4"]'));setValue(ctrl('prompt'),'把第二行中间一格改成洋红色');
     const generate=ctrl('generate');flushSync(()=>{generate.click();generate.click();});
@@ -89,7 +105,7 @@ export async function auditGridUI({host, check, wait, flushSync, posts}) {
     const preview=await until(()=>q('.vig-grid-stage img')?.naturalWidth && q('.vig-grid-stage img'),'候选覆盖层解码'), overlay=preview.getBoundingClientRect(), cellBox=q('[data-grid-cell="4"]').getBoundingClientRect();
     check('候选只在所选格原位预览，像素画布尚未变化', ['left','top','right','bottom'].every(k=>Math.abs(overlay[k]-cellBox[k])<1) && isWorkingSheet(ctrl('canvas')));
 
-    check('快速双击只提交一次，轮询并显示候选后不自动覆盖',calls.length===1 && polls.includes('grid_qa_job_1') && candidateRead>0 && isWorkingSheet(ctrl('canvas')));
+    check('快速双击只提交一次，轮询并显示候选后不自动覆盖',calls.length===1 && polls.includes('grid_qa_job_1') && ctrl('candidate').naturalWidth===96 && ctrl('candidate').naturalHeight===160 && isWorkingSheet(ctrl('canvas')));
     check('局部重绘保留提示词和当前生图设置，发送单格且不重复图字节',body?.prompt==='把第二行中间一格改成洋红色' && body.model==='gpt-image-2.5-c' && body.providerId==='pv_gpt' && body.conversationId==='conv_default' && body.quality==='LOW' && body.n===1 && body.endpoint==='images_edits' && body.mode==='edit' && !body.images?.length && !body.image && body.referenceUrl===refUrls[0] && body.referenceUrls?.length===1 && body.referenceUrls[0]===refUrls[0] && uploads.length===1 && /^data:image\/png;base64,/.test(uploads[0]?.data),JSON.stringify({model:body?.model,mode:body?.mode,n:body?.n,endpoint:body?.endpoint}));
     const cut=await decode(uploads[0].data);
     check('提交的 PNG 就是所选格：原生尺寸和所有像素都匹配',cut.width===cw && cut.height===ch && samples(cut).every((v,i)=>v===before[(y0+Math.floor(i/cw))*W+x0+i%cw]));
@@ -146,10 +162,26 @@ export async function auditGridUI({host, check, wait, flushSync, posts}) {
     delayPoll=false;release();release=null;await wait(180);
     check('旧弹窗迟回结果不进入重开的编辑器，无下载外的隐式写入',!ctrl('candidate') && isWorkingSheet(ctrl('canvas')) && !writes.some(path=>/library\/(import|delete|rename)|asset\/export/.test(path)) && !posts.some(p=>p.path==='/library/import'));
     click(ctrl('close'));
+    const openBroken=async(path=broken)=>{const btn=await until(()=>path===stale ? q('img[alt="stale.png"]')?.closest('.vig-shot')?.querySelector('[data-grid-open]') : shotButton(path),'404 测试卡');click(btn);await until(()=>ctrl('retry-load'),'图片读失败后出现重试',10000);};
+    await openBroken();
+    const failedJobs=calls.length, retryNode=ctrl('retry-load'); const originallyFailed=brokenFetch>0 && !ctrl('canvas') && ctrl('editor').querySelector('[role=alert]')?.textContent.includes('404');
+    await fixture('recover');const previousFetch=brokenFetch;click(retryNode);
+    await until(()=>ctrl('canvas')?.width===W,'同一窗重试成功',8000);
+    check('损坏的卡片可原位重试：原生 Image 成功，未再 JS fetch、未重新生成',originallyFailed && isWorkingSheet(ctrl('canvas')) && brokenFetch===previousFetch && calls.length===failedJobs && !ctrl('retry-load'));
+    click(ctrl('close'));
+    // Mirror a stale thumbnail/placeholder: its pixels are valid but its src is not the owning record URL.
+    const staleImg=shot(stale).querySelector('img');staleImg.src=small;await staleImg.decode();traceSource=staleImg;traced=0;
+    await openBroken(stale);fault='allow';click(ctrl('retry-load'));
+    await until(()=>ctrl('canvas')?.width===96,'原生 Image 缺失时 Blob 兜底返回的是记录本身而非缩略图');
+    const fallback=ctrl('canvas');check('有像素但 URL 不匹配的卡面不复用；原生404后 fetch+Blob实际解码',traced===0 && fallback.height===160 && samples(fallback)[0]===pink);traceSource=null;
+    click(ctrl('close'));fault='deny';await openBroken(stale);fault='delay';click(ctrl('retry-load'));await until(()=>finishStale,'孤立一次旧图片请求',8000);
+    click(ctrl('close'));await open();fault='allow';finishStale();finishStale=null;await wait(160);
+    check('图片加载重试尚未回包就关窗，旧响应不写入另一个源图',opener===shotButton(small) && isWorkingSheet(ctrl('canvas')) && !ctrl('retry-load') && !ctrl('editor').querySelector('[role=alert]') && calls.length===failedJobs);
+    click(ctrl('close'));
   } catch (error) {
     check('宫格端到端场景执行完毕',false, String(error.stack || error)+'; editor='+(ctrl('editor')?.textContent || 'closed').slice(-420));
   } finally {
-    delayPoll=false;release?.();window.fetch=origFetch;window.confirm=origConfirm;
+    delayPoll=false;release?.();finishStale?.();CanvasRenderingContext2D.prototype.drawImage=drawing;window.fetch=origFetch;window.confirm=origConfirm;
     URL.createObjectURL=origCreate;URL.revokeObjectURL=origRevoke;HTMLAnchorElement.prototype.click=origClick;
   }
 }
@@ -161,8 +193,24 @@ export async function runGridPage(pagePath, chrome, query) {
     import('node:http'),import('node:child_process'),import('node:fs/promises'),import('node:os'),import('node:path'),import('node:crypto')
   ]);
   const reportRoute='/result/'+randomUUID(), original=await fs.readFile(pagePath,'utf8');
-  const capture = `<script>(()=>{const send=window.fetch.bind(window);let done=false;const report=payload=>{if(done)return;done=true;void send(${JSON.stringify(reportRoute)},{method:'POST',body:payload});};const observe=()=>{const pre=document.getElementById('vig-viewer-out');if(pre?.textContent)report(pre.textContent);};new MutationObserver(observe).observe(document,{childList:true,subtree:true});setTimeout(()=>report(JSON.stringify({results:[{name:'宫格浏览器驱动超时',pass:false,detail:document.querySelector('[data-grid-editor]')?.textContent||'未打开宫格窗口'}],debug:[]})),40000);})();</script>`;
-  const html=original.replace('<head>','<head>'+capture);
+  const base='/api/velapi-image-go/asset/grid-qa-', small=base+'source.png', big=base+'8k.png', broken=base+'retry.png', stale=base+'stale.png', control='/fixture-control/'+randomUUID();
+  const {deflateSync}=await import('node:zlib');
+  const crc32=bytes=>{let v=-1;for(const n of bytes){v^=n;for(let k=0;k<8;k++)v=v>>>1^((v&1)?0xedb88320:0);}return ~v>>>0;};
+  const chunk=(tag,bytes)=>{const content=Buffer.concat([Buffer.from(tag),bytes]), head=Buffer.alloc(4), tail=Buffer.alloc(4);head.writeUInt32BE(bytes.length);tail.writeUInt32BE(crc32(content));return Buffer.concat([head,content,tail]);};
+  function png(w,h,channels,fill,palette){
+    const head=Buffer.alloc(13);head.writeUInt32BE(w);head.writeUInt32BE(h,4);head[8]=8;head[9]=palette?3:2;
+    const stride=w*channels+1, pixels=Buffer.alloc(stride*h);for(let y=0;y<h;y++)fill(pixels.subarray(y*stride+1,(y+1)*stride),y);
+    return Buffer.concat([Buffer.from('89504e470d0a1a0a','hex'),chunk('IHDR',head),...(palette?[chunk('PLTE',Buffer.from(palette.flat()))]:[]),chunk('IDAT',deflateSync(pixels,{level:3})),chunk('IEND',Buffer.alloc(0))]);
+  }
+  const source=png(360,144,3,(row,y)=>{for(let x=0;x<360;x++){row[3*x]=x%251;row[3*x+1]=y;row[3*x+2]=(x+3*y)%251;}});
+  const candidate=png(96,160,3,row=>row.fill(Buffer.from([254,17,180])));
+  // Indexed-colour PNG: ~28 MiB while producing scanlines instead of allocating a 110 MiB RGBA source.
+  const large=png(8192,3456,1,(row,y)=>{const baseColor=y<1728?0:3;for(let c=0;c<3;c++)row.fill(baseColor+c,Math.round(c*8192/3),Math.round((c+1)*8192/3));},[[231,45,61],[15,160,90],[39,81,202],[227,151,20],[158,64,222],[20,153,189]]);
+  const initMarker='const JOB = {';if(original.split(initMarker).length!==2)throw Error('fixture JOB injection anchor changed');
+  const cardData=`IMAGES[0].url=${JSON.stringify(small)};IMAGES[1].url=${JSON.stringify(big)};IMAGES.push({...IMAGES[0],id:'grid_retry',assetId:'grid_retry',name:'retry.png',url:${JSON.stringify(broken)}},{...IMAGES[0],id:'grid_stale',assetId:'grid_stale',name:'stale.png',url:${JSON.stringify(stale)}});`;
+  let bigReads=0, bigLocked=false, retryReady=false;
+  const capture = `<script>(()=>{const send=window.fetch.bind(window);window.__gridQAControl=(action)=>send(${JSON.stringify(control)}+"?action="+encodeURIComponent(action)).then(r=>r.json());let done=false;const report=payload=>{if(done)return;done=true;void send(${JSON.stringify(reportRoute)},{method:'POST',body:payload});};const observe=()=>{const pre=document.getElementById('vig-viewer-out');if(pre?.textContent)report(pre.textContent);};new MutationObserver(observe).observe(document,{childList:true,subtree:true});setTimeout(()=>report(JSON.stringify({results:[{name:'宫格浏览器驱动超时',pass:false,detail:document.querySelector('[data-grid-editor]')?.textContent||'未打开宫格窗口'}],debug:[]})),40000);})();</script>`;
+  const html=original.replace(initMarker,cardData+'\n'+initMarker).replace('<head>','<head>'+capture);
   if(html===original) throw Error('宫格测试页缺少 head');
   let finish,fail;const result=new Promise((r,j)=>{finish=r;fail=j;});
   const server=createServer(async(req,res)=>{
@@ -172,6 +220,14 @@ export async function runGridPage(pagePath, chrome, query) {
         let text='';for await(const part of req){text+=part;if(text.length>1024*1024)throw Error('结果节点过长');}
         const payload=JSON.parse(text);if(!Array.isArray(payload.results))throw Error('结果节点不是测试结果');
         res.writeHead(200);res.end('ok');finish('<pre id="vig-viewer-out">'+text.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')+'</pre>');
+      } else if(u.pathname===control && req.method==='GET') {
+        const cmd=u.searchParams.get('action');if(cmd==='lock')bigLocked=true;else if(cmd==='recover')retryReady=true;
+        res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({bigReads}));
+      } else if([small,big,broken,stale,base+'candidate.png'].includes(u.pathname) && req.method==='GET') {
+        if(u.pathname===big)bigReads++;
+        const data=u.pathname===big ? (!bigLocked && large) : u.pathname===broken ? (retryReady && source) : u.pathname===stale ? false : u.pathname===small ? source : candidate;
+        if(!data){res.writeHead(u.pathname===big ? 503 : 404,{'cache-control':'no-store'});res.end('fixture offline');}
+        else{res.writeHead(200,{'content-type':'image/png','cache-control':'no-store','content-length':data.length});res.end(data);}
       } else if(u.pathname==='/viewer.html' && req.method==='GET'){res.writeHead(200,{'content-type':'text/html;charset=utf-8','cache-control':'no-store'});res.end(html);}
       else{res.writeHead(404);res.end();}
     } catch(error){res.destroy();fail(error);}

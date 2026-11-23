@@ -9,6 +9,8 @@
 //   4. 把这坨拖拽数据丢进输入区 → 真走 /upload，挂成参考图；
 //   5. 供应商页的「素材目录」块：显示当前目录、保存时 POST /config(stateDir)、打开目录打 /state/reveal。
 
+import { auditChatScroll } from "../test/chat-scroll.test.mjs";
+import { auditChatFlow } from "../test/chat-flow.test.mjs";
 import { auditGallery } from "../test/library-audit.test.mjs";
 import { auditWorkbench } from "./workbench-audit.mjs";
 import { execFileSync } from "node:child_process";
@@ -366,6 +368,15 @@ flushSync(() => root.render(React.createElement(ui.Workbench, { onOpenInRightbar
 const shot = await waitFor(() => host.querySelector(".vig-grid.is-duo .vig-shot-img") ?? host.querySelector(".vig-shot-img"), 6000);
 check("结果卡挂起来了（有可点的图）", Boolean(shot), shot ? "" : "没有 .vig-shot-img");
 
+if (new URLSearchParams(location.search).get("audit")==="chatscroll") {
+ await (${auditChatScroll.toString()})({host,check,wait,flushSync,ui,React,createRoot});
+ const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
+if (new URLSearchParams(location.search).get("audit")==="chatflow") {
+ const remount=async()=>{flushSync(()=>root.render(null));flushSync(()=>root.render(React.createElement(ui.Workbench,{onOpenInRightbar:()=>{}})));await wait(120);};
+ await (${auditChatFlow.toString()})({host,check,wait,flushSync,posts,remount});
+ const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
 if (["workbench", "gallery"].includes(new URLSearchParams(location.search).get("audit"))) {
  const audit=new URLSearchParams(location.search).get("audit") === "gallery" ? (${auditGallery.toString()}) : (${auditWorkbench.toString()});
  await audit({host,check,wait,flushSync,posts});

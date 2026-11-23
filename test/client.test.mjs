@@ -335,7 +335,7 @@ check("渲染出工作台标题", chat.includes("API 对话生图工作台"));
 for (const label of ["对话生图", "图片管理", "信息管理", "供应商管理"]) {
   check(`导航含「${label}」`, chat.includes(label));
 }
-check("渲染出空态提示", chat.includes("你可以通过对话描述需求，生成图片"));
+check("渲染出空态提示", chat.includes('class="vig-hint-title"') && chat.includes("还没有生成记录"));
 check("渲染出输入占位符", chat.includes("描述你想要生成的图片内容"));
 check(
   "渲染出右栏三张卡（图片 / 预设卡 / 供应商）",
@@ -343,7 +343,8 @@ check(
   `blocks=${(chat.match(/vig-block-title">([^<]+)</g) ?? []).join(" ")}`
 );
 check("渲染出 0/500 计数器", chat.includes("0/500"));
-check("渲染出发送按钮", chat.includes('class="vig-send"'));
+check("单一生成入口：生成按钮同时保留旧自动化标记", (chat.match(/class="vig-send"/g) ?? []).length === 1 && (chat.match(/data-force-generate="1"/g) ?? []).length === 1 && /<button[^>]*class="vig-send"[^>]*data-force-generate="1"[^>]*>生成<\/button>/.test(chat));
+check("输入区说明 Enter 生成、Shift+Enter 换行", /<textarea[^>]*title="Enter 生成，Shift\+Enter 换行"/.test(chat));
 check("注入样式表", chat.includes("--vig-r-card:18px") && chat.includes(".vig-root"));
 check("没有渲染出 undefined", !/undefined/.test(chat), chat.match(/undefined/g)?.length + " 处");
 
@@ -3069,7 +3070,7 @@ check(
   check(
     "参考图上传拿回本站 URL，并随生成请求带出去（任务里只存 URL，不存 base64）",
     /const uploadRefData = async \(name, dataUrl\) => \{[\s\S]{0,300}call\("\/upload", \{ method: "POST", body: \{ name: name \|\| "reference\.png", data: dataUrl \} \}\)/.test(SOURCE) &&
-      /setReferences\(\(current\) => current\.map\(\(item\) => \(item\.dataUrl === dataUrl && !item\.url \? \{ \.\.\.item, url \} : item\)\)\)/.test(SOURCE) &&
+      /refs\.map\(\(item\) => item === entry \? \{ \.\.\.item, url \} : item\)/.test(SOURCE) &&
       refBody.referenceUrl === refBody.referenceUrls[0] &&
       /referenceUrl: job\.referenceUrl \|\| ""/.test(SOURCE)
   );
@@ -3198,11 +3199,10 @@ check(
       };
       const makeJob = (id, prompt) => ({ id, status: "succeeded", prompt, model: "m", size: "1024x1024", images: [] });
       const html = renderToStaticMarkup(
-        React.createElement(w.ChatView, { state: { ...base, jobs: [makeJob("job_new", "后说的那句"), makeJob("job_old", "先说的那句")] }, actions: noop })
+        React.createElement(w.ChatView, { state: { ...base, jobs: [makeJob("job_external", "远端最新"), { ...makeJob("ack_1", "本地第一句"), clientSeq: 1 }, { ...makeJob("pending_2", "本地第二句"), clientSeq: 2 }, makeJob("job_new", "后说的那句"), makeJob("job_old", "先说的那句")] }, actions: noop })
       );
-      const oldAt = html.indexOf("先说的那句");
-      const newAt = html.indexOf("后说的那句");
-      return oldAt >= 0 && newAt >= 0 && oldAt < newAt;
+      const positions = ["先说的那句", "后说的那句", "本地第一句", "本地第二句", "远端最新"].map(text => html.indexOf(text));
+      return positions.every((at, i) => at >= 0 && (i === 0 || at > positions[i - 1]));
     })()
   );
   check(
@@ -3233,9 +3233,9 @@ check(
     "重试 / 删除 / 编辑接的是 retryJob、/job/delete、填回输入框",
     /deleteJob: async \(job\) => \{/.test(SOURCE) &&
       /call\("\/job\/delete", \{ method: "POST", body: \{ ids: \[id\] \} \}\)/.test(SOURCE) &&
-      /editJob: \(job\) => \{[\s\S]{0,220}setDraft\(prompt\.slice\(0, 500\)\)/.test(SOURCE) &&
+      /window\.confirm\(t\("chat\.replaceDraft"\)\)\) return false;\s*jsonOverrideRef\.current = null;\s*setDraft\(prompt\)/.test(SOURCE) &&
       /onDelete: actions\.deleteJob/.test(SOURCE) &&
-      /onEdit: actions\.editJob/.test(SOURCE)
+      /onEdit: editInComposer/.test(SOURCE) && /if \(!actions\.editJob\(job\)\) return;\s*const input = inputRef\.current;\s*input\?\.focus\(\)/.test(SOURCE)
   );
   check("参考图字节不接受 URL 充当伪文件", refBody.images.length === 1 && refBody.images[0] === refBody.image && makeRequest([{dataUrl: "/local/1"}]).images.length === 0);
   check(
@@ -3262,7 +3262,7 @@ check(
   );
   check(
     "上下文显示参考图：消息带 referenceUrls（气泡旁缩略图）",
-    /referenceUrls: \(references \|\| \[\]\)/.test(SOURCE) &&
+    /referenceUrls: body\.referenceUrls/.test(SOURCE) &&
       /className: "vig-me-ref"/.test(SOURCE) &&
       /job\.referenceUrls/.test(SOURCE)
   );
@@ -3348,25 +3348,15 @@ check(
   check(
     "发送串行化：对话端口与生图端口不并发（sendChain 队列 + clientSeq 排序）",
     /const sendChainRef = useRef\(Promise\.resolve\(\)\)/.test(SOURCE) &&
-      /const runGenerateFlow = async \(requestBody, override, seq\) => \{/.test(SOURCE) &&
+      /const runGenerateFlow = async \(requestBody, override, seq, inputText\) => \{/.test(SOURCE) &&
       /pendingSendsRef\.current >= 6/.test(SOURCE) &&
       /clientSeq: seq/.test(SOURCE) &&
-      /Number\.isFinite\(Number\(job\.clientSeq\)\)/.test(SOURCE)
+      /Number\.isFinite\(job\.clientSeq\)/.test(SOURCE)
   );
   check(
-    "刷新/切会话停在最新一条：贴底跟随（stickRef）+ 图片撑高补滚 + 上翻历史不抢滚动",
-    /const list = jobs\.slice\(\);/.test(SOURCE) &&
-      /Number\.isFinite\(Number\(job\.clientSeq\)\)/.test(SOURCE) &&
-      /box\.scrollTop = box\.scrollHeight/.test(SOURCE) &&
-      /const stickRef = useRef\(true\)/.test(SOURCE) &&
-      /const nearBottom = box\.scrollHeight - box\.scrollTop - box\.clientHeight < 160/.test(SOURCE) &&
-      /stickRef\.current = nearBottom/.test(SOURCE) &&
-      /const jumpToBottom = \(\) => \{/.test(SOURCE) &&
-      /className: "vig-bottom-jump"/.test(SOURCE) &&
-      /box\.scrollTo\(\{ top: box\.scrollHeight, behavior: "smooth" \}\)/.test(SOURCE) &&
-      /onScroll: trackStick/.test(SOURCE) &&
-      /addEventListener\("load", onLoad, true\)/.test(SOURCE) &&
-      /\}, \[conversationId\]\)/.test(SOURCE)
+    "历史消息区独立滚动，初始 SSR 不显示未读浮标（真实追加和切会话见 chatscroll 用例）",
+    chatView.includes('class="vig-main-body vig-chat-feed"') &&
+      chatView.includes('class="vig-thread"') && !chatView.includes('class="vig-bottom-jump"')
   );
   check(
     "信息卡：点开先快速选择（点一张插进输入框），二级「管理」才跳信息管理页",

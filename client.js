@@ -199,6 +199,8 @@ function writeConvSetting(id, settings) {
 		 * ------------------------------------------------------------------ */
 
 		const zh = {
+			"chat.noReceipt": "未收到任务编号", "chat.noReceiptHint": "没有收到提交回执。请先查看任务记录，避免重复生图。",
+			"chat.restorePrompt": "取回提示词", "chat.replaceForRecovery": "用这条提示词替换正在写的文字？参考图保持不变。", "chat.dismissRecovery": "忽略这条提示",
 			"chat.requestInfo": "本次生成",
 			"chat.directHint": "发送会直接生图，不会让对话模型改写提示词。可在 JSON 请求体中核对本次参数。",
 			"tab.title": "生图工作台",
@@ -411,10 +413,12 @@ function writeConvSetting(id, settings) {
 			"rail.library": "图库",
 			"rail.notes": "信息",
 			"rail.jobs": "任务",
-			"chat.hint.title": "你可以通过对话描述需求，生成图片",
+			"chat.hint.title": "描述画面，或添加参考图开始创作",
 			"chat.hint.sub": "例如：生成一张产品图、场景图或风格图",
-			"chat.placeholder": "描述你想要生成的图片内容，或上传参考图、直接 Ctrl+V 粘贴一张…",
+			"chat.placeholder": "描述你想要生成的图片内容；Ctrl+V 粘贴参考图。Enter 生成，Shift+Enter 换行。",
 			"chat.send": "生成",
+			"chat.sendKeys": "Enter 生成，Shift+Enter 换行",
+			"chat.replaceDraft": "用这条历史记录的提示词和参考图替换当前草稿？取消可保留现有内容。",
 			"chat.sending": "生成中…",
 			"chat.you": "你",
 			"chat.assistant": "工作台",
@@ -444,8 +448,6 @@ function writeConvSetting(id, settings) {
 			"chat.contextOn": "上下文管理：开 —— 每轮先由对话模型把本对话的历史整理成提示词",
 			"chat.contextPanel": "对话模型",
 			"chat.dialogDesc": "本面板保留旧版设置。发送始终直接生图，不调用对话模型。",
-			"chat.forceGenerate": "生成图片",
-			"chat.forceGenerateHint": "跳过对话，直接把这句话交给生图（agent 之外的手动入口）",
 			"chat.dialogNotReady": "Chat endpoint not ready: refresh the page (F5); restart DSH only if it still fails",
 			"chat.contextDesc": "只负责整理提示词与读取配置，不直接调用供应商出图。",
 			"chat.contextAuto": "优化提示词",
@@ -505,9 +507,8 @@ function writeConvSetting(id, settings) {
 			"chat.jsonApplied": "已应用 JSON 覆盖",
 			"chat.jsonInvalid": "JSON 格式不对",
 			"chat.sizeRaw": "尺寸原样发送（档位 + 宽高比，不转像素）",
-			"chat.thinking": "思考中…",
+			"chat.thinking": "等待提交…",
 			"chat.emptyReply": "（对话模型没有返回内容，换个对话模型再试一次）",
-			"chat.forceGenerateTooShort": "提示词太短：至少写 5 个字符的画面描述，再点「生成图片」",
 			"chat.modelSwitched": "当前模型不能生图，已自动切到 {model}",
 			"chat.toBottom": "回到底部",
 			"chat.expandTools": "展开更多参数",
@@ -728,6 +729,9 @@ function writeConvSetting(id, settings) {
 		};
 
 		const en = {
+			"chat.thinking": "Awaiting submission…",
+			"chat.noReceipt": "No job ID received", "chat.noReceiptHint": "No submission receipt. Check your history before sending again.",
+			"chat.restorePrompt": "Restore prompt", "chat.replaceForRecovery": "Replace the current text with this prompt? Reference images will not change.", "chat.dismissRecovery": "Dismiss notice",
 			"chat.requestInfo": "Generation settings",
 			"chat.directHint": "Send generates directly without rewriting your prompt. Open the JSON request to review the parameters.",
 			"tab.title": "Image workbench",
@@ -875,8 +879,10 @@ function writeConvSetting(id, settings) {
 			"rail.jobs": "Jobs",
 			"chat.hint.title": "Describe what you need and generate images in chat",
 			"chat.hint.sub": "For example: a product shot, a scene, or a style sheet",
-			"chat.placeholder": "Describe the image you want, attach a reference, or just paste one with Ctrl+V…",
+			"chat.placeholder": "Describe the image or paste a reference. Enter to generate, Shift+Enter for a new line.",
 			"chat.send": "Generate",
+			"chat.sendKeys": "Enter to generate, Shift+Enter for a new line",
+			"chat.replaceDraft": "Replace the current draft and its references with this history entry? Cancel to keep your draft.",
 			"chat.sending": "Generating…",
 			"chat.you": "You",
 			"chat.assistant": "Workbench",
@@ -899,9 +905,6 @@ function writeConvSetting(id, settings) {
 			"chat.deletedConv": "Conversation deleted",
 			"chat.convList": "Switch conversation",
 			"chat.untitledConv": "Untitled",
-			"chat.forceGenerate": "Generate image",
-			"chat.forceGenerateTooShort": "Prompt too short: write at least 5 characters describing the image, then press Generate image",
-			"chat.forceGenerateHint": "Generate an image directly",
 			"chat.convMemory": "Each conversation keeps its own memory; a new conversation starts empty",
 			"chat.context": "Context",
 			"chat.contextOn": "Context manager: on — a chat model rewrites this conversation's history into the prompt each turn",
@@ -1339,6 +1342,9 @@ body[data-ds-dark-theme] .vig-mark{background:var(--vig-accent);color:var(--vig-
 /* 输入区 */
 .vig-composer{margin:0 12px 12px;border:1px solid var(--vig-line);border-radius:var(--vig-r-card);
 	background:var(--vig-surface);box-shadow:var(--vig-shadow-soft);padding:10px 10px 8px;display:flex;flex-direction:column;gap:8px}
+.vig-recover-list{flex:none;max-height:min(120px,18vh);overflow:auto}
+.vig-recover{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 10px;padding:6px 10px;border:1px solid var(--vig-line);border-radius:10px;background:var(--vig-surface-soft)}
+.vig-recover>div{flex:1 1 180px;min-width:0}.vig-recover strong,.vig-recover small,.vig-recover span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vig-recover strong{font-size:12px;white-space:normal}
 .vig-composer.is-busy{border-color:var(--vig-accent-line)}
 .vig-input{width:100%;border:0;outline:0;resize:none;background:transparent;min-height:44px;max-height:180px;line-height:1.6}
 .vig-input::placeholder{color:var(--vig-text-faint)}
@@ -2256,7 +2262,7 @@ body[data-ds-dark-theme] .vig-mask-pill{background:rgba(20,20,22,.94)}
 /* 工具行不换行：模型/尺寸可收缩，发送贴右 */
 .vig-tools{position:relative;flex-wrap:nowrap}
 .vig-tools .vig-picker{min-width:0;flex:0 1 auto}
-.vig-tools .vig-send{margin-left:auto;flex:none}
+.vig-tools .vig-send{margin-left:auto;flex:none;width:auto;min-width:42px;padding:0 10px;font:inherit;font-weight:600;white-space:nowrap}
 .vig-tools .vig-sel{min-width:0;max-width:170px;flex:none;white-space:nowrap}
 /* 展开器：一块浮在工具行上方的面板，不占行内空间（不是把按钮塞回行里） */
 .vig-tools-pop{position:absolute;left:0;bottom:calc(100% + 10px);z-index:34;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
@@ -2318,7 +2324,9 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 /* ============================================================
    设计系统 v2.25 · 「回到底部」浮标（上翻历史时出现）
    ============================================================ */
-.vig-bottom-dock{position:sticky;bottom:22px;display:flex;justify-content:flex-end;height:0;z-index:7;pointer-events:none}
+.vig-bottom-dock{position:sticky;bottom:8px;display:flex;align-items:flex-end;justify-content:flex-end;height:0;z-index:7;pointer-events:none}
+.vig-root[data-compact="1"] .vig-main-body.vig-chat-feed{flex:0 1 auto;min-height:128px;height:clamp(180px,calc(var(--vig-host-height,100vh)*.47),600px);overflow:auto;scrollbar-gutter:stable}
+.vig-root[data-compact="1"] .vig-col:has(.vig-chat-feed){flex:0 0 auto!important}
 .vig-bottom-jump{pointer-events:auto;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;
 	border-radius:var(--vig-r-pill);border:1px solid var(--vig-line);background:rgba(255,255,255,.94);
 	-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:var(--vig-sh-2);
@@ -3860,41 +3868,29 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const inputRef = useRef(null);
 			const dropRef = useRef(null);
 			const bodyRef = useRef(null);
-			const lastJobCount = useRef(0);
-			/* 刷新 / 切会话后必须停在「最新一条」：
-			   stickRef = 用户当前是不是贴着底部（默认 true，刷新后从 true 起步）。
-			   图片 load、字体撑高、消息追加都会改变 scrollHeight —— 只要还贴着底就继续跟到底，
-			   所以不会再出现「刷新后焦点停在中途」的情况。 */
 			const stickRef = useRef(true);
-			/* 贴底状态与未读数：上翻历史时右下角出现「回到底部」浮标 */
+			const previousFeed = useRef({ owner: null, known: new Set() });
+			const unreadKeys = useRef(new Set());
 			const [atBottom, setAtBottom] = useState(true);
 			const [unread, setUnread] = useState(0);
-			const jumpGuardRef = useRef(0);
+			const clearUnread = () => { unreadKeys.current.clear(); setUnread(0); };
 			const scrollToBottom = () => {
 				const box = bodyRef.current;
 				if (box) box.scrollTop = box.scrollHeight;
 				setAtBottom(true);
-				setUnread(0);
+				clearUnread();
 			};
 			const trackStick = () => {
-				// 点「回到底部」后平滑滚动途中不要再把按钮翻出来
-				if (Date.now() < jumpGuardRef.current) return;
 				const box = bodyRef.current;
 				if (!box) return;
-				const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 160;
+				const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight <= 12;
 				stickRef.current = nearBottom;
 				setAtBottom(nearBottom);
-				if (nearBottom) setUnread(0);
+				if (nearBottom) clearUnread();
 			};
 			const jumpToBottom = () => {
-				const box = bodyRef.current;
-				if (!box) return;
-				jumpGuardRef.current = Date.now() + 480;
 				stickRef.current = true;
-				setAtBottom(true);
-				setUnread(0);
-				if (typeof box.scrollTo === "function") box.scrollTo({ top: box.scrollHeight, behavior: "smooth" });
-				else box.scrollTop = box.scrollHeight;
+				scrollToBottom();
 			};
 			const [dragOver, setDragOver] = useState(false);
 			// 输入框旁的「信息卡」：点开先快速选一张，二级「管理」才跳信息管理页
@@ -3964,50 +3960,47 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				}
 			}, [draft]);
 
-			/* 信息流从上往下：老的在上、新的在下；来新任务或原来就贴着底部时自动滚到底。
-			   （以前是最新一条排在最上面，读起来是倒着的。） */
+			// 宿主按从新到旧返回；只在属于本地发送的槽位内整理 clientSeq，历史不会被反转或移到远端新增任务之后。
+			const orderedJobs = useMemo(() => {
+				const timeline = jobs.slice().reverse();
+				const local = timeline.filter((job) => Number.isFinite(job.clientSeq)).sort((a, b) => a.clientSeq - b.clientSeq);
+				let index = 0;
+				return local.length < 2 ? timeline : timeline.map((job) => Number.isFinite(job.clientSeq) ? local[index++] : job);
+			}, [jobs]);
+
+			useMeasureEffect(() => {
+				const previous = previousFeed.current;
+				if (previous.owner !== conversationId) stickRef.current = true;
+				const known = new Set(), unseen = new Set();
+				let count = 0, pastKnownTail = true;
+				// 从尾部数新增；回填更早的历史不算新消息。已受理任务保留 id 别名，完整刷新丢掉 clientSeq 也不重复计数。
+				for (let i = orderedJobs.length - 1; i >= 0; i--) {
+					const job = orderedJobs[i];
+					const id = `id:${job.id}`, seq = Number.isFinite(job.clientSeq) ? `send:${job.clientSeq}` : id;
+					const existed = previous.known.has(id) || previous.known.has(seq);
+					const wasUnread = unreadKeys.current.has(id) || unreadKeys.current.has(seq);
+					if (!stickRef.current && (wasUnread || (pastKnownTail && !existed))) {
+						unseen.add(id); unseen.add(seq); count++;
+					}
+					if (existed) pastKnownTail = false;
+					known.add(id); known.add(seq);
+				}
+				previousFeed.current = { owner: conversationId, known };
+				unreadKeys.current = unseen;
+				if (stickRef.current) scrollToBottom();
+				else setUnread(count);
+			}, [conversationId, orderedJobs]);
+
+			// 图片解码、容器伸缩或输入区增高后，仅在读者仍然贴底时跟随；不再全树观察或定时强拉位置。
 			useEffect(() => {
 				const box = bodyRef.current;
 				if (!box) return;
-				const grew = jobs.length > lastJobCount.current;
-				if (jobs.length !== lastJobCount.current || stickRef.current) scrollToBottom();
-				else if (grew) setUnread((value) => value + (jobs.length - lastJobCount.current));
-				lastJobCount.current = jobs.length;
-			}, [jobs]);
-
-			/* 刷新 / 切会话：强制回到底部，并补两帧兜底（首帧图片还没量出高度时会差一截）。 */
-			useEffect(() => {
-				stickRef.current = true;
-				const raf = window.requestAnimationFrame(() => scrollToBottom());
-				const early = window.setTimeout(() => {
-					if (stickRef.current) scrollToBottom();
-				}, 60);
-				const late = window.setTimeout(() => {
-					if (stickRef.current) scrollToBottom();
-				}, 320);
-				return () => {
-					window.cancelAnimationFrame(raf);
-					window.clearTimeout(early);
-					window.clearTimeout(late);
-				};
-			}, [conversationId]);
-
-			/* 图片 / 内容撑高时继续贴底（img load 不冒泡，用捕获阶段听）。 */
-			useEffect(() => {
-				const box = bodyRef.current;
-				if (!box) return undefined;
-				const onLoad = (event) => {
-					if (event.target?.tagName === "IMG" && stickRef.current) scrollToBottom();
-				};
-				const observer = new MutationObserver(() => {
-					if (stickRef.current) scrollToBottom();
-				});
-				box.addEventListener("load", onLoad, true);
-				observer.observe(box, { childList: true, subtree: true });
-				return () => {
-					box.removeEventListener("load", onLoad, true);
-					observer.disconnect();
-				};
+				const follow = () => { if (stickRef.current) scrollToBottom(); };
+				const observer = typeof ResizeObserver === "function" ? new ResizeObserver(follow) : null;
+				observer?.observe(box);
+				if (box.firstElementChild) observer?.observe(box.firstElementChild);
+				box.addEventListener("load", follow, true);
+				return () => { observer?.disconnect(); box.removeEventListener("load", follow, true); };
 			}, []);
 
 			const limit = 500;
@@ -4017,15 +4010,27 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				actions.setDraft(raw.slice(0, limit));
 			};
 
-			const submit = (force = false) => {
-				const text = draft.trim();
-				if (text.length === 0) return;
-				// 「生成图片」前的硬校验：提示词太短上游会直接拒（prompt_too_short），先拦一下
-				if (force && text.length < 5) {
-					actions.toast?.(t("chat.forceGenerateTooShort"), "err");
-					return;
-				}
-				void (force ? actions.forceGenerate() : actions.generate());
+			const composingRef = useRef(false);
+			const submit = () => {
+				if (composingRef.current || !draft.trim()) return;
+				void actions.generate();
+				inputRef.current?.focus({ preventScroll: true });
+			};
+			const onComposerKeyDown = (event) => {
+				if (event.key !== "Enter" || event.defaultPrevented || event.shiftKey || event.altKey) return;
+				// 某些输入法在选词回车时只报告 229；让浏览器完成输入法提交，不能吃掉这个键。
+				if (composingRef.current || event.nativeEvent?.isComposing || event.nativeEvent?.keyCode === 229) return;
+				event.preventDefault();
+				if (!event.repeat) submit();
+			};
+			const editInComposer = (job) => {
+				if (!actions.editJob(job)) return;
+				const input = inputRef.current;
+				input?.focus();
+				// 新草稿在下一次提交渲染后才写入 DOM。
+				window.requestAnimationFrame(() => {
+					if (input && input === document.activeElement) input.setSelectionRange(input.value.length, input.value.length);
+				});
 			};
 
 			const onDrop = async (event) => {
@@ -4053,27 +4058,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				}
 			};
 
-			/* 宿主 /jobs 是「新的在前」，聊天流却要按时间正序显示：老的在上、新的在下。
-			   竞态兜底：本地发送的 job 带 clientSeq（发送顺序），有 seq 的按 seq 排、排在历史消息之后；
-			   全是历史消息（刷新后从 /jobs 拉回来、没有 seq）时直接反转成宿主顺序的逆序。 */
-			const thread = (() => {
-				const list = jobs.slice();
-				const hasSeq = list.some((job) => Number.isFinite(Number(job.clientSeq)));
-				if (!hasSeq) return list.reverse();
-				return list.sort((left, right) => {
-					const leftSeq = Number(left.clientSeq);
-					const rightSeq = Number(right.clientSeq);
-					const leftOk = Number.isFinite(leftSeq);
-					const rightOk = Number.isFinite(rightSeq);
-					if (leftOk && rightOk) return leftSeq - rightSeq;
-					if (leftOk) return 1;
-					if (rightOk) return -1;
-					return 0;
-				});
-			})()
+			const thread = orderedJobs
 				.map((job) =>
 					h(JobTurn, {
-						key: job.id,
+						key: Number.isFinite(job.clientSeq) ? `send:${job.clientSeq}` : job.id,
 						job,
 						onReuseImage: actions.switchToEdit,
 						onToast: actions.toast,
@@ -4082,7 +4070,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						onPreview: actions.openViewer,
 						onSave: actions.exportAsset,
 						onDelete: actions.deleteJob,
-						onEdit: actions.editJob
+						onEdit: editInComposer
 					})
 				);
 
@@ -4188,19 +4176,14 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				),
 				h(
 					"div",
-					{ className: "vig-main-body", ref: bodyRef, onScroll: trackStick },
-					h(
-						"div",
-						{ className: "vig-hint" },
-						h(Icon, { name: "spark", size: 18 }),
-						h(
-							"div",
-							null,
-							h("div", { className: "vig-hint-title" }, t("chat.hint.title")),
-							h("div", { className: "vig-hint-sub" }, t("chat.hint.sub"))
+					{ className: "vig-main-body vig-chat-feed", ref: bodyRef, onScroll: trackStick },
+					h("div", { className: "vig-chat-content" },
+						thread.length > 0 ? h("div", { className: "vig-thread" }, thread) : h(react.Fragment, null,
+							h("div", { className: "vig-hint" }, h(Icon, { name: "spark", size: 18 }),
+								h("div", null, h("div", { className: "vig-hint-title" }, t("chat.hint.title")), h("div", { className: "vig-hint-sub" }, t("chat.hint.sub")))),
+							h("div", { className: "vig-empty" }, t("chat.empty"))
 						)
 					),
-					thread.length > 0 ? h("div", { className: "vig-thread" }, thread) : h("div", { className: "vig-empty" }, t("chat.empty")),
 					// 回到底部浮标：上翻历史时出现在右下角，贴底自动收起
 					!atBottom
 						? h(
@@ -4216,6 +4199,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							)
 						: null
 				),
+				state.unsent?.length ? h("div", {className:"vig-recover-list"}, state.unsent.map((entry) => h("div", { key:entry.seq, className:"vig-recover", role:"status" },
+					h("div", null, h("strong", null, t("chat.noReceiptHint")), h("small", null, entry.error), h("span", {title:entry.text}, entry.text)),
+					h("button", {className:"vig-mini", "data-recover-prompt":"1", onClick:()=>actions.recoverUnsent(entry)}, t("chat.restorePrompt")),
+					h("button", {className:"vig-icon-btn", "aria-label":t("chat.dismissRecovery"), onClick:()=>actions.dismissUnsent(entry.seq)}, h(Icon, {name:"close"}))))) : null,
 				h(
 					"div",
 					{
@@ -4236,7 +4223,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								references.map((item, index) =>
 									h(
 										"div",
-										{ className: "vig-ref", key: item.url || item.name },
+										{ className: "vig-ref", key: `${item.url || item.name}_${index}` },
 										h("img", { src: item.dataUrl, alt: item.name, title: `${item.name}（第 ${index + 1} 张${state.editMode ? " · 图生图" : ""}）` }),
 										h(
 											"button",
@@ -4257,13 +4244,12 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						className: "vig-input",
 						value: draft,
 						placeholder: t("chat.placeholder"),
+						title: t("chat.sendKeys"), "aria-label": t("chat.placeholder"),
 						onChange: onInput,
-						onKeyDown: (event) => {
-							if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent?.isComposing) {
-								event.preventDefault();
-								submit();
-							}
-						}
+						onCompositionStart: () => { composingRef.current = true; },
+						onCompositionEnd: () => { composingRef.current = false; },
+						onBlur: () => { composingRef.current = false; },
+						onKeyDown: onComposerKeyDown
 					}),
 					h(
 						"div",
@@ -4487,19 +4473,6 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							},
 							h(Icon, { name: toolsOpen ? "chevronDown" : "chevron", size: 14 })
 						),
-						// 强制生成：跳过对话 agent，直接把这句话交给生图流程（生图作为工具之外的手动入口）
-						h(
-							"button",
-							{
-								className: "vig-tool",
-								"data-force-generate": "1",
-								title: t("chat.forceGenerateHint"),
-								"aria-label": t("chat.forceGenerate"),
-								disabled: draft.trim().length === 0,
-								onClick: () => submit(true)
-							},
-							h(Icon, { name: "image", size: 14 })
-						),
 						// JSON 请求体：查看 / 编辑这次发送给宿主的 /generate body
 						h(
 							"button",
@@ -4514,8 +4487,12 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						),
 						h(
 							"button",
-							{ className: "vig-send", disabled: draft.trim().length === 0, onClick: () => submit(), title: t("chat.send") },
-							state.generating ? h("span", { className: "vig-spin", style: { borderTopColor: "#fff", borderColor: "rgba(255,255,255,.35)" } }) : h(Icon, { name: "send", size: 16 })
+							{
+								type: "button", className: "vig-send", "data-force-generate": "1",
+								"aria-keyshortcuts": "Enter Control+Enter Meta+Enter", title: t("chat.sendKeys"),
+								disabled: !draft.trim(), onClick: submit
+							},
+							t("chat.send")
 						)
 					)
 				)
@@ -6534,7 +6511,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								references.map((item, index) =>
 									h(
 										"div",
-										{ className: "vig-ref", key: item.url || item.name },
+										{ className: "vig-ref", key: `${item.url || item.name}_${index}` },
 										h("img", { src: item.dataUrl, alt: item.name, title: `${item.name}（第 ${index + 1} 张）` }),
 										h("span", null, item.name),
 										h("div", { className: "vig-spacer" }),
@@ -11428,6 +11405,23 @@ h(
 			}
 		}
 
+		// 刷新只恢复文本和本站已留档图片的路径，不向浏览器存储写 base64 或 JSON 请求覆盖。
+		const draftKey = (id) => `dsh.velapi-image-go.draft.${id}`;
+		function readComposer(id) {
+			let stored;
+			try { if (id) stored = JSON.parse(window.sessionStorage.getItem(draftKey(id))); } catch { /* storage may be disabled */ }
+			const refs = (Array.isArray(stored?.refs) ? stored.refs : []).filter((r) => /^\/api\/velapi-image-go\/(?:asset|upload|preset)\/[\w.-]+$/.test(r?.url)).slice(0, 4);
+			return { text: String(stored?.text || "").slice(0, 500), refs: refs.map((r) => ({name:String(r.name || "image"), url:r.url, dataUrl:r.url})), edit: !!stored?.edit, override:null };
+		}
+		function persistComposer(id, text, refs, edit) {
+			if (!id) return;
+			try {
+				const linked = refs.filter((r) => /^\/api\/velapi-image-go\/(?:asset|upload|preset)\/[\w.-]+$/.test(r.url)).map(({url, name}) => ({url, name}));
+				if (text || linked.length) window.sessionStorage.setItem(draftKey(id), JSON.stringify({text, refs:linked, edit}));
+				else window.sessionStorage.removeItem(draftKey(id));
+			} catch { /* 内存中的编辑继续可用 */ }
+		}
+
 		function Workbench({ onOpenInRightbar }) {
 			const [view, setView] = useState(() => window.localStorage.getItem(VIEW_KEY) || "chat");
 			// 右侧检查器收没收起（存 "0" = 收起）；默认展开
@@ -11576,24 +11570,52 @@ h(
 			const initialConfigRef = useRef(null);
 			// 切换时只恢复本地设置，绝不把上一个会话的 render 快照写给新会话。
 			const inputEpoch = useRef(0);
-			const activateConversation = useCallback((id) => {
+			const [initialDraft] = useState(() => readComposer(conversationId));
+			const savedComposers = useRef(new Map());
+			const [draft, renderDraft] = useState(initialDraft.text);
+			const [references, renderReferences] = useState(initialDraft.refs);
+			const [editMode, renderEditMode] = useState(initialDraft.edit);
+			const draftNow = useRef(draft), refsNow = useRef(references), editNow = useRef(editMode);
+			const persistCurrent = () => persistComposer(conversationIdRef.current, draftNow.current, refsNow.current, editNow.current);
+			const setDraft = (next) => {
+				draftNow.current = typeof next === "function" ? next(draftNow.current) : next;
+				renderDraft(draftNow.current); persistCurrent();
+			};
+			const setReferences = (next) => {
+				refsNow.current = typeof next === "function" ? next(refsNow.current) : next;
+				renderReferences(refsNow.current); persistCurrent();
+			};
+			const setEditMode = (value) => { editNow.current = value; renderEditMode(value); persistCurrent(); };
+			const activateConversation = useCallback((id, forget = false) => {
+				const prev = conversationIdRef.current, drafts = savedComposers.current;
+				const current = {text:draftNow.current, refs:refsNow.current.map((r) => r.url ? { ...r, dataUrl:r.url } : r), edit:editNow.current, override:jsonOverrideRef.current};
+				if (prev && !forget) {
+					drafts.delete(prev);
+					if (current.text || current.refs.length || current.override) drafts.set(prev, current);
+					if (drafts.size > 12) drafts.delete(drafts.keys().next().value);
+				}
+				const next = drafts.get(id) || (!prev && (current.text || current.refs.length) ? current : readComposer(id));
+				drafts.delete(id);
 				++inputEpoch.current;
 				conversationIdRef.current = id;
 				setConversationId(id);
-				jsonOverrideRef.current = null;
-				setJsonOpen(false);
+				renderDraft(draftNow.current = next.text);
+				renderReferences(refsNow.current = next.refs);
+				renderEditMode(editNow.current = next.edit);
+				jsonOverrideRef.current = next.override;
+				if (!prev && next === current) persistComposer(id, next.text, next.refs, next.edit);
+				setJsonOpen(false); setPickOpen(false);
 				const saved = readConvSettings()[id] || initialConfigRef.current;
 				if (saved) setConfig((previous) => ({ ...previous, ...saved }));
 			}, []);
-
 			const [pending, setPending] = useState(0);
-			const [draft, setDraft] = useState("");
-			const [references, renderReferences] = useState([]);
-			const refsNow = useRef(references);
-			const setReferences = (next) => {
-				refsNow.current = typeof next === "function" ? next(refsNow.current) : next;
-				renderReferences(refsNow.current);
-			};
+			const [unsent, setUnsent] = useState([]);
+			const discardedConvs = useRef(new Set());
+			const retryLocks = useRef(new Set());
+			const awaitingJobs = useRef(new Map());
+			const withAwaiting = (id, rows) => [...awaitingJobs.current.values()].filter((item) => item.conversationId === id).reverse().concat(rows);
+			const newConvPending = useRef(false);
+
 			const appendReference = (entry) => {
 				if (refsNow.current.length >= 4) { toast(t("chat.refLimit"), "err"); return false; }
 				setReferences([...refsNow.current, entry]);
@@ -11608,7 +11630,6 @@ h(
 					return "";
 				}
 			};
-			const [editMode, setEditMode] = useState(false);
 			const [generating, setGenerating] = useState(false);
 			const [pickOpen, setPickOpen] = useState(false);
 			const [ready, setReady] = useState(false);
@@ -11704,7 +11725,7 @@ h(
 					const jobList = await call(`/jobs?limit=40${activeConv ? `&conversationId=${encodeURIComponent(activeConv)}` : ""}`).catch(() => ({ items: [], pending: 0 }));
 					if (activeConv !== conversationIdRef.current) return;
 					const items = jobList.items || [];
-					setJobs(items);
+					setJobs(withAwaiting(activeConv, items));
 					setPending(jobList.pending || 0);
 					// 还挂着的任务要接着轮询：刷新页面（或从别处切回来）时，之前发出去的任务
 					// 不归任何人管 —— 宿主早跑完了，界面却一直停在「生成中…」（踩过）。
@@ -11738,7 +11759,7 @@ h(
 								timers.current.delete(jobId);
 								return;
 							}
-							setJobs((list) => list.map((item) => (item.id === job.id ? job : item)));
+							setJobs((list) => list.map((item) => (item.id === job.id ? { ...item, ...job } : item)));
 							if (job.status === "queued" || job.status === "running") {
 								// 宿主那边有 300s 超时兜着，正常不会走到这里；走到就是它没消息了
 								if (Date.now() - startedAt > STALE_MS) {
@@ -11818,15 +11839,10 @@ h(
 			const sendChainRef = useRef(Promise.resolve());
 			const pendingSendsRef = useRef(0);
 			const sendSeqRef = useRef(0);
-			const runGenerateFlow = async (requestBody, override, seq) => {
-				const rawPrompt = requestBody.userText;
+			const runGenerateFlow = async (requestBody, override, seq, inputText) => {
 				const isCurrent = () => requestBody.conversationId === conversationIdRef.current;
-				/* 请求受理前的占位属于这一笔发送。 */
 				const pendingId = `pending_${seq}`;
-				if (isCurrent()) setJobs((list) => [
-					{ id: pendingId, kind: "pending", status: "running", prompt: rawPrompt, userText: rawPrompt, images: [], referenceUrls: (references || []).map((item) => item.url || "").filter(Boolean), model: "", size: "", clientSeq: seq, createdAt: new Date().toISOString() },
-					...list.filter((item) => item.id !== pendingId)
-				]);
+				if (discardedConvs.current.has(requestBody.conversationId)) return;
 				try {
 					/* 发送前把「还没有本站 URL」的参考图补一份留档：从图库 / 重绘 / 预设挂进来的
 					   chip 不走 /upload，没有 URL 的话 referenceUrls 会少一张 —— 发出去变成单图，
@@ -11846,19 +11862,26 @@ h(
 						referenceUrls: Object.hasOwn(override, "referenceUrls") ? requestBody.referenceUrls : urls,
 						referenceUrl: Object.hasOwn(override, "referenceUrl") ? requestBody.referenceUrl : urls[0] || ""
 					};
+					if (discardedConvs.current.has(requestBody.conversationId)) return;
 					const payload = await call("/generate", { method: "POST", body: finalBody });
+					if (!payload?.job?.id) throw new Error(t("chat.noReceipt"));
 					const job = { ...payload.job, images: [], clientSeq: seq };
+					awaitingJobs.current.delete(seq);
 					if (isCurrent()) {
-						setJobs((list) => [job, ...list.filter((item) => item.id !== job.id)]);
+						setJobs((list) => [job, ...list.filter((item) => item.id !== job.id && item.id !== pendingId)]);
 						setPending(payload.queue ?? 1);
 					}
 					// 对话标题可能刚被这段提示词命名（宿主会改），刷新一下会话列表
 					void call("/conversations")
 						.then((list) => setConversations(list.items || []))
 						.catch(() => {});
-					watchJob(job.id);
+					if (isCurrent()) watchJob(job.id);
 				} catch (error) {
-					toast(String(error?.message ?? error), "err");
+					// 网络中断不等于宿主没有接单。保留原文，让用户先查记录，不自动重发或覆盖新草稿。
+					if (!discardedConvs.current.has(requestBody.conversationId)) {
+						const entry = { owner:requestBody.conversationId, seq, text:inputText, error:String(error?.message ?? error) };
+						setUnsent((list) => [...list.slice(-11), entry]);
+					}
 				}
 			};
 
@@ -11887,12 +11910,20 @@ h(
 				// 入队即清空输入框：连点不会重复发送同一句（prompt 已经捕获进队列）
 				setDraft("");
 				const seq = ++sendSeqRef.current;
+				const placeholder = {
+					id: `pending_${seq}`, kind: "pending", status: "queued", prompt: rawPrompt, userText: rawPrompt,
+					images: [], referenceUrls: body.referenceUrls, conversationId: body.conversationId,
+					clientSeq: seq, createdAt: new Date().toISOString()
+				};
+				awaitingJobs.current.set(seq, placeholder);
+				setJobs((list) => [placeholder, ...list]);
 				pendingSendsRef.current += 1;
 				setGenerating(true);
-				const runSend = () => runGenerateFlow(body, override, seq);
+				const runSend = () => runGenerateFlow(body, override, seq, rawPrompt);
 				const run = sendChainRef.current.then(runSend, runSend);
 				sendChainRef.current = run.catch(() => {});
 				return run.finally(() => {
+					awaitingJobs.current.delete(seq);
 					pendingSendsRef.current = Math.max(0, pendingSendsRef.current - 1);
 					setJobs((list) => list.filter((item) => item.id !== `pending_${seq}`));
 					if (pendingSendsRef.current === 0) setGenerating(false);
@@ -11916,6 +11947,13 @@ h(
 				} catch (error) { toast(String(error?.message ?? error), "err"); return false; }
 			};
 			const actions = {
+				dismissUnsent: (seq) => setUnsent((list) => list.filter((entry) => entry.seq !== seq)),
+				recoverUnsent: (entry) => {
+					if (entry.owner !== conversationIdRef.current) return;
+					if (draftNow.current.trim() && draftNow.current !== entry.text && !window.confirm(t("chat.replaceForRecovery"))) return;
+					setDraft(entry.text); actions.dismissUnsent(entry.seq);
+					rootRef.current?.querySelector(".vig-composer textarea")?.focus();
+				},
 				resetJsonBody: () => { jsonOverrideRef.current = null; jsonBaseRef.current = buildRequestPreview(draft); setJsonDraft(JSON.stringify(jsonBaseRef.current, null, 2)); toast(t("chat.jsonReset")); },
 				openJsonBody: () => openJsonPreview(),
 				applyJsonBody: () => applyJsonDraft(),
@@ -11945,17 +11983,14 @@ h(
 				},
 				/* ---- 对话（会话）：新建不带记忆，每个会话的历史互相隔离 ---- */
 				switchConversation: async (id) => {
-					if (!id || id === conversationId) return;
+					if (!id || id === conversationIdRef.current) return;
 					activateConversation(id);
-					setJobs([]);
+					setJobs(withAwaiting(id, []));
 					setPending(0);
-					setDraft("");
-					setReferences([]);
-					setEditMode(false);
 					try {
 						const payload = await call(`/jobs?limit=40&conversationId=${encodeURIComponent(id)}`);
 						if (conversationIdRef.current !== id) return;
-						setJobs(payload.items || []);
+						setJobs(withAwaiting(id, payload.items || []));
 						for (const job of payload.items || []) if (["queued", "running"].includes(job.status)) watchJob(job.id);
 						setPending(payload.pending || 0);
 					} catch (error) {
@@ -11963,20 +11998,21 @@ h(
 					}
 				},
 				newConversation: async () => {
+					if (newConvPending.current) return;
+					newConvPending.current = true;
+					const owner = conversationIdRef.current;
 					try {
 						const payload = await call("/conversations", { method: "POST", body: {} });
 						setConversations(payload.items || []);
-						activateConversation(payload.item?.id || "");
+						if (owner !== conversationIdRef.current || !payload.item?.id) return;
+						activateConversation(payload.item.id);
 						setJobs([]);
 						setPending(0);
-						setDraft("");
-						setReferences([]);
-						setEditMode(false);
 						toast(t("chat.newConvHint"));
 					} catch (error) {
 						const message = String(error?.message ?? error);
 						toast(message.includes("未知端点") ? t("prov.storageNeedRestart") : message, "err");
-					}
+					} finally { newConvPending.current = false; }
 				},
 				renameConversation: async (id, title) => {
 					try {
@@ -11995,13 +12031,15 @@ h(
 						const items = payload.items || [];
 						setConversations(items);
 						const next = items[0]?.id || "";
-						activateConversation(next);
-						setDraft("");
-						setReferences([]);
-						setEditMode(false);
+						savedComposers.current.delete(id);
+						persistComposer(id, "", [], false);
+						discardedConvs.current.add(id);
+						setUnsent((list) => list.filter((entry) => entry.owner !== id));
+						if (conversationIdRef.current !== id) return;
+						activateConversation(next, true); setJobs([]); setPending(0);
 						const jobsPayload = next ? await call(`/jobs?limit=40&conversationId=${encodeURIComponent(next)}`) : { items: [], pending: 0 };
 						if (conversationIdRef.current !== next) return;
-						setJobs(jobsPayload.items || []);
+						setJobs(withAwaiting(next, jobsPayload.items || []));
 						setPending(jobsPayload.pending || 0);
 						toast(t("chat.deletedConv"));
 					} catch (error) {
@@ -12010,12 +12048,6 @@ h(
 					}
 				},
 				generate: async () => {
-					const rawPrompt = draft.trim();
-					if (rawPrompt.length === 0) return;
-					return enqueueSend(rawPrompt);
-				},
-				/** 强制生成：跳过 agent，直接把这句话交给生图流程（输入框旁的「生成图片」按钮）。 */
-				forceGenerate: async () => {
 					const rawPrompt = draft.trim();
 					if (rawPrompt.length === 0) return;
 					return enqueueSend(rawPrompt);
@@ -12071,7 +12103,9 @@ h(
 				/** 用失败任务的原参数再发一次（上游偶发抖动时最常见的一步）。 */
 				retryJob: async (job) => {
 					const prompt = String(job?.prompt ?? "").trim();
-					if (prompt.length === 0 || generating) return;
+					const owner = job?.conversationId || conversationId;
+					if (!prompt || owner !== conversationIdRef.current || retryLocks.current.has(job.id)) return;
+					retryLocks.current.add(job.id);
 					setGenerating(true);
 					try {
 						/* 重试也要过模型隔离：老任务若记的是对话模型（修隔离之前误发的），
@@ -12098,14 +12132,14 @@ h(
 								source: "ui"
 							}
 						});
+						if (owner !== conversationIdRef.current) return;
 						const next = { ...payload.job, images: [] };
 						setJobs((list) => [next, ...list.filter((item) => item.id !== next.id)]);
 						setPending(payload.queue ?? 1);
 						watchJob(next.id);
 					} catch (error) {
-						setGenerating(false);
-						toast(String(error?.message ?? error), "err");
-					}
+						if (owner === conversationIdRef.current) toast(String(error?.message ?? error), "err");
+					} finally { retryLocks.current.delete(job.id); if (!retryLocks.current.size && !pendingSendsRef.current) setGenerating(false); }
 				},
 				/** 删掉一条对话记录（图库里的素材不动）。 */
 				deleteJob: async (job) => {
@@ -12123,13 +12157,18 @@ h(
 				},
 				/** 把这条任务的原话填回输入框（连带参考图，多张全回），改完再发一次。 */
 				editJob: (job) => {
-					const prompt = String(job?.userText || job?.prompt || "");
-					if (!prompt) return;
-					setDraft(prompt.slice(0, 500));
+					const prompt = String(job?.userText || job?.prompt || "").slice(0, 500);
+					if (!prompt) return false;
+					const urls = (Array.isArray(job?.referenceUrls) && job.referenceUrls.length > 0 ? job.referenceUrls : job?.referenceUrl ? [job.referenceUrl] : []).slice(0, 4);
+					const attached = refsNow.current;
+					const different = draft !== prompt || attached.length !== urls.length || attached.some((ref, i) => ref.url !== urls[i]);
+					const hasOverrides = Object.keys(jsonOverrideRef.current || {}).length > 0;
+					if ((hasOverrides || (different && (draft.length || attached.length))) && !window.confirm(t("chat.replaceDraft"))) return false;
+					jsonOverrideRef.current = null;
+					setDraft(prompt);
 					const epoch = ++inputEpoch.current;
 					setReferences([]);
 					setEditMode(false);
-					const urls = (Array.isArray(job?.referenceUrls) && job.referenceUrls.length > 0 ? job.referenceUrls : job?.referenceUrl ? [job.referenceUrl] : []).slice(0, 4);
 					if (urls.length > 0) {
 						// 参考图只存了本站 URL：dataUrl 先放 URL 让缩略图能显示；
 						// 真正发送时宿主会按 referenceUrls 把字节读回来。
@@ -12146,15 +12185,26 @@ h(
 					}
 					setView("chat");
 					toast(t("chat.edited"));
+					return true;
 				},
 				attachReference: async ({ name, dataUrl }) => {
-					if (!dataUrl || !appendReference({ name, dataUrl, url: "" })) return false;
-					const epoch = inputEpoch.current;
+					const entry = { name, dataUrl, url: "" };
+					if (!dataUrl || !appendReference(entry)) return false;
+					const owner = conversationIdRef.current, epoch = inputEpoch.current;
 					setEditMode(false);
-					// 上传同时留档 + 拿到一个本站 URL：任务记录里只存这个 URL，
-					// 「我发出去的那条消息」靠它显示缩略图（原始 base64 不进历史）。
 					const url = await uploadRefData(name, dataUrl);
-					if (url && epoch === inputEpoch.current) setReferences((current) => current.map((item) => (item.dataUrl === dataUrl && !item.url ? { ...item, url } : item)));
+					// 路径只补给最初的 chip。切到 B 之后 A 的上传也能留档；被删除的 chip 不复活。
+					if (url) {
+						const link = (refs) => refs.map((item) => item === entry ? { ...item, url } : item);
+						if (conversationIdRef.current === owner && refsNow.current.includes(entry)) setReferences(link);
+						else {
+							const parked = savedComposers.current.get(owner);
+							if (parked?.refs.includes(entry)) {
+								parked.refs = link(parked.refs);
+								persistComposer(owner, parked.text, parked.refs, parked.edit);
+							}
+						}
+					}
 					return epoch === inputEpoch.current;
 				},
 				clearReference: () => {
@@ -12516,6 +12566,7 @@ h(
 				protocols,
 				jobs,
 				pending,
+				unsent: unsent.filter((entry) => entry.owner === conversationId),
 				draft,
 				references,
 				editMode,

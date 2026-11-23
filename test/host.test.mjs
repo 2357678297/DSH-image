@@ -736,6 +736,10 @@ check(
     ahead.body?.code === "behind" && ahead.body?.available === true && /^[0-9a-f]{7}$/.test(String(ahead.body?.short?.remote ?? "")),
     JSON.stringify({ code: ahead.body?.code, remote: ahead.body?.short?.remote })
   );
+  const pkgVersion = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, "package.json"), "utf8")).version;
+  const localBuild = await call("/update/check", { method:"POST", body:{localOnly:true, remote:path.join(tmpRemote,"not-a-remote")} });
+  check("离线首屏使用本地包版本与安装目录 HEAD，不访问远端", localBuild.body?.code === "local" && localBuild.body.packageVersion === pkgVersion && localBuild.body.localSha === String(git(["rev-parse", "HEAD"], PLUGIN_ROOT)).trim());
+  for (const api of ["/status", "/capabilities"]) check(api + " 报告实际加载的包版本", (await call(api)).body?.version === pkgVersion);
   const same = await call("/update/check", { method: "POST", body: { remote: PLUGIN_ROOT } });
   check(
     "更新通道：远端 = 本地仓库 → code=latest（已是最新）",

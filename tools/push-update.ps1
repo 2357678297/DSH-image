@@ -16,6 +16,9 @@ if (-not $Message) {
     $Message = "chore: update " + (Get-Date -Format "yyyy-MM-dd HH:mm")
 }
 
+node tools/package-version.mjs
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 git add -A
 $staged = (git diff --cached --name-only | Measure-Object).Count
 if ($staged -eq 0) {

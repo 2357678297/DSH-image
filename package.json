@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-velapi-image-go",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "velapi-image-go —— DeepSeek Harness 右侧栏「API 对话生图工作台」：对话生图 / 图片管理 / 信息管理 / 供应商管理，后端对接 velapi 兼容生图接口。",
   "type": "module",
   "main": "lib/index.js",
@@ -18,7 +18,9 @@
   ],
   "license": "MIT",
   "scripts": {
-    "test": "node test/host.test.mjs && node test/client.test.mjs",
+    "test": "node tools/package-version.mjs && node test/host.test.mjs && node test/client.test.mjs",
+    "version:sync": "node tools/package-version.mjs --write",
+    "version": "node tools/package-version.mjs --write && git add -- client.js",
     "wiring": "node tools/verify-wiring.mjs",
     "audit:workbench": "node tools/viewer-check.mjs --query audit=workbench && node tools/viewer-check.mjs --query audit=gallery && node tools/dock-check.mjs",
     "audit:chat": "node tools/viewer-check.mjs --query audit=chatflow && node tools/viewer-check.mjs --query audit=chatscroll && node tools/viewer-check.mjs --query audit=convnav",

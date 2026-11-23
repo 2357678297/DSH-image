@@ -1076,10 +1076,13 @@ node tools/verify-wiring.mjs --api http://127.0.0.1:54419/api/velapi-image-go   
 - **不再自动排定重启**：宿主半边（`lib/index.js`）改动需要生效时先说明，由用户手动运行脚本或在用户明确同意后再排；浏览器半边（`client.js`）刷新页面即可。
 - 重启后 GUI 端口会变，用 `node tools/verify-wiring.mjs` 自动探测确认接壤 8/8。
 
-### 更新通道（两段式，已接壤）
+### 更新通道与正式版本
+
+- `0.2.0` 包含宫格拆分、单格重绘和候选对照、桌面读图修复、图库分页及会话交互改进。更新按钮旁显示 `v包版本 · 本地提交号`。打开工作台只读本机；只有主动检查才连接远端。非 Git 安装不虚构提交号。
+- 正式发版以 `package.json` 为版本来源：`npm version patch`（或 `minor`）同步浏览器版本并创建版本提交及标签，然后推送分支及标签。独立打包时可以运行 `npm run version:sync`；测试和推送脚本会拒绝前端与清单版本不一致的包。
 
 - 第一次点「更新」→ `POST /update/check`（`git ls-remote` 对比本地 HEAD），返回 `latest` / `behind` / `not_a_repo` / `remote_unreachable`；
-- 查到 `behind` 后**再点一次** → `POST /update/apply`（`git pull --ff-only`，本地有未提交改动会被拒绝）→ 成功后自动 `POST /update/restart`（调 `~/.dsh/restart-dsh.cmd`，15 秒后重启宿主）。
+- 查到 `behind` 后两分钟内**再点一次**才拉取（`git pull --ff-only`）。成功后不会自动重启。刷新页面加载新前端；运行中的宿主在下次加载时才切换版本。
 - 实测：远端 `c3c0886` 之后本机连续 3 个更新包，界面显示「已是最新（591fb71）」。
 
 ### 视频上游字段（已实测，2026-10-21）

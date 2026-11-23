@@ -122,7 +122,7 @@
 | 项 | 规格 |
 |---|---|
 | 位置 | 左侧导航**贴底**（与统计之间一条 1px 分隔线）：更新按钮吃掉 nav 剩余空白，统计紧随其下 |
-| 内容 | `⟳ 更新` 胶囊按钮（24 高，11px，flex:none 不换行）+ 版本号 `v0.1.0`（9.5px 大写字距、三级灰，来自 `PLUGIN_VERSION`，与 package.json 对齐）；「PR 流程」只放 `title` 提示 |
+| 内容 | `⟳ 更新` 胶囊按钮（24 高，11px，flex:none 不换行）+ `v包版本 · 本地提交号`（空间不足可换行，紧凑态通过按钮标题查看）；降级到非 Git 安装时只显示包版本 |
 | 行为 | 点击 → `POST /update/check`；`running` 时按钮 spinner + 禁用；宿主未实现 → 进度条转 `--vig-danger` 并提示「更新通道还没接壤」 |
 | 进度条 | **按需出现**（仅检查中 / 完成瞬间 / 失败）：3px 圆角条，`order:-1` 排在按钮上方；墨黑进行、`--vig-ok` 完成、`--vig-danger` 失败；`role=progressbar` + `aria-valuenow`；结束后自动收起 |
 | 接壤 | 宿主 `POST /update/check` 已实现：`git ls-remote https://github.com/2357678297/DSH-image.git refs/heads/main` 对比本地 `git rev-parse HEAD`；返回 `code=latest/behind/not_a_repo/remote_unreachable`、`short.local/remote`、`hint`；界面按 code 提示（已是最新 / 远端有更新 + 短 SHA / 具体失败原因），进度条三态不变；拉取更新用 `git pull`（或 `tools/push-update.ps1` 的反向流程），改完重启 DSH |

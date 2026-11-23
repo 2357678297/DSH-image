@@ -33,12 +33,14 @@ if (!existsSync(REACT_ROOT)) {
 }
 
 const clientSource = readFileSync(path.join(ROOT, "client.js"), "utf8");
+const PACKAGE_VERSION = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
 const STATE_DIR = "C:\\Users\\demo\\.dsh\\state\\velapi-image-go";
 const NEXT_DIR = "D:\\素材\\velapi";
 
 /* 驱动脚本：别用反引号 / ${}（整段是模板字符串），要拼就用 + */
 const driver = `
 
+const packageVersion = ${JSON.stringify(PACKAGE_VERSION)};
 const React = window.__vigRequire("react");
 const { createRoot } = window.__vigRequire("react-dom/client");
 const { flushSync } = window.__vigRequire("react-dom");
@@ -349,6 +351,7 @@ window.fetch = async (url, init) => {
 	if (pathname.startsWith("/job")) return json({ ok: true, job: JOB });
 	if (pathname.startsWith("/models")) return json({ ok: true, items: [], models: [] });
 	if (pathname.startsWith("/update/check")) {
+		if (body?.localOnly) return json({ok:true, code:"latest", version:"0.1.0", localSha:"1111111"}); // still-running legacy host
 		const behind = new URLSearchParams(location.search).get("behind") === "1";
 		return json(
 			behind
@@ -356,7 +359,7 @@ window.fetch = async (url, init) => {
 				: { ok: true, latest: true, code: "latest", version: "0.1.0", localSha: "1111111", remoteSha: "1111111", short: { local: "1111111", remote: "1111111" }, hint: "已是最新（1111111）" }
 		);
 	}
-	if (pathname.startsWith("/update/apply")) return json({ ok: true, pulled: true, code: "applied", needsRestart: true, from: "1111111", to: "2222222", short: { from: "1111111", to: "2222222" }, hint: "已更新到 2222222，重启 DSH 生效" });
+	if (pathname.startsWith("/update/apply")) return json({ ok: true, pulled: true, code: "applied", packageVersion:"1.2.3", needsRestart: true, from: "1111111", to: "2222222", short: { from: "1111111", to: "2222222" }, hint: "已更新到 2222222，重启 DSH 生效" });
 	if (pathname.startsWith("/update/restart")) return json({ ok: true, restarting: true, delaySeconds: 15, hint: "15 秒后重启" });
 	return json({ ok: true });
 };
@@ -1023,10 +1026,13 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 	}
 	// 更新通道两段式：&behind=1&update=2 → 第一次点检查到 behind，第二次点只拉取
 	if (new URLSearchParams(location.search).get("update") === "2") {
+		const badge = () => host.querySelector(".vig-update-tag")?.textContent;
+		check("首屏旧宿主兼容：显示当前包版本与本地 SHA、未联网检查", badge() === "v"+packageVersion+" · 1111111" && !posts.some(p=>p.path==="/update/check" && p.body.remote!=="."));
 		const btn = host.querySelector(".vig-update-btn");
 		if (btn) {
 			flushSync(() => btn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 			await wait(700);
+			check("有新版时不把远端 SHA 当成本地版本", badge()==="v"+packageVersion+" · 1111111");
 			flushSync(() => btn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 			await wait(1200);
 		}
@@ -1034,7 +1040,7 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 		const restartPost = posts.filter((item) => item.path.startsWith("/update/restart")).pop();
 		check(
 			"更新通道两段式：第一次检查到 behind，第二次拉取（/update/apply）且不重启",
-			Boolean(applyPost) && !restartPost,
+			Boolean(applyPost) && !restartPost && badge()==="v1.2.3 · 2222222",
 			JSON.stringify({ apply: Boolean(applyPost), restart: Boolean(restartPost), posts: posts.filter((item) => item.path.startsWith("/update")).map((item) => item.path) })
 		);
 	}

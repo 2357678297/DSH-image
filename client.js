@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
 		const TAB_ID = "dsh-plugin-velapi-image-go";
 		const VIEW_KEY = "dsh.velapi-image-go.view";
 		// 与 package.json 的 version 对齐（界面「更新」入口显示它）
-		const PLUGIN_VERSION = "0.1.0";
+		const PLUGIN_VERSION = "0.2.0";
 		// 视频模型单独一套尺寸候选：和图片尺寸分开（用户要求「视频参数区分图片配置」）
 		const VIDEO_SIZES = ["1280x720", "1920x1080", "720x1280", "1080x1920"];
 		/* 视频参数按「比例 / 分辨率」分开选：像素 size 由两者组合（主流 API 里 OpenAI 用 size 像素、
@@ -663,7 +663,7 @@ function writeConvSetting(id, settings) {
 			"prov.storageOpen": "打开目录",
 			"prov.storageMove": "迁移到…",
 			"update.check": "检查更新",
-			"update.title": "更新",
+			"update.title": "更新", "update.pulledLabel": "已拉取",
 			"update.latest": "已是最新版本",
 			"update.ready": "有新版本，按 PR 流程更新",
 			"update.behind": "远端有更新 {sha}，拉取后需重启 DSH",
@@ -1146,7 +1146,7 @@ function writeConvSetting(id, settings) {
 			"prov.storageOpen": "Open folder",
 			"prov.storageMove": "Move to…",
 			"update.check": "Check for updates",
-			"update.title": "Update",
+			"update.title": "Update", "update.pulledLabel": "Pulled",
 			"update.latest": "You are on the latest version",
 			"update.ready": "Update available — shipped via PR flow",
 			"update.behind": "Remote has {sha} — pull then restart DSH",
@@ -2349,7 +2349,7 @@ body[data-ds-dark-theme] .vig-tools-pop{background:rgba(20,20,22,.96)}
    设计系统 v2.18 · 更新入口（先设计，宿主未接壤）+ 按需进度条
    ============================================================ */
 .vig-update{display:flex;flex-direction:column;gap:6px;padding:10px 2px 2px}
-.vig-update-row{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:nowrap;overflow:hidden}
+.vig-update-row{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;overflow:visible;row-gap:2px}
 .vig-update-btn{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:var(--vig-r-pill);flex:none;white-space:nowrap;font-size:11px;
 	border:1px solid var(--vig-line);background:var(--vig-surface);color:var(--vig-text);font-size:11.5px;font-weight:500;
 	transition:background-color var(--vig-dur) var(--vig-ease),border-color var(--vig-dur) var(--vig-ease)}
@@ -2357,7 +2357,7 @@ body[data-ds-dark-theme] .vig-tools-pop{background:rgba(20,20,22,.96)}
 .vig-update-btn:disabled{opacity:.6;cursor:default}
 .vig-update-btn.is-busy svg{animation:vig-update-spin 900ms linear infinite}
 @keyframes vig-update-spin{to{transform:rotate(360deg)}}
-.vig-update-tag{flex:none;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--vig-text-faint);
+.vig-update-tag{flex:none;font-size:10px;letter-spacing:0;color:var(--vig-text-muted);
 	white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vig-update-bar{order:-1;height:3px;border-radius:var(--vig-r-pill);background:var(--vig-surface-sunken);overflow:hidden;margin:0 2px 6px}
 .vig-update-bar>i{display:block;height:100%;width:0;background:var(--vig-accent);transition:width 260ms var(--vig-ease)}
@@ -11887,9 +11887,21 @@ h(
 			/* 更新入口：一次点击 = 检查；查到新版本后再点一次 = 只拉取，不重启。
 			   （进度条只在这期间出现，结束就收起。） */
 			const [updateState, setUpdateState] = useState({ phase: "idle", percent: 0 });
-			const updateInfoRef = useRef(null);
+			const updateInfoRef = useRef(null), buildEpoch = useRef(0);
+			const [build, setBuild] = useState({ version:PLUGIN_VERSION, sha:"" });
+			const shortSha = value => /^[0-9a-f]{7,64}$/i.test(value || "") ? value.slice(0,7).toLowerCase() : "";
+			const buildLabel = [build.version ? `v${build.version}` : t("update.pulledLabel"), build.sha].filter(Boolean).join(" · ");
+			useEffect(() => {
+				let active = true; const initial = buildEpoch.current;
+				// 兼容尚未重载的 0.1.0 宿主：其 check 不识别 localOnly，remote="." 也只查本机仓库。
+				void call("/update/check", { method:"POST", body:{localOnly:true, remote:"."} }).then(info => {
+					if (active && initial === buildEpoch.current) setBuild({version:info.packageVersion || PLUGIN_VERSION, sha:shortSha(info.localSha)});
+				}).catch(() => {}); // 无 git 或老宿主不支持：只显示包版本，不猜提交号。
+				return () => { active = false; };
+			}, []);
 			const checkUpdate = async () => {
 				if (updateState.phase === "running") return;
+				++buildEpoch.current;
 				const recent = updateInfoRef.current;
 				// 第二次点击（刚查到 behind，两分钟内有效）：直接只拉取，不重启
 				if (recent?.code === "behind" && Date.now() - recent.at < 120000) {
@@ -11898,6 +11910,7 @@ h(
 					try {
 						const applied = await call("/update/apply", { method: "POST", body: {} });
 						if (applied?.pulled) {
+							setBuild({version:applied.packageVersion || "", sha:shortSha(applied.to || applied.short?.to)});
 							setUpdateState({ phase: "done", percent: 100 });
 							toast(t("update.applied", { sha: applied.short?.to || "" }));
 							window.setTimeout(() => setUpdateState({ phase: "idle", percent: 0 }), 3600);
@@ -11921,6 +11934,7 @@ h(
 				const finish = (phase, ms) => window.setTimeout(() => setUpdateState({ phase: "idle", percent: 0 }), ms);
 				try {
 					const payload = await call("/update/check", { method: "POST", body: {} });
+					if (payload.localSha) setBuild(prev => ({...prev, sha:shortSha(payload.localSha)}));
 					setUpdateState({ phase: "done", percent: 100 });
 					if (payload?.code === "behind") {
 						updateInfoRef.current = { code: "behind", at: Date.now(), remote: payload.short?.remote };
@@ -13056,14 +13070,14 @@ h(
 									"button",
 									{
 										className: `vig-update-btn${updateState.phase === "running" ? " is-busy" : ""}`,
-										title: `${t("update.check")} · ${t("update.prFlow")}`,
+										title: `${t("update.check")} · ${buildLabel}`,
 										disabled: updateState.phase === "running",
 										onClick: () => void checkUpdate()
 									},
 									h(Icon, { name: "refresh", size: 12 }),
 									t("update.title")
 								),
-								h("span", { className: "vig-update-tag" }, `v${PLUGIN_VERSION}`),
+								h("span", { className: "vig-update-tag", title:buildLabel }, buildLabel),
 								h("div", { className: "vig-spacer" }),
 
 							),

@@ -225,6 +225,7 @@ function writeConvSetting(id, settings) {
 			"grid.leaveJob": "关闭预览？已提交的任务可能继续生成；不会自动填回。",
 			"grid.leaveDraft": "关闭并放弃未下载的整图修改或未应用的候选？原图不会改变。",
 			"grid.readError": "无法读取图片",
+			"grid.unsupportedSource": "宫格不支持这个图片地址（{scheme}）。请使用当前工作台图库中的原图。",
 			"grid.retryLoad": "重新加载原图", "grid.notFound": "找不到原图文件（404），请在图片管理中检查该素材是否还在。",
 			"grid.localRead": "图片读取中断，未能取得完整像素。请重试读取图片。", "grid.remoteRead": "外部图片无法读取像素，请使用已保存到本站图库的原图。",
 			"grid.badImage": "文件无法解码为图片，请检查原图是否完整。", "grid.readTimeout": "读取图片超时，请重试。",
@@ -789,6 +790,7 @@ function writeConvSetting(id, settings) {
 			"grid.leaveJob": "Close the preview? A submitted job can still finish; it will not change this sheet.",
 			"grid.leaveDraft": "Close and discard unexported changes or an unapplied candidate? The original stays unchanged.",
 			"grid.readError": "Cannot read image",
+			"grid.unsupportedSource": "Unsupported image address ({scheme}). Use an original from this workbench’s library.",
 			"grid.retryLoad": "Reload original", "grid.notFound": "Original file not found (404). Check the asset in the library.",
 			"grid.localRead": "Could not read the full image. Reload the original; no generation request was sent to load it.", "grid.remoteRead": "This external image is not readable by the editor. Use a local library copy.",
 			"grid.badImage": "The file could not be decoded as an image.", "grid.readTimeout": "Timed out while loading the image. Try again.",
@@ -3315,10 +3317,21 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				img.src = src;
 			});
 		}
+		function gridImageSource(url, base, pageURL) {
+			if (!url) throw new Error(t("grid.badImage"));
+			const src = new URL(url, base), page = new URL(pageURL);
+			// Electron 的主窗口是 dsh-app://app/。不要用 URL.origin 的 "null" 比较自定义协议，
+			// 也不要将此地址改写为会变化的 localhost 端口；由桌面壳转发已认证的相对 API 请求。
+			if (src.protocol === "dsh-app:" && page.protocol === src.protocol && page.host === "app" && src.host === page.host &&
+				!src.username && !src.password && /^\/api\/velapi-image-go\/(asset|upload|preset)\/[A-Za-z0-9._-]+$/.test(src.pathname)) {
+				return { src, remote:false, request:src.pathname + src.search };
+			}
+			if (!["http:","https:","blob:","data:"].includes(src.protocol)) throw new Error(t("grid.unsupportedSource", {scheme:src.protocol}));
+			return { src, remote:/^https?:$/.test(src.protocol) && src.origin !== page.origin, request:src.href };
+		}
 		async function gridLoadImage(url, parent, displayed = null) {
-			parent.throwIfAborted(); if (!url) throw new Error(t("grid.badImage"));
-			const src = new URL(url, document.baseURI), remote = /^https?:$/.test(src.protocol) && src.origin !== location.origin;
-			if (!["http:","https:","blob:","data:"].includes(src.protocol)) throw new Error(t("grid.readError"));
+			parent.throwIfAborted();
+			const { src, remote, request } = gridImageSource(url, document.baseURI, location.href);
 			const borrowed = (img) => ({img, url:src.href, release:()=>{}});
 			if (displayed?.complete && displayed.naturalWidth && (displayed.currentSrc || displayed.src) === src.href) {
 				try { gridCheckPixels(displayed); return borrowed(displayed); }
@@ -3334,7 +3347,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				try { const img = await gridNativeImage(src.href, signal, remote); gridCheckPixels(img); return borrowed(img); }
 				catch (e) { signal.throwIfAborted(); if (e instanceof RangeError) throw e; }
 				let response;
-				try { response = await fetch(src.href, {signal, credentials:"same-origin"}); }
+				try { response = await fetch(request, {signal, credentials:"same-origin"}); }
 				catch { signal.throwIfAborted(); throw new Error(t(remote ? "grid.remoteRead" : "grid.localRead")); }
 				if (!response.ok) throw new Error(response.status === 404 ? t("grid.notFound") : `${t("grid.readError")} (HTTP ${response.status})`);
 				let blob; try { blob = await response.blob(); } catch { signal.throwIfAborted(); throw new Error(t("grid.localRead")); }
@@ -13776,7 +13789,7 @@ h(
 			psRectFrom,
 			psResizeRect,
 			psSplitTiles,
-			psGridLayout, psGridCrop, psGridReplace,
+			gridImageSource, psGridLayout, psGridCrop, psGridReplace,
 			psInscribedSize,
 			psAnchorOffset,
 			psDeskewAngle,

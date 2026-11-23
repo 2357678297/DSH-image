@@ -2698,6 +2698,18 @@ check(
     renderToStaticMarkup(React.createElement(w.JobTurn, { job: { ...FAILED, source: "tool", sessionId: "sess-abc" }, onToast: () => {} })).slice(0, 240)
   );
 
+  // Desktop and browser serve the same record path under different document protocols.
+  {
+    const page = "dsh-app://app/", base = page + "index.html", path = "/api/velapi-image-go/asset/old_sheet_9.png";
+    const source = (value, origin = page) => w.gridImageSource(value, base, origin);
+    const rejects = (value, origin) => { try { source(value, origin); return false; } catch { return true; } };
+    check("桌面原图及候选引用同一工作台协议；fetch 走相对宿主 API", [path, "dsh-app://app" + path].every(value => {
+      const file = source(value); return file.src.href === "dsh-app://app" + path && file.request === path && !file.remote;
+    }) && source("/api/velapi-image-go/upload/particle.png?v=2").request.endsWith("particle.png?v=2"));
+    check("桌面通道不接受其它页面、目录、凭据或本机文件地址", ["dsh-app://shell" + path,"dsh-app://app/plugins/events","dsh-app://user@app" + path,"file:///C:/private.png","dsh-app://app/api/velapi-image-go/asset/a%2Fb.png"].every(v => rejects(v)) && rejects(path,"http://localhost:5000/"));
+    const web = w.gridImageSource(path,"http://127.0.0.1:1234/","http://127.0.0.1:1234/");
+    check("网页原有同源/远端图片分流仍有效", !web.remote && web.request === "http://127.0.0.1:1234"+path && source("https://example.invalid/image.png").remote);
+  }
   /* 结果卡：图片自己一张卡，下面三个动作是纯文字按键（以前那块白底面板+分隔线像又一张卡） */
   check(
     "结果卡：图片单独一个圆角框，五个动作无底色、无分隔线、排一行（短名字 + title 全称）",

@@ -19,8 +19,11 @@
   "license": "MIT",
   "scripts": {
     "test": "node tools/package-version.mjs && node test/host.test.mjs && node test/client.test.mjs",
+    "release:editor": "powershell.exe -NoProfile -STA -File tools/update-editor.ps1",
+    "release:status": "node tools/release-guard.mjs status",
+    "test:release-guard": "node test/release-guard.test.mjs",
     "version:sync": "node tools/package-version.mjs --write",
-    "version": "node tools/package-version.mjs --write && git add -- client.js",
+    "preversion": "node tools/release-guard.mjs npm-version",
     "wiring": "node tools/verify-wiring.mjs",
     "audit:workbench": "node tools/viewer-check.mjs --query audit=workbench && node tools/viewer-check.mjs --query audit=gallery && node tools/dock-check.mjs",
     "audit:chat": "node tools/viewer-check.mjs --query audit=chatflow && node tools/viewer-check.mjs --query audit=chatscroll && node tools/viewer-check.mjs --query audit=convnav",

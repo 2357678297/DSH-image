@@ -1039,9 +1039,7 @@ node tools/fit-check.mjs
 ## 仓库与更新包
 
 - 仓库：<https://github.com/2357678297/DSH-image>（分支 `main`）。
-- 以后**每次改动都作为一个「更新包」提交**：
-  - 手动：`git add -A && git commit -m "feat: ..." && git push`
-  - 或：`pwsh tools/push-update.ps1 "feat: ..."`（不带消息时用时间戳）
+- 日常功能改动先审查、本地提交；正式发版只用维护者更新编辑器，见下方「更新通道与正式版本」。旧整库直推脚本已停用。
 - 提交前自检（本机）：`node test/host.test.mjs`、`node test/client.test.mjs`、`node test/engine.test.mjs`、
   `node tools/viewer-check.mjs`（真机 Chrome 渲染检查，CI 里不跑）。
 - CI：`.github/workflows/test.yml` 在每次 push / PR 时跑 host / client / engine 三套离线测试。
@@ -1079,7 +1077,7 @@ node tools/verify-wiring.mjs --api http://127.0.0.1:54419/api/velapi-image-go   
 ### 更新通道与正式版本
 
 - `0.2.0` 包含宫格拆分、单格重绘和候选对照、桌面读图修复、图库分页及会话交互改进。更新按钮旁显示 `v包版本 · 本地提交号`。打开工作台只读本机；只有主动检查才连接远端。非 Git 安装不虚构提交号。
-- 正式发版以 `package.json` 为版本来源：`npm version patch`（或 `minor`）同步浏览器版本并创建版本提交及标签，然后推送分支及标签。独立打包时可以运行 `npm run version:sync`；测试和推送脚本会拒绝前端与清单版本不一致的包。
+- **维护者发版**：双击根目录 `更新编辑器.cmd` 或运行 `npm run release:editor`，按「保存草稿 → 准备 → 校验 → 输入标签确认发布」执行。[维护者操作与恢复说明](docs/RELEASE-GUARD.md)。普通工作台的「更新」只检查/拉取，不能发布。
 
 - 第一次点「更新」→ `POST /update/check`（`git ls-remote` 对比本地 HEAD），返回 `latest` / `behind` / `not_a_repo` / `remote_unreachable`；
 - 查到 `behind` 后两分钟内**再点一次**才拉取（`git pull --ff-only`）。成功后不会自动重启。刷新页面加载新前端；运行中的宿主在下次加载时才切换版本。

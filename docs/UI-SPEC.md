@@ -117,7 +117,7 @@
 | 右侧 | 图标按钮 26×26；顶栏内图标 `stroke-width:1.05`（比正文 1.4 更纤细）；状态胶囊压成 20px 圆点（文字进 `title`） |
 | 右侧动作 | 图标按钮按 4.3 |
 
-### 4.1b 更新入口 `.vig-update`（先设计，宿主未接壤）
+### 4.1b 更新入口 `.vig-update`（检查与拉取）
 
 | 项 | 规格 |
 |---|---|
@@ -125,7 +125,7 @@
 | 内容 | `⟳ 更新` 胶囊按钮（24 高，11px，flex:none 不换行）+ `v包版本 · 本地提交号`（空间不足可换行，紧凑态通过按钮标题查看）；降级到非 Git 安装时只显示包版本 |
 | 行为 | 点击 → `POST /update/check`；`running` 时按钮 spinner + 禁用；宿主未实现 → 进度条转 `--vig-danger` 并提示「更新通道还没接壤」 |
 | 进度条 | **按需出现**（仅检查中 / 完成瞬间 / 失败）：3px 圆角条，`order:-1` 排在按钮上方；墨黑进行、`--vig-ok` 完成、`--vig-danger` 失败；`role=progressbar` + `aria-valuenow`；结束后自动收起 |
-| 接壤 | 宿主 `POST /update/check` 已实现：`git ls-remote https://github.com/2357678297/DSH-image.git refs/heads/main` 对比本地 `git rev-parse HEAD`；返回 `code=latest/behind/not_a_repo/remote_unreachable`、`short.local/remote`、`hint`；界面按 code 提示（已是最新 / 远端有更新 + 短 SHA / 具体失败原因），进度条三态不变；拉取更新用 `git pull`（或 `tools/push-update.ps1` 的反向流程），改完重启 DSH |
+| 接壤 | 宿主 `POST /update/check` 已实现：`git ls-remote https://github.com/2357678297/DSH-image.git refs/heads/main` 对比本地 `git rev-parse HEAD`；返回 `code=latest/behind/not_a_repo/remote_unreachable`、`short.local/remote`、`hint`；界面按 code 提示（已是最新 / 远端有更新 + 短 SHA / 具体失败原因），进度条三态不变；再次点击只做 `git pull --ff-only`，不自动重启；维护者发布走独立本地更新编辑器 |
 
 ### 4.2 左侧导航 `.vig-nav-item`
 

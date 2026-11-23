@@ -1,0 +1,49 @@
+// Injected into viewer-check's local Chrome fixture. No real uploads, images, or providers.
+export async function auditPsPixels({ui,React,root,flushSync,wait,check,host}) {
+  const canvas=(w,h,color)=>{const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');if(color){x.fillStyle=color;x.fillRect(0,0,w,h);}return c;};
+  const px=(c,x=1,y=1)=>Array.from(c.getContext('2d').getImageData(x,y,1,1).data).join(',');
+  const base=canvas(32,16,'red'), top=canvas(32,16,'lime'), hidden=canvas(32,16,'blue');
+  const layers=[{id:'green',name:'visible',visible:true,canvas:top},{id:'blue',name:'hidden',visible:false,canvas:hidden}];
+  const mount=async(key,tool)=>{flushSync(()=>root.render(React.createElement(ui.PsView,{key,state:{library:[],presets:[]},actions:{toast(){}},initial:{name:'base',canvas:base,width:32,height:16,tool,layers}})));await wait(80);};
+  const button=s=>[...host.querySelectorAll('button')].find(b=>b.textContent.trim()===s);
+  const click=async(el)=>{if(!el)throw new Error('missing editor control');flushSync(()=>el.click());await wait(65);};
+  const view=()=>host.querySelector('.vig-ps-canvas');
+  await mount('split','split');
+  check('合成预览显示绿层，排除隐藏蓝层',px(view())==='0,255,0,255');
+  await click(button('切块'));const tile=host.querySelector('.vig-ps-tile img');
+  await new Promise((ok,fail)=>{if(tile.complete&&tile.naturalWidth)ok();else {tile.onload=ok;tile.onerror=fail;}});
+  const read=canvas(tile.naturalWidth,tile.naturalHeight);read.getContext('2d').drawImage(tile,0,0);
+  check('切块与可见合成一致，不从红色底图取像素',px(read)==='0,255,0,255',px(read));
+  const layout=ui.psSplitTiles(2,1,8,8);check('小图切块不产生零尺寸或重复像素',layout.length===2&&layout.every(t=>t.w===1&&t.h===1));
+  await mount('adjust','adjust');await click(button('反相'));await click(button('应用'));
+  check('反相加工当前可见绿层而非红色底图',px(view())==='255,0,255,255',px(view()));
+  await click(host.querySelector('.vig-toolbar button[title="撤销"]'));check('撤销恢复绿层且底图仍是红色',px(view())==='0,255,0,255'&&px(base)==='255,0,0,255');
+  const large=canvas(802,404,'red'), visible=canvas(802,404,'#123456');
+  flushSync(()=>root.render(React.createElement(ui.PsView,{key:'large-split',state:{library:[],presets:[]},actions:{toast(){}},initial:{name:'large',canvas:large,width:802,height:404,dpi:300,tool:'split',layers:[{id:'visible',canvas:visible,visible:true}]}})));await wait(70);await click(button('切块'));
+  const first=host.querySelector('.vig-ps-tile'), preview=first.querySelector('img');await wait(80);
+  check('401×202 原始切块只编码 160px 卡面',preview.naturalWidth===160&&preview.naturalHeight===81,preview.naturalWidth+'×'+preview.naturalHeight);
+  const oldClick=HTMLAnchorElement.prototype.click;let href='';try{HTMLAnchorElement.prototype.click=function(){href=this.href;};await click(first.querySelectorAll('button')[1]);}finally{HTMLAnchorElement.prototype.click=oldClick;}
+  const image=new Image();await new Promise((ok,fail)=>{image.onload=ok;image.onerror=fail;image.src=href;});
+  const sample=canvas(image.naturalWidth,image.naturalHeight);sample.getContext('2d').drawImage(image,0,0);
+  check('下载的切块仍是 401×202、300 DPI 的合成像素',sample.width===401&&sample.height===202&&px(sample)==='18,52,86,255'&&ui.psReadDpi(href)===300);
+  await click(host.querySelector('.vig-ps-chip-eye'));check('显隐变化后不提供过期切块',!host.querySelector('.vig-ps-tile'));
+  await mount('ruler','straighten');
+  const rulerView=view(), r=rulerView.getBoundingClientRect();
+  const pointer=async(type,x,y)=>{flushSync(()=>rulerView.dispatchEvent(new PointerEvent(type,{button:0,buttons:type==='pointerdown'||type==='pointermove'?1:0,pointerId:7,bubbles:true,clientX:r.left+r.width*x,clientY:r.top+r.height*y})));await wait(20);};
+  await pointer('pointerdown',.1,.1);await pointer('pointermove',.9,.8);await pointer('pointercancel',.9,.8);
+  check('系统取消标尺拖动不提交拉直、不新增历史',host.querySelector('[title="撤销"]').disabled&&view().width===32&&view().height===16);
+  await mount('canvas','canvasSize');await click(button('百分比'));await click([...host.querySelectorAll('.vig-ps-params .is-ratio button')].find(el=>el.textContent==='1:1'));await click(button('应用'));
+  check('百分比模式比例预设生成 32×32 像素',view().width===32&&view().height===32,view().width+'×'+view().height);
+  await click(host.querySelector('.vig-toolbar button[title="撤销"]'));
+  const dims=[...host.querySelectorAll('.vig-ps-params input[type=number]')];
+  check('撤销后恢复 32×16，继续显示 100% 而非误用像素数',view().width===32&&view().height===16&&dims.length>=2&&dims[0].value==='100'&&dims[1].value==='100',dims.map(d=>d.value).join(','));
+  const result=canvas(32,16,null);result.getContext('2d').fillRect(6,6,16,4);
+  const layer={id:'replacement',canvas:result,compositeResult:true,visible:true,mode:'normal',opacity:1};
+  const out=ui.psExportComposite(base,[layer],false);
+  check('已确认的完整结果保留透明像素',px(out)==='0,0,0,0'&&px(out,12,8)==='0,0,0,255',px(out));
+  const fade=ui.psExportComposite(base,[{...layer,opacity:.5}],false);const alpha=Number(px(fade).split(',')[3]);
+  check('半透明完整结果按图层强度混合，隐藏后恢复底图',Math.abs(alpha-128)<=1&&px(ui.psExportComposite(base,[{...layer,visible:false}],false))===px(base),alpha);
+  const mask=canvas(32,16,'white');mask.getContext('2d').clearRect(0,0,2,16);
+  const masked=ui.psExportComposite(base,[{...layer,mask:{canvas:mask}}],false);
+  check('蒙版外保留底图，蒙版内可替换为透明',px(masked)===px(base)&&px(masked,4,1)==='0,0,0,0');
+}

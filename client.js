@@ -330,7 +330,7 @@ function writeConvSetting(id, settings) {
 			"ps.layer.add": "相加",
 			"ps.drop.none": "拖进来的不是图片文件，也没有可用的图片地址",
 			"ps.replace": "换一张",
-			"ps.reload": "还原这张",
+			"ps.reload": "重置工具参数",
 			"ps.apply": "应用",
 			"ps.reset": "清零",
 			"ps.undo": "撤销",
@@ -833,7 +833,7 @@ function writeConvSetting(id, settings) {
 			"ps.empty": "Load an image first",
 			"ps.empty.hint": "Upload a local file, or pick one from the library (generated results live there)",
 			"ps.replace": "Replace",
-			"ps.reload": "Revert",
+			"ps.reload": "Reset tool settings",
 			"ps.apply": "Apply",
 			"ps.reset": "Reset",
 			"ps.undo": "Undo",
@@ -7181,7 +7181,16 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if (!bitmap) continue;
 				ctx.save();
 				ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
-				ctx.globalCompositeOperation = psBlendOp(layer.mode);
+				if (layer.compositeResult && psBlendOp(layer.mode) === "source-over") {
+					// 完整画面的透明像素也是结果。带蒙版/强度时，按覆盖率混合两份预乘 RGBA。
+					if (!layer.mask && ctx.globalAlpha === 1) ctx.globalCompositeOperation = "copy";
+					else {
+						ctx.globalCompositeOperation = "destination-out";
+						if (layer.mask) ctx.drawImage(layer.mask.canvas, 0, 0, width, height);
+						else { ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, width, height); }
+						ctx.globalCompositeOperation = "lighter";
+					}
+				} else ctx.globalCompositeOperation = psBlendOp(layer.mode);
 				ctx.drawImage(bitmap, 0, 0, width, height);
 				ctx.restore();
 				drawn += 1;
@@ -7690,7 +7699,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const list = Array.isArray(layers) ? layers : [];
 			// 没有可用 id 就不写：不然 id 是 undefined 时会把「没 id 的层」当成目标，写错层
 			if (!canvas || id === null || id === undefined) return list;
-			return list.map((layer) => (layer && layer.id === id ? { ...layer, canvas, width: canvas.width, height: canvas.height } : layer));
+			return list.map((layer) => (layer && layer.id === id ? { ...layer, canvas, width: canvas.width, height: canvas.height, pixelRevision:(layer.pixelRevision || 0) + 1 } : layer));
 		}
 
 		/**
@@ -8000,17 +8009,30 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		/** 历史快照：底图 + 图层 + 单层会话一起记，撤销才能把整屏状态一起回退。 */
-		function psHistorySnapshot(source, layers, layerSession, label) {
+		function psHistorySnapshot(source, layers, layerSession, label, meta = {}) {
 			const canvas = source?.canvas ?? null;
 			if (!canvas) return null;
 			return {
 				name: source?.name || "image",
 				canvas,
 				layers: Array.isArray(layers) ? layers.slice() : [],
-				// 历史面板上显示的那一步叫什么（裁切 / 旋转 / 调整 / 变形 …）
+				activeLayerId: meta.activeLayerId ?? layerSession?.id ?? "",
+				warpResultId: meta.warpResultId ?? "",
+				// 标签写的是「进入这个状态的操作」，而不是下一步尚未执行的操作。
 				label: typeof label === "string" ? label : "",
 				layerSession: layerSession && typeof layerSession === "object" ? layerSession : null
 			};
+		}
+
+		/** 快照复用不可变的像素对象；这里只移动引用，跳多步不会重算滤镜/重跑变形。 */
+		function psHistoryPush(history, before, nextLabel) {
+			return { past: [...history.past, { ...before, label:history.currentLabel || before.label || before.name }].slice(-PS_MAX_HISTORY), currentLabel:nextLabel, future:[] };
+		}
+		function psHistorySeek(history, current, kind, index) {
+			if (!current || !Number.isInteger(index) || !["past","future"].includes(kind) || !history[kind]?.[index]) return null;
+			const {past,future} = history, line = [...past, current, ...future];
+			const at = kind === "past" ? index : past.length + 1 + index;
+			return { target:line[at], history:{past:line.slice(0,at), currentLabel:line[at].label, future:line.slice(at+1)} };
 		}
 
 		/**
@@ -8025,7 +8047,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				index,
 				label: (snapshot && snapshot.label) || `第 ${index + 1} 步`
 			}));
-			rows.push({ kind: "current", index: past.length, label: currentLabel || "当前" });
+			rows.push({ kind: "current", index: past.length, label: history?.currentLabel || currentLabel || "当前" });
 			future.forEach((snapshot, index) => {
 				rows.push({ kind: "future", index, label: (snapshot && snapshot.label) || `第 ${index + 1} 步` });
 			});
@@ -8041,6 +8063,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const base = current && typeof current === "object" ? current : {};
 			const layers = Array.isArray(snapshot.layers) ? snapshot.layers : Array.isArray(base.layers) ? base.layers : [];
 			const layerSession = snapshot.layerSession === undefined ? base.layerSession ?? null : snapshot.layerSession;
+			const activeId = snapshot.activeLayerId ?? layerSession?.id ?? base.activeLayerId ?? "";
+			const warpId = snapshot.warpResultId ?? base.warpResultId ?? "";
 			const label = typeof snapshot.label === "string" ? snapshot.label : "";
 			return {
 				name: snapshot.name || "image",
@@ -8049,12 +8073,15 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				height: snapshot.canvas.height,
 				layers,
 				label,
+				activeLayerId: psLayerById(layers, activeId)?.id ?? "",
+				warpResultId: layerSession?.id === warpId ? warpId : "",
 				layerSession: layerSession && typeof layerSession === "object" ? layerSession : null
 			};
 		}
 
 		/** 行点击是否等于「打开这一层」：点在行里的控件（眼睛 / 混合模式 / 不透明度 / 蒙版按钮）上不算。 */
 		function psLayerRowActivate(event) {
+			if (event?.target?.closest?.("button,select,option,input,textarea,label")) return false;
 			const tag = String(event?.target?.tagName ?? "").toUpperCase();
 			return !["BUTTON", "SELECT", "OPTION", "INPUT", "TEXTAREA", "LABEL"].includes(tag);
 		}
@@ -8079,15 +8106,21 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			return list;
 		}
 
-		/** 图层缩略图：画布缩到 56px 的 dataURL（控制条用，惰性缓存由调用方管）。 */
-		function psLayerThumb(canvas, size = 56) {
+		// 已提交的像素画布按不可变对象使用；几何操作/单层写回更换 canvas，纯属性变更不应重新编码整排缩略图。
+		// 若调用方复用同一画布并更新像素，显式递增 pixelRevision。每个弱键仅保留最后一个尺寸/版本。
+		const psLayerThumbCache = new WeakMap();
+		function psLayerThumb(canvas, size = 56, pixelRevision = 0) {
 			try {
 				if (!canvas || !canvas.width || !canvas.height) return "";
+				const cached = psLayerThumbCache.get(canvas);
+				if (cached && cached.size === size && cached.w === canvas.width && cached.h === canvas.height && cached.revision === pixelRevision) return cached.url;
 				const thumb = psCanvas(size, size);
 				const context = thumb.getContext("2d");
 				context.imageSmoothingQuality = "high";
 				context.drawImage(canvas, 0, 0, size, size);
-				return thumb.toDataURL("image/png");
+				const url = thumb.toDataURL("image/png");
+				psLayerThumbCache.set(canvas, {size,w:canvas.width,h:canvas.height,revision:pixelRevision,url});
+				return url;
 			} catch (error) {
 				return "";
 			}
@@ -8095,14 +8128,15 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 
 		/** 合成用的那张图：底图 + 图层（导出、设为参考图都走它，保证「看到的就是导出的」）。
 		 *  蒙版必须和画布上一样参与合成 —— 以前这里不传 prepare，导出会把蒙住的内容原样露出来。 */
-		function psLayerExport(base, layers, width, height) {
-			const target = psCanvas(width, height);
-			const ctx = target.getContext("2d");
-			if (base) ctx.drawImage(base, 0, 0, target.width, target.height);
-			psDrawLayers(ctx, layers, target.width, target.height, (layer) =>
-				psMaskedCanvas(layer.canvas, layer.mask?.canvas, target.width, target.height)
-			);
+		function psPaintStack(target, base, layers) {
+			const ctx = target.getContext("2d"), w = target.width, h = target.height;
+			ctx.clearRect(0, 0, w, h);
+			if (base) ctx.drawImage(base, 0, 0, w, h);
+			psDrawLayers(ctx, layers, w, h, layer => psMaskedCanvas(layer.canvas, layer.mask?.canvas, w, h));
 			return target;
+		}
+		function psLayerExport(base, layers, width, height) {
+			return psPaintStack(psCanvas(width, height), base, layers);
 		}
 
 		/** 画布上该叠哪些层：平时是全部图层，单层会话里只有这一层在画布上（别的层不叠、自己也不叠自己）。 */
@@ -8115,7 +8149,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		function psExportComposite(shown, layers, inSession) {
 			if (!shown) return null;
 			if (inSession) return shown;
-			return Array.isArray(layers) && layers.length > 0 ? psLayerExport(shown, layers, shown.width, shown.height) : shown;
+			return Array.isArray(layers) && layers.some(layer => layer?.canvas && layer.visible !== false) ? psLayerExport(shown, layers, shown.width, shown.height) : shown;
 		}
 
 		/** 把选区夹回图内；宽高至少 1px。传 null 表示没有选区。 */
@@ -8167,8 +8201,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 
 		/** 切割拆分：把 w×h 按 cols×rows 均分，余数摊到最后一块。 */
 		function psSplitTiles(width, height, cols, rows) {
-			const c = Math.max(1, Math.min(8, Math.round(cols)));
-			const r = Math.max(1, Math.min(8, Math.round(rows)));
+			if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) return [];
+			const c = Math.max(1, Math.min(width, 8, Math.round(cols) || 1));
+			const r = Math.max(1, Math.min(height, 8, Math.round(rows) || 1));
 			const tiles = [];
 			for (let row = 0; row < r; row += 1) {
 				for (let col = 0; col < c; col += 1) {
@@ -8848,6 +8883,56 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			);
 		}
 
+		// 最近一次选图持有从取图到提交的所有权；即使底层忽略 abort，旧回包也不能写入当前文档。
+		function psReadChannel() {
+			let current = null;
+			const cancel = () => { const previous = current; current = null; previous?.abort(); };
+			return { cancel, async run(work, commit, onError, onBusy) {
+				cancel(); const task = new AbortController(); current = task; onBusy(true);
+				try {
+					const image = await work(task.signal);
+					if (task !== current) return false;
+					return commit(image) !== false;
+				} catch (error) {
+					if (task === current) onError(error);
+					return false;
+				} finally { if (task === current) { current = null; onBusy(false); } }
+			} };
+		}
+
+		function psAdjustDefaults() {
+			return { brightness:0, contrast:0, saturation:0, vibrance:0, hue:0, grayscale:false,
+				invert:false, inBlack:0, inWhite:255, gamma:1, blur:0, sharpen:0, noise:0 };
+		}
+
+		async function psDecodeInput(input, signal, size) {
+			signal.throwIfAborted();
+			if (input.canvas) return {canvas:input.canvas, dpi:input.dpi || 72};
+			let blob = input.file, src = input.dataUrl, owned = null;
+			if (!blob && !src) {
+				const {request} = gridImageSource(input.url, document.baseURI, location.href);
+				const response = await fetch(request, {signal, credentials:"same-origin"});
+				if (!response.ok) throw new Error(`取图失败 HTTP ${response.status}`);
+				blob = await response.blob();
+			}
+			signal.throwIfAborted();
+			try {
+				if (blob) { if (!blob.size) throw new Error(t("grid.badImage")); owned = URL.createObjectURL(blob); src = owned; }
+				else if (!/^data:image\//i.test(src || "")) throw new Error(t("grid.badImage"));
+				const image = await gridNativeImage(src, signal);
+				signal.throwIfAborted();
+				const w = image.naturalWidth, h = image.naturalHeight;
+				if (!w || !h) throw new Error(t("grid.badImage"));
+				if (Math.max(w,h)>16384 || w*h>48*1024*1024) throw new RangeError(t("grid.imageLimit"));
+				// 文件和 URL 都不经整图 base64 中转；DPI 只查前 256 KiB，新增图层沿用文档 DPI。
+				const dpi = size ? 72 : (blob ? psReadDpiBytes(new Uint8Array(await blob.slice(0,256*1024).arrayBuffer())) : psReadDpi(src)) || 72;
+				signal.throwIfAborted();
+				const canvas = psCanvas(size?.width || w, size?.height || h);
+				canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+				return {canvas, dpi};
+			} finally { if (owned) URL.revokeObjectURL(owned); }
+		}
+
 		function PsView({ state, actions, initial, initialUrl, onConsumeInitialUrl }) {
 			// 提示统一走宿主注入的 actions.toast：PsView 里没有提示容器，
 			// 壳里那份 .vig-toasts 才是唯一的（以前这里直接调全局 toast，等于每条提示都报 ReferenceError）
@@ -8865,21 +8950,13 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			// 曲线的控制点（默认恒等；预设按钮改的就是它）
 			const [curve, setCurve] = useState([[0, 0], [255, 255]]);
 			// 「调整」的参数（亮度/对比度/饱和度/色相 + 灰度/反相）
-			const [adjust, setAdjust] = useState({
-				brightness: 0,
-				contrast: 0,
-				saturation: 0,
-				vibrance: 0,
-				hue: 0,
-				grayscale: false,
-				invert: false,
-				inBlack: 0,
-				inWhite: 255,
-				gamma: 1,
-				blur: 0,
-				sharpen: 0,
-				noise: 0
-			});
+			const [adjust, setAdjust] = useState(psAdjustDefaults);
+			const [reading, setReading] = useState(false);
+			const readChannelRef = useRef(null);
+			if (!readChannelRef.current) readChannelRef.current = psReadChannel();
+			const reads = readChannelRef.current;
+			const invalidatePsReads = () => { reads.cancel(); setReading(false); };
+			useMeasureEffect(() => () => reads.cancel(), [reads]);
 			// 图层（叠加算法）：底图之外再叠几层，默认空（initial.layers = 静态预览 / 截图用的种子）
 			const [layers, setLayers] = useState(() => (Array.isArray(initial?.layers) ? initial.layers : []));
 			// 单层编辑会话：正在把哪一层当底图在改（null = 改底图）；initial.layerSession 同样是预览种子
@@ -8911,13 +8988,47 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const [layerPick, setLayerPick] = useState(false);
 			// 底部控制条缩略图（底图 + 各层）：随 source / layers 变化重算
 			const layerThumbs = useMemo(() => {
-				const base = psLayerThumb(source?.canvas);
-				const items = (layers || []).map((layer) => psLayerThumb(layer.canvas));
+				const base = psLayerThumb((layerSession?.base ?? source)?.canvas);
+				const items = layers.map(layer => psLayerThumb(layer.id === layerSession?.id ? source?.canvas : layer.canvas, 56, layer.pixelRevision));
 				return { base, items };
-			}, [source, layers]);
+			}, [source, layers, layerSession]);
 			// 控制条选中的图层（"" = 底图）：属性条（叠加算法 / 不透明度 / 顺序 / 蒙版 / 删除）跟着它走
 			const activeLayerIndex = (layers || []).findIndex((item) => item.id === activeLayerId);
 			const activeLayer = activeLayerIndex >= 0 ? layers[activeLayerIndex] : null;
+			// 手势内 slider 多次 input 只产生一步历史，键盘/独立点击则分别记。其余结构变更必须截断合并。
+			const opacityGesture = useRef(null);
+			const layerControlsLocked = Boolean(layerSession) || !source?.canvas;
+			const changeLayers = (label, update, nextId, gesture = null) => {
+				if (layerSessionRef.current || !source?.canvas) return false;
+				const next = update(layers);
+				if (next === layers || (next.length === layers.length && next.every((item, i) => item === layers[i]))) return false;
+				if (!gesture || gesture.last !== layers) pushHistory(source.canvas, label);
+				if (gesture) gesture.last = next;
+				else opacityGesture.current = null;
+				setLayers(next);
+				if (nextId !== undefined) setActiveLayerId(nextId);
+				else if (activeLayerId && !next.some(item => item.id === activeLayerId)) setActiveLayerId("");
+				return true;
+			};
+			const editLayer = (id, key, patch, gesture) => changeLayers(t(key), list => list.map(item => item.id !== id ? item : patch(item)), undefined, gesture);
+			const toggleLayer = id => editLayer(id, "ps.layer.visible", layer => ({...layer,visible:layer.visible === false}));
+			const removeLayer = id => changeLayers(t("ps.layer.remove"), list => list.filter(item => item.id !== id));
+			const moveLayer = (index, delta) => changeLayers(t(delta > 0 ? "ps.layer.up" : "ps.layer.down"), list => psMoveLayer(list, index, delta));
+			const layerModeProps = layer => ({
+				disabled:layerControlsLocked, value:layer.mode || "normal", title:t("ps.layer.mode"),
+				onChange:e => { const mode=e.target.value; editLayer(layer.id,"ps.layer.mode", l => (l.mode || "normal") === mode ? l : {...l,mode}); }
+			});
+			const layerOpacityProps = layer => ({
+				disabled:layerControlsLocked, type:"range", min:0,max:100,step:1,value:Math.round((layer.opacity ?? 1)*100),title:t("ps.layer.opacity"),
+				onPointerDown:() => { opacityGesture.current={id:layer.id}; },
+				onPointerUp:() => { opacityGesture.current=null; }, onPointerCancel:() => { opacityGesture.current=null; }, onBlur:() => { opacityGesture.current=null; },
+				onChange:e => { const opacity=Number(e.target.value)/100; editLayer(layer.id,"ps.layer.opacity",l => (l.opacity ?? 1) === opacity ? l : {...l,opacity}, opacityGesture.current?.id === layer.id ? opacityGesture.current : null); }
+			});
+			const toggleLayerMask = layer => editLayer(layer.id,layer.mask ? "ps.layer.maskInvert" : "ps.layer.maskAdd", l => {
+				const dims = psMaskDims(l.mask, l.mask ? l.canvas : source.canvas);
+				const alpha = l.mask ? psInvertAlpha(l.mask.alpha) : psMaskAlpha(dims.w, dims.h, selection);
+				return {...l, mask:{canvas:psMaskCanvas(dims.w, dims.h, alpha), alpha}};
+			});
 			// 参数面板浮窗的位置（拖过就记住）
 			const [floatPos, setFloatPos] = useState(() => {
 				try {
@@ -9008,6 +9119,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			});
 
 			const stage = source ? source.canvas : null;
+			useMeasureEffect(() => { setTiles(list => list.length ? [] : list); }, [stage, layers, layerSession, splitCols, splitRows]);
 			// 静态预览分支只有宽高没有 canvas，参数栏读尺寸、画布算显示尺寸都统一走这两个值
 			const stageW = stage ? stage.width : source?.width || 0;
 			const stageH = stage ? stage.height : source?.height || 0;
@@ -9038,17 +9150,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				const canvas = viewRef.current;
 				const shown = stage;
 				if (!canvas || !shown) return;
-				canvas.width = shown.width;
-				canvas.height = shown.height;
-				const ctx = canvas.getContext("2d");
-				ctx.clearRect(0, 0, canvas.width, canvas.height);
-				ctx.drawImage(shown, 0, 0);
-				// 图层叠在底图之上（叠加算法走画布原生的 globalCompositeOperation）
-				// 有蒙版的层按蒙版裁一遍再叠（destination-in，画布自带）
-				// 单层会话里画布上只有这一层：其它层不叠，这一层也不叠自己（否则编辑时看到的是叠加后的样子）
-				psDrawLayers(ctx, psCanvasLayers(layers, Boolean(layerSession)), canvas.width, canvas.height, (layer) =>
-					psMaskedCanvas(layer.canvas, layer.mask?.canvas, canvas.width, canvas.height)
-				);
+				if (canvas.width !== shown.width) canvas.width = shown.width;
+				if (canvas.height !== shown.height) canvas.height = shown.height;
+				psPaintStack(canvas, shown, psCanvasLayers(layers, Boolean(layerSession)));
 			}, [stage, layers, layerSession]);
 
 			/** 选区 / 切割线画在第二层：拖动时只重画这一层。线宽按缩放比折算，视觉粗细恒定。 */
@@ -9056,8 +9160,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				const canvas = overlayRef.current;
 				const shown = stage;
 				if (!canvas || !shown) return;
-				canvas.width = shown.width;
-				canvas.height = shown.height;
+				if (canvas.width !== shown.width) canvas.width = shown.width;
+				if (canvas.height !== shown.height) canvas.height = shown.height;
 				const ctx = canvas.getContext("2d");
 				ctx.clearRect(0, 0, canvas.width, canvas.height);
 				const thin = 1.4 / scale;
@@ -9226,13 +9330,12 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				panRef.current = null;
 			};
 
+			const currentSnapshot = (canvas = source?.canvas) => psHistorySnapshot(
+				{ name:source?.name, canvas }, layers, layerSession, history.currentLabel || source?.name, { activeLayerId, warpResultId }
+			);
 			const pushHistory = (canvas, label) => {
-				// 快照连 layers / layerSession 一起记：只记底图的话，撤销后图层会和新底图错配
-				const snapshot =
-					psHistorySnapshot(source, layers, layerSession, label) ??
-					psHistorySnapshot({ name: source?.name, canvas }, layers, layerSession, label);
-				if (!snapshot) return;
-				setHistory((value) => ({ past: [...value.past, snapshot].slice(-PS_MAX_HISTORY), future: [] }));
+				const snapshot = currentSnapshot(source?.canvas ?? canvas);
+				if (snapshot) setHistory(value => psHistoryPush(value, snapshot, label));
 			};
 
 			/**
@@ -9244,8 +9347,13 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			 * 而是把结果压成一层新的叠上去（旧层先隐藏：它们已经被烘焙进这一层，历史里可撤回）。
 			 * 几何类（改尺寸）仍改写底图，否则图层坐标对不上。
 			 */
+			const syncCanvasDimensions = (w, h) => {
+				setCanvasSize(value => ({ ...value, w:canvasUnit === "percent" ? 100 : w, h:canvasUnit === "percent" ? 100 : h }));
+				setTarget(value => ({ ...value, w, h }));
+			};
 			const commit = (canvas, name, geometry, label) => {
 				if (!canvas) return;
+				invalidatePsReads();
 				pushHistory(source?.canvas ?? canvas, label || (tool ? t(`ps.tool.${tool}`) : ""));
 				const before = source?.canvas ?? null;
 				const steps = (Array.isArray(geometry) ? geometry : geometry ? [geometry] : [])
@@ -9262,10 +9370,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if (!isGeometryChange && !layerSessionRef.current) {
 					// 默认新图层：结果压成一层，旧层隐藏（已被烘焙进去），底图保持不动
 					const layerName = label || name || (tool ? t(`ps.tool.${tool}`) : t("ps.layer.new"));
+					const id = `layer_${Date.now().toString(36)}_${layers.length}`;
 					setLayers((list) => [
 						...list.map((item) => ({ ...item, visible: false })),
 						{
-							id: `layer_${Date.now().toString(36)}_${list.length}`,
+							id, compositeResult:true,
 							name: layerName,
 							canvas,
 							visible: true,
@@ -9273,7 +9382,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							opacity: 1
 						}
 					]);
-					setActiveLayerId((value) => value);
+					setActiveLayerId(id);
 					if (name !== null) setSelection(null);
 					return;
 				}
@@ -9283,117 +9392,89 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				}
 				const next = { name: name || source?.name || "image", canvas, width: canvas.width, height: canvas.height };
 				setSource(next);
-				setCanvasSize((value) => ({ ...value, w: canvas.width, h: canvas.height }));
-				setTarget((value) => ({ ...value, w: canvas.width, h: canvas.height }));
+				syncCanvasDimensions(canvas.width, canvas.height);
 				if (name !== null) setSelection(null);
 			};
 
-			const loadImage = async ({ name, dataUrl, canvas, preserveLayers = false }) => {
-				if (canvas) {
-					if (!preserveLayers) {
-						layerSessionRef.current = null;
-						setLayerSession(null);
-						setActiveLayerId("");
-						setWarpResultId("");
-						setLayers([]);
-					}
-					setSource({ name: name || "image", canvas, width: canvas.width, height: canvas.height });
-					setCanvasSize((value) => ({ ...value, w: canvas.width, h: canvas.height }));
-					setTarget((value) => ({ ...value, w: canvas.width, h: canvas.height }));
-					setSelection(null);
-					setTiles([]);
-					setHistory({ past: [], future: [] });
-					setZoom({ mode: "fit", scale: 1 });
-					return;
-				}
-				const image = new Image();
-				image.crossOrigin = "anonymous";
-				await new Promise((resolve, reject) => {
-					image.onload = resolve;
-					image.onerror = () => reject(new Error("图片加载失败"));
-					image.src = dataUrl;
-				});
-				const bitmap = psCanvas(image.naturalWidth || image.width, image.naturalHeight || image.height);
-				bitmap.getContext("2d").drawImage(image, 0, 0);
-				// 图里本来就写了分辨率（PNG 的 pHYs / JPEG 的 JFIF）就接着用，没写才回到 72
-				if (typeof dataUrl === "string" && dataUrl.startsWith("data:")) setDpi(psReadDpi(dataUrl) || 72);
-				await loadImage({ name, canvas: bitmap });
+			// 工具草稿跟着画布；面板位置与快捷键是工作区偏好，不随图片更换。
+			const resetPsToolDrafts = (w, h) => {
+				setSelection(null); setTiles([]); setRuler(null); setDrag(null); setDragLayerId("");
+				panRef.current = null; pendingScroll.current = null;
+				setWarp(warpInitial("flat", w, h)); setWarpSide("src");
+				setCurve(psCurvePreset("identity")); setAdjust(psAdjustDefaults());
+				setAngle(0); setFeatherRadius(12); setFeatherTarget("all"); setSplitCols(2); setSplitRows(2); setFlipAxis("h");
+				setCanvasUnit("px"); setCanvasSize({w,h,anchor:"c",fill:"transparent"}); setTarget({w,h,keep:true});
+				setZoom({mode:"fit",scale:1});
+			};
+			const loadError = error => notify(String(error?.message ?? error), "err");
+			const loadImage = input => reads.run(signal => psDecodeInput(input, signal), ({canvas,dpi}) => {
+				layerSessionRef.current = null; setLayerSession(null); setLayers([]); setActiveLayerId(""); setWarpResultId("");
+				setPickOpen(false); setLayerPick(false); setFileOver(false);
+				setSource({name:input.name || "image",canvas,width:canvas.width,height:canvas.height}); setDpi(dpi);
+				setHistory({past:[],future:[]}); resetPsToolDrafts(canvas.width,canvas.height); setTool("select");
+			}, loadError, setReading);
+
+			// 交接的是一次选择意图：先按身份消费，即便解码途中离开也不会回来时重复打开。
+			const handoffRef = useRef(null);
+			useMeasureEffect(() => {
+				if (!initialUrl?.url && !initialUrl?.dataUrl) return;
+				void loadImage(initialUrl);
+				if (handoffRef.current !== initialUrl) { handoffRef.current = initialUrl; onConsumeInitialUrl?.(initialUrl); }
+			}, [initialUrl]);
+
+			/** 「加图层」属于选择时的合成文档，慢回包不得写到新文档或单层会话。 */
+			const changeLayersLatest = useRef(changeLayers), readStage = useRef(stage);
+			changeLayersLatest.current = changeLayers; readStage.current = stage;
+			const addLayerFrom = input => {
+				const base = stage;
+				if (!base || layerSessionRef.current) return false;
+				return reads.run(signal => psDecodeInput(input, signal, {width:base.width,height:base.height}), ({canvas}) => {
+					if (readStage.current !== base || layerSessionRef.current) return false;
+					const id = `layer_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+					const layer = {id,name:input.name || t("ps.layer.new"),canvas,visible:true,mode:"normal",opacity:1};
+					return changeLayersLatest.current(t("ps.layer.addLayer"), list => [...list,layer], id);
+				}, loadError, setReading);
 			};
 
-			// 从查看器 / 别处带进来的图：进「图片处理」时自动载入一次。
-			// 载完回调清掉源数据，来回切视图不会重复载入、也不会把用户后来的编辑顶掉。
-			useEffect(() => {
-				if (!initialUrl?.dataUrl) return undefined;
-				let alive = true;
-				(async () => {
-					try {
-						await loadImage({ name: initialUrl.name, dataUrl: initialUrl.dataUrl });
-					} catch (error) {
-						notify(String(error?.message ?? error), "err");
-					} finally {
-						if (alive) onConsumeInitialUrl?.();
-					}
-				})();
-				return () => {
-					alive = false;
-				};
-				// eslint-disable-next-line react-hooks/exhaustive-deps
-			}, [initialUrl?.dataUrl]);
-
-			/** 把一张图铺成一层（尺寸对齐当前底图，之后叠加算法直接可用）。 */
-			const addLayerFrom = async ({ name, dataUrl }) => {				const image = new Image();
-				image.crossOrigin = "anonymous";
-				await new Promise((resolve, reject) => {
-					image.onload = resolve;
-					image.onerror = () => reject(new Error("图层加载失败"));
-					image.src = dataUrl;
-				});
-				const canvas = psCanvas(stage?.width || image.naturalWidth, stage?.height || image.naturalHeight);
-				canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
-				setLayers((list) => [
-					...list,
-					{
-						id: `layer_${Date.now().toString(36)}_${list.length}`,
-						name: name || `图层 ${list.length + 1}`,
-						canvas,
-						visible: true,
-						mode: "normal",
-						opacity: 1
-					}
-				]);
-			};
-
-			/** 把某一层当底图打开（工具照旧作用在 source 上，回来时写回这一层）。 */
-			const enterLayer = async (layer) => {
-				// 没有底图 / 已经在会话里（连点两下）就什么都不做：以前会把底图弄丢、或者开两个会话
+			/** 单层是一段局部编辑时间线；外层快照/历史只保存引用，离开时恢复或合并成一步。 */
+			const enterLayer = (layer) => {
 				const session = psLayerSessionStart(layer, source, layerSessionRef.current);
 				if (!session) return;
+				invalidatePsReads();
+				session.parent = {history, before:currentSnapshot(), initialCanvas:layer.canvas};
 				layerSessionRef.current = session;
 				setLayerSession(session);
-				await loadImage({ name: layer.name, canvas: layer.canvas, preserveLayers: true });
+				setActiveLayerId(layer.id);
+				setWarpResultId("");
+				setSource({name:layer.name, canvas:layer.canvas, width:layer.canvas.width, height:layer.canvas.height});
+				resetPsToolDrafts(layer.canvas.width, layer.canvas.height);
+				setHistory({past:[], currentLabel:layer.name, future:[]});
 				notify(t("ps.layer.editing", { name: layer.name }));
 			};
 
-			/** 退出单层编辑：把改完的画布写回那一层，再把底图换回来。 */
-			const exitLayer = async (commitChanges = true) => {
-				const session = layerSessionRef.current ?? layerSession;
-				// "leaving" = 已经在退出（连点两下「回到合成」）就不要再写回一遍、再还原一遍
-				if (!session || session === "leaving") return;
-				layerSessionRef.current = "leaving";
-				setLayerSession(null);
-				try {
-					// stage = 会话里的当前画布；没有 stage（或用户选了不写回）就只还原底图，绝不半途把底图顶掉
-					const edited = commitChanges ? stage ?? source?.canvas ?? null : null;
-					const result = psLayerSessionExit(session, layers, edited);
-					if (!result) return;
-					if (result.committed) {
-						setLayers(result.layers);
-						notify(t("ps.layer.committed", { name: session.name }));
-					}
-					if (result.base?.canvas) await loadImage({ name: result.base.name, canvas: result.base.canvas, preserveLayers: true });
-				} finally {
-					layerSessionRef.current = null;
+			const exitLayer = (commitChanges = true) => {
+				const session = layerSessionRef.current;
+				if (!session?.base?.canvas) return;
+				invalidatePsReads();
+				const parent = session.parent;
+				const changed = commitChanges && stage && (!parent || stage !== parent.initialCanvas || layers.length !== parent.before.layers.length || layers.some((item,i) => item !== parent.before.layers[i]));
+				const result = psLayerSessionExit(session, layers, changed ? stage : null);
+				const {base} = result;
+				if (parent) {
+					setHistory(changed ? psHistoryPush(parent.history, parent.before, t("ps.layer.committed",{name:session.name})) : parent.history);
+					setLayers(changed ? result.layers : parent.before.layers);
+				} else {
+					// 显式透视提交打开结果会话，但沿用主时间线，退出也是可逆的一步。
+					pushHistory(stage, t("ps.layer.back"));
+					if (changed) setLayers(result.layers);
 				}
+				layerSessionRef.current = null;
+				setLayerSession(null);
+				setSource(base);
+				setActiveLayerId(psLayerById(result.layers, session.id)?.id ?? "");
+				setWarpResultId("");
+				resetPsToolDrafts(base.canvas.width, base.canvas.height);
+				if (changed) notify(t("ps.layer.committed",{name:session.name}));
 			};
 			/** 拖进来的图片文件 / 拖过来的图片链接，都走这一条。 */
 			const dropImage = async (event) => {
@@ -9405,95 +9486,49 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					await fromFile(file);
 					return;
 				}
-				// 从浏览器里直接拖一张图过来：拿它的地址
-				const url = event.dataTransfer?.getData?.("text/uri-list") || event.dataTransfer?.getData?.("text/plain") || "";
-				const trimmed = String(url).split(/\r?\n/).find((line) => /^https?:\/\//i.test(line.trim()))?.trim() ?? "";
-				if (!trimmed) {
-					notify(t("ps.drop.none"), "err");
-					return;
-				}
-				setBusy("读图");
-				try {
-					await loadImage({ name: trimmed.split("/").pop() || " image", dataUrl: await urlToDataUrl(trimmed) });
-				} catch (error) {
-					notify(String(error?.message ?? error), "err");
-				} finally {
-					setBusy("");
-				}
+				// 优先使用自己的拖拽载荷；桌面图片路径也经过同一地址边界，不接受 file:。
+				const text = event.dataTransfer?.getData?.("text/uri-list") || event.dataTransfer?.getData?.("text/plain") || "";
+				const item = readImageDrag(event.dataTransfer);
+				const url = item?.url || String(text).split(/\r?\n/).map(s => s.trim()).find(s => /^(?:https?:\/\/|dsh-app:\/\/app\/|\/api\/velapi-image-go\/)/i.test(s));
+				if (!url) { notify(t("ps.drop.none"), "err"); return; }
+				await loadImage({name:item?.name || url.split("/").pop() || "image", url});
 			};
-
-			const fromFile = async (file) => {
-				if (!file) return;
-				setBusy("读图");
-				try {
-					await loadImage({ name: file.name, dataUrl: await fileToDataUrl(file) });
-				} catch (error) {
-					notify(String(error?.message ?? error), "err");
-				} finally {
-					setBusy("");
-				}
-			};
+			const fromFile = file => file ? loadImage({name:file.name,file}) : false;
 
 			/** 导出已提交的画面，不读取工具草稿。单层会话保留裁出图层的实际宽高。 */
+			const committedPixels = () => psExportComposite(stage, layers, Boolean(layerSession));
 			const toDataUrl = () => {
-				const out = psExportComposite(stage, layers, Boolean(layerSession));
+				const out = committedPixels();
 				if (!out) return "";
 				return psApplyDpi(out.toDataURL("image/png"), dpi);
 			};
 
 			/** 快照 → 状态：底图、图层、单层会话一起还原（旧快照缺字段就沿用当前值，不清空图层）。 */
 			const applySnapshot = (snapshot) => {
-				const restored = psHistoryRestore(snapshot, { layers, layerSession });
+				const restored = psHistoryRestore(snapshot, { layers, layerSession, activeLayerId, warpResultId });
 				if (!restored) return;
 				setSource({ name: restored.name, canvas: restored.canvas, width: restored.width, height: restored.height });
-				setActiveLayerId(restored.layerSession?.id || "");
-				setCanvasSize((value) => ({ ...value, w: restored.width, h: restored.height }));
-				setTarget((value) => ({ ...value, w: restored.width, h: restored.height }));
+				invalidatePsReads();
+				setActiveLayerId(restored.activeLayerId);
+				setWarpResultId(restored.warpResultId);
+				setDrag(null);
+				setRuler(null);
+				setTiles([]);
+				syncCanvasDimensions(restored.width, restored.height);
 				setLayers(restored.layers);
 				// 会话状态也一起回退：只回底图不回会话，画布上会挂着「已经退出的会话层」
 				layerSessionRef.current = restored.layerSession;
 				setLayerSession(restored.layerSession);
 				setSelection(null);
 			};
-			const undo = () => {
-				if (history.past.length === 0 || !source) return;
-				const previous = history.past[history.past.length - 1];
-				const current = psHistorySnapshot(source, layers, layerSession);
-				setHistory((value) => ({ past: value.past.slice(0, -1), future: (current ? [current, ...value.future] : value.future).slice(0, PS_MAX_HISTORY) }));
-				applySnapshot(previous);
-			};
-			/** 点历史条：回到某一步（过去的 = 撤销若干步，未来的 = 重做若干步）。 */
 			const jumpHistory = (row) => {
-				if (!row || !source) return;
-				if (row.kind === "current") return;
-				if (row.kind === "past") {
-					const target = history.past[row.index];
-					if (!target) return;
-					const current = psHistorySnapshot(source, layers, layerSession, "");
-					setHistory({
-						past: history.past.slice(0, row.index),
-						future: [target, ...history.past.slice(row.index + 1), ...(current ? [current] : []), ...history.future].slice(0, PS_MAX_HISTORY)
-					});
-					applySnapshot(target);
-					return;
-				}
-				const target = history.future[row.index];
-				if (!target) return;
-				const current = psHistorySnapshot(source, layers, layerSession, "");
-				setHistory({
-					past: [...history.past, ...history.future.slice(0, row.index), ...(current ? [current] : [])].slice(-PS_MAX_HISTORY),
-					future: history.future.slice(row.index + 1)
-				});
-				applySnapshot(target);
+				const move = psHistorySeek(history, currentSnapshot(), row?.kind, row?.index);
+				if (!move) return;
+				setHistory(move.history);
+				applySnapshot(move.target);
 			};
-
-			const redo = () => {
-				if (history.future.length === 0 || !source) return;
-				const next = history.future[0];
-				const current = psHistorySnapshot(source, layers, layerSession);
-				setHistory((value) => ({ past: current ? [...value.past, current].slice(-PS_MAX_HISTORY) : value.past, future: value.future.slice(1) }));
-				applySnapshot(next);
-			};
+			const undo = () => jumpHistory({kind:"past", index:history.past.length-1});
+			const redo = () => jumpHistory({kind:"future", index:0});
 
 			/* ---- 画布上的指针交互：拖框 / 移动 / 手柄缩放 ---- */
 			const pointToImage = (event) => {
@@ -9547,7 +9582,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				// 手柄的判定半径按缩放折算：屏幕上永远是 ~10px，放大缩小时手感一致
 				const hit = selection ? psHitHandle(selection, point, Math.max(6, 10 / scale)) : null;
 				if (hit) {
-					setDrag({ mode: "resize", handle: hit, start: point });
+					setDrag({ mode: "resize", handle: hit, start: point, origin: selection });
 					return;
 				}
 				if (selection && point.x >= selection.x && point.x <= selection.x + selection.w && point.y >= selection.y && point.y <= selection.y + selection.h) {
@@ -9555,7 +9590,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					return;
 				}
 				setSelection(psClampRect({ x: point.x, y: point.y, w: 1, h: 1 }, stage.width, stage.height));
-				setDrag({ mode: "new", start: point });
+				setDrag({ mode: "new", start: point, origin: selection });
 			};
 
 			const onPointerMove = (event) => {
@@ -9612,6 +9647,14 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				setDrag(null);
 			};
 
+			// 系统取消指针（窗口失焦/触控中断）不是松手确认，尤其不能提交标尺拉直。
+			const cancelToolDrag = () => {
+				if (drag?.mode === "ruler") setRuler(null);
+				else if (drag?.mode === "warp") setWarp(value => ({ ...value, [drag.which]: drag.origin }));
+				else if (drag) setSelection(drag.origin ?? null);
+				setDrag(null);
+			};
+
 			/* ---- 各工具的执行 ---- */
 			const needSelection = () => {
 				if (selection) return true;
@@ -9646,22 +9689,24 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if (!stage || !warpPlanNow || warpLocked) return;
 				try {
 					const plan = warpPlanNow;
-					const pixels = psExportComposite(stage, layers, Boolean(layerSession));
+					const pixels = committedPixels();
 					const out = psWarpCanvas(pixels, plan.inverse, plan.size.w, plan.size.h);
 					const id = `layer_${Date.now().toString(36)}_${layers.length}`;
-					const result = { id, name: t("ps.warp.confirm"), canvas: out, visible: true, mode: "normal", opacity: 1 };
+					const result = { id, name: t("ps.warp.confirm"), canvas: out, compositeResult:true, visible: true, mode: "normal", opacity: 1 };
 					const base = layerSession?.base || source;
 					const previous = layerSession ? psLayerSessionExit(layerSession, layers, stage).layers : layers;
 					const session = psLayerSessionStart(result, base, null);
 					if (!session) return;
+					invalidatePsReads();
+					// 普通单层里再做显式透视，内层仍可撤销；回到合成时收束到原外层时间线。
+					if (layerSession?.parent) session.parent = layerSession.parent;
 					pushHistory(stage, result.name);
 					setLayers([...previous.map((item) => ({ ...item, visible: false })), result]);
 					layerSessionRef.current = session;
 					setLayerSession(session);
 					setActiveLayerId(id);
 					setSource({ name: result.name, canvas: out, width: out.width, height: out.height });
-					setCanvasSize((value) => ({ ...value, w: out.width, h: out.height }));
-					setTarget((value) => ({ ...value, w: out.width, h: out.height }));
+					syncCanvasDimensions(out.width, out.height);
 					setSelection(null);
 					setWarpResultId(id);
 					notify(t("ps.warp.done", { w: out.width, h: out.height }));
@@ -9679,7 +9724,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if (!stage) return;
 				setBusy("矫正");
 				try {
-					const { luma, width, height } = psLumaFromCanvas(stage);
+					const { luma, width, height } = psLumaFromCanvas(committedPixels());
 					const best = psDeskewAngle(luma, width, height);
 					if (Math.abs(best) < 0.3) {
 						notify(t("ps.straightAlready"));
@@ -9734,7 +9779,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const applyFeather = () => {
 				if (!stage) return;
 				if (featherTarget === "selection" && !needSelection()) return;
-				commit(psFeather(stage, featherTarget === "selection" ? selection : null, featherRadius), null);
+				commit(psFeather(committedPixels(), featherTarget === "selection" ? selection : null, featherRadius), null);
 			};
 
 			const applyFlip = () => {
@@ -9744,17 +9789,20 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 
 			const runSplit = () => {
 				if (!stage) return;
-				const list = psSplitTiles(stage.width, stage.height, splitCols, splitRows).map((tile) => {
-					const piece = psSlice(stage, tile);
-					return { ...tile, url: piece.toDataURL("image/png"), canvas: piece };
+				const pixels = committedPixels();
+				// 各块共享已提交的像素；列表只编码小预览，在下载或打开某块时才裁出原始尺寸。
+				const list = psSplitTiles(pixels.width, pixels.height, splitCols, splitRows).map(tile => {
+					const scale = Math.min(1, 160 / Math.max(tile.w, tile.h));
+					const thumb = psCanvas(Math.max(1, Math.round(tile.w * scale)), Math.max(1, Math.round(tile.h * scale)));
+					thumb.getContext("2d").drawImage(pixels, tile.x, tile.y, tile.w, tile.h, 0, 0, thumb.width, thumb.height);
+					return { ...tile, pixels, url: thumb.toDataURL("image/png") };
 				});
 				setTiles(list);
 				notify(t("ps.splitDone", { n: String(list.length) }));
 			};
 
 			const useTile = async (tile) => {
-				await loadImage({ name: `${source?.name || "image"}-${tile.index + 1}`, canvas: tile.canvas });
-				notify(t("ps.tileLoaded", { n: String(tile.index + 1) }));
+				if (await loadImage({name:`${source?.name || "image"}-${tile.index + 1}`, canvas:psSlice(tile.pixels, tile), dpi})) notify(t("ps.tileLoaded", {n:String(tile.index+1)}));
 			};
 
 			const download = (url, name) => {
@@ -9836,17 +9884,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const focusMode = !panels.labels && !panels.params;
 			/** 当前生效的整套键位（默认 + 用户改的），工具栏提示、快捷键表、分发都用它。 */
 			const bindings = psBindingMap(overrides);
-			/** 图库 / 预设样张 → 画布：两步都是「取字节 → loadImage」，空画面和选图弹层共用。 */
-			const loadAsset = async (name, url) => {
-				setBusy("读图");
-				try {
-					await loadImage({ name, dataUrl: await urlToDataUrl(url) });
-				} catch (error) {
-					notify(String(error?.message ?? error), "err");
-				} finally {
-					setBusy("");
-				}
-			};
+			const loadAsset = (name, url) => loadImage({name,url});
 			const togglePanels = (next) => {
 				setPanels((value) => {
 					const merged = { ...value, ...next };
@@ -9997,13 +10035,13 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						/* 调整 / 曲线 / 色阶 / 滤镜：滑块只改参数，点动作行的按钮才写回像素（进撤销栈） */
 						const runPixels = (mutate) => {
 							if (!source?.canvas) return;
-							const canvas = psCanvas(source.canvas.width, source.canvas.height);
+							// 加工私有画布，不原地改写历史或单层源图。
+							const canvas = psLayerExport(stage, psCanvasLayers(layers, !!layerSession), stage.width, stage.height);
 							const ctx = canvas.getContext("2d");
-							ctx.drawImage(source.canvas, 0, 0);
 							const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 							mutate(imageData, canvas);
 							ctx.putImageData(imageData, 0, 0);
-							commit(canvas, source.name);
+							commit(canvas, source.name, null, t("ps.tool.adjust"));
 							notify(t("ps.adjust.done"));
 						};
 						const applyAdjust = () =>
@@ -10094,22 +10132,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									"button",
 									{
 										className: "vig-btn is-sm is-ghost",
-										onClick: () =>
-											setAdjust({
-												brightness: 0,
-												contrast: 0,
-												saturation: 0,
-												vibrance: 0,
-												hue: 0,
-												grayscale: false,
-												invert: false,
-												inBlack: 0,
-												inWhite: 255,
-												gamma: 1,
-												blur: 0,
-												sharpen: 0,
-												noise: 0
-											})
+										onClick: () => setAdjust(psAdjustDefaults())
 									},
 									t("ps.adjust.reset")
 								),
@@ -10253,7 +10276,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 													"div",
 													{ className: "vig-row" },
 													h("button", { className: "vig-mini", onClick: () => void useTile(tile) }, t("ps.tileUse")),
-													h("button", { className: "vig-mini", onClick: () => download(tile.url, `${source?.name || "image"}-${tile.index + 1}`) }, t("ps.download"))
+													h("button", { className: "vig-mini", onClick: () => download(psApplyDpi(psSlice(tile.pixels, tile).toDataURL("image/png"), dpi), `${source?.name || "image"}-${tile.index + 1}`) }, t("ps.download"))
 												)
 											)
 										)
@@ -10428,7 +10451,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								"div",
 								{ className: "vig-ps-btns is-ratio" },
 								[["1:1", 1], ["4:3", 4 / 3], ["3:4", 3 / 4], ["16:9", 16 / 9], ["9:16", 9 / 16]].map(([label, ratio]) =>
-									h("button", { key: label, className: "vig-btn", onClick: () => setCanvasSize((value) => ({ ...value, ...psRatioSize(stageW, stageH, ratio) })) }, label)
+									h("button", { key: label, className: "vig-btn", onClick: () => {
+										const { w, h } = psRatioSize(stageW, stageH, ratio);
+										setCanvasSize(value => ({ ...value, w:canvasUnit === "percent" ? 100*w/stageW : w, h:canvasUnit === "percent" ? 100*h/stageH : h }));
+									} }, label)
 								)
 							),
 							h("span", { className: "vig-label" }, t("ps.canvas.dpi")),
@@ -10557,6 +10583,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					{ className: "vig-toolbar" },
 					h(Icon, { name: "crop" }),
 					h("span", { className: "vig-item-title" }, t("nav.ps")),
+					reading && h("span", {role:"status",className:"vig-muted"}, t("grid.busy.load")),
 					h("span", { className: "vig-muted", style: { fontSize: 12 } }, source ? `${source.name} · ${shownW}×${shownH} · ${dpi} DPI` : t("ps.noSource")),
 					h("div", { className: "vig-spacer" }),
 					h("button", {
@@ -10764,7 +10791,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 														onPointerDown,
 														onPointerMove,
 														onPointerUp,
-														onPointerCancel: onPointerUp
+														onPointerCancel: cancelToolDrag
 													}),
 													/* 选框 / 切割线单独一层：拖选区时不用重画底图（3000×4000 的图重画一次很贵） */
 													h("canvas", {
@@ -10785,7 +10812,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											"div",
 											{ className: "vig-row" },
 											h("button", { className: "vig-btn is-primary", onClick: () => fileRef.current?.click() }, h(Icon, { name: "upload" }), t("preset.upload")),
-											h("button", { className: "vig-btn", onClick: () => setPickOpen(true) }, h(Icon, { name: "grid" }), t("preset.fromLibrary"))
+											h("button", { className: "vig-btn", onClick: () => { setLayerPick(false); setPickOpen(true); } }, h(Icon, { name: "grid" }), t("preset.fromLibrary"))
 										),
 										/* 空画面下的纵向空间别浪费：最近生成的图 + 预设样张，点一下就进来 */
 										state.library?.length || state.presets?.length
@@ -10806,7 +10833,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 																		},
 																		recentExpanded ? t("ps.collapse") : t("ps.expand")
 																	),
-																	h("button", { className: "vig-link", onClick: () => setPickOpen(true) }, t("preset.fromLibrary"))
+																	h("button", { className: "vig-link", onClick: () => { setLayerPick(false); setPickOpen(true); } }, t("preset.fromLibrary"))
 																),
 																h(
 																	"div",
@@ -10896,19 +10923,21 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										key: layer.id,
 										className: `vig-ps-chip${activeLayerId === layer.id ? " is-on" : ""}${layer.visible === false ? " is-hidden" : ""}${layerSession?.id === layer.id ? " is-editing" : ""}${dragLayerId === layer.id ? " is-dragging" : ""}`,
 										role: "listitem",
-										draggable: true,
+										draggable: !layerControlsLocked,
 										title: `${layer.name} · 拖拽排序 / 双击进入单层编辑`,
 										onDragStart: () => setDragLayerId(layer.id),
 										onDragEnd: () => setDragLayerId(""),
 										onDragOver: (event) => event.preventDefault(),
 										onDrop: (event) => {
 											event.preventDefault();
+											if (!dragLayerId) return;
+											event.stopPropagation();
 											const from = dragLayerId;
 											setDragLayerId("");
-											if (from && from !== layer.id) setLayers((list) => psMoveLayerTo(list, from, layer.id));
+											if (from && from !== layer.id) changeLayers(t("ps.layers"), list => psMoveLayerTo(list, from, layer.id));
 										},
 										onClick: () => setActiveLayerId(layer.id),
-										onDoubleClick: () => void enterLayer(layer)
+										onDoubleClick: event => { if (!layerControlsLocked && psLayerRowActivate(event)) void enterLayer(layer); }
 									},
 									layerThumbs.items[index]
 										? h("img", { className: "vig-ps-chip-thumb", src: layerThumbs.items[index], alt: "" })
@@ -10918,11 +10947,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										"button",
 										{
 											className: "vig-ps-chip-eye",
-											title: t("ps.layer.visible"),
+											title: t("ps.layer.visible"), disabled: layerControlsLocked,
 											"aria-pressed": layer.visible !== false,
 											onClick: (event) => {
 												event.stopPropagation();
-												setLayers((list) => list.map((item) => (item.id === layer.id ? { ...item, visible: item.visible === false } : item)));
+												toggleLayer(layer.id);
 											}
 										},
 										h(Icon, { name: layer.visible === false ? "close" : "check", size: 10 })
@@ -10931,11 +10960,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										"button",
 										{
 											className: "vig-ps-chip-x",
-											title: t("ps.layer.remove"),
+											title: t("ps.layer.remove"), disabled: layerControlsLocked,
 											onClick: (event) => {
 												event.stopPropagation();
-												setLayers((list) => list.filter((item) => item.id !== layer.id));
-												if (activeLayerId === layer.id) setActiveLayerId("");
+												removeLayer(layer.id);
 											}
 										},
 										h(Icon, { name: "close", size: 10 })
@@ -10946,7 +10974,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								"button",
 								{
 									className: "vig-ps-chip is-add",
-									title: t("ps.layer.addLayer"),
+									title: t("ps.layer.addLayer"), disabled: layerControlsLocked,
 									onClick: () => {
 										setLayerPick(true);
 										setPickOpen(true);
@@ -10968,9 +10996,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											h(
 												"select",
 												{
-													className: "vig-ps-layer-mode",
-													value: activeLayer.mode || "normal",
-													onChange: (event) => setLayers((list) => list.map((item) => (item.id === activeLayer.id ? { ...item, mode: event.target.value } : item)))
+													className: "vig-ps-layer-mode", ...layerModeProps(activeLayer)
 												},
 												PS_BLEND_MODES.map((mode) => h("option", { key: mode.id, value: mode.id }, t(mode.labelKey)))
 											)
@@ -10980,42 +11006,26 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											{ className: "vig-ps-chipprops-row", title: t("ps.layer.opacity") },
 											h("span", null, t("ps.layer.opacity")),
 											h("input", {
-												className: "vig-range vig-ps-layer-opacity",
-												type: "range",
-												min: 0,
-												max: 100,
-												step: 1,
-												value: Math.round((activeLayer.opacity ?? 1) * 100),
-												onChange: (event) => setLayers((list) => list.map((item) => (item.id === activeLayer.id ? { ...item, opacity: Number(event.target.value) / 100 } : item)))
+												className: "vig-range vig-ps-layer-opacity", ...layerOpacityProps(activeLayer)
 											}),
 											h("span", { className: "vig-ps-chipprops-val" }, `${Math.round((activeLayer.opacity ?? 1) * 100)}%`)
 										),
 										h(
 											"button",
-											{ className: "vig-ps-layer-mini", title: t("ps.layer.up"), onClick: () => setLayers((list) => psMoveLayer(list, activeLayerIndex, 1)) },
+											{ className: "vig-ps-layer-mini", title: t("ps.layer.up"), disabled: layerControlsLocked || activeLayerIndex === layers.length - 1, onClick: () => moveLayer(activeLayerIndex, 1) },
 											h(Icon, { name: "chevron", size: 11 })
 										),
 										h(
 											"button",
-											{ className: "vig-ps-layer-mini", title: t("ps.layer.down"), onClick: () => setLayers((list) => psMoveLayer(list, activeLayerIndex, -1)) },
+											{ className: "vig-ps-layer-mini", title: t("ps.layer.down"), disabled: layerControlsLocked || activeLayerIndex === 0, onClick: () => moveLayer(activeLayerIndex, -1) },
 											h(Icon, { name: "chevronDown", size: 11 })
 										),
 										h(
 											"button",
 											{
 												className: `vig-ps-layer-mini${activeLayer.mask ? " is-on" : ""}`,
-												title: activeLayer.mask ? t("ps.layer.maskInvert") : t("ps.layer.maskAdd"),
-												onClick: () => {
-													if (!activeLayer.mask) {
-														const dims = psMaskDims(null, source?.canvas ?? activeLayer.canvas);
-														const alpha = psMaskAlpha(dims.w, dims.h, selection);
-														setLayers((list) => list.map((item) => (item.id === activeLayer.id ? { ...item, mask: { canvas: psMaskCanvas(dims.w, dims.h, alpha), alpha } } : item)));
-														return;
-													}
-													const dims = psMaskDims(activeLayer.mask, activeLayer.canvas);
-													const alpha = psInvertAlpha(activeLayer.mask.alpha);
-													setLayers((list) => list.map((item) => (item.id === activeLayer.id ? { ...item, mask: { canvas: psMaskCanvas(dims.w, dims.h, alpha), alpha } } : item)));
-												}
+												title: activeLayer.mask ? t("ps.layer.maskInvert") : t("ps.layer.maskAdd"), disabled: layerControlsLocked,
+												onClick: () => toggleLayerMask(activeLayer)
 											},
 											h(Icon, { name: activeLayer.mask ? "marquee" : "crop", size: 11 })
 										),
@@ -11023,7 +11033,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											"button",
 											{
 												className: "vig-ps-layer-mini",
-												title: t("ps.layer.edit"),
+												title: t("ps.layer.edit"), disabled: layerControlsLocked,
 												onClick: () => void enterLayer(activeLayer)
 											},
 											h(Icon, { name: "pen", size: 11 })
@@ -11032,11 +11042,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											"button",
 											{
 												className: "vig-ps-layer-mini is-danger",
-												title: t("ps.layer.remove"),
-												onClick: () => {
-													setLayers((list) => list.filter((item) => item.id !== activeLayer.id));
-													setActiveLayerId("");
-												}
+												title: t("ps.layer.remove"), disabled: layerControlsLocked,
+												onClick: () => removeLayer(activeLayer.id)
 											},
 											h(Icon, { name: "trash", size: 11 })
 										)
@@ -11077,7 +11084,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									"button",
 									{
 										className: "vig-btn is-ghost is-sm",
-										title: t("preset.fromLibrary"),
+										title: t("preset.fromLibrary"), disabled: layerControlsLocked,
 										onClick: () => {
 											setLayerPick(true);
 											setPickOpen(true);
@@ -11139,17 +11146,17 @@ h(
 										{ key: layer.id, className: `vig-ps-layer-row${layer.visible === false ? " is-hidden" : ""}${layerSession?.id === layer.id ? " is-editing" : ""}`, title: t("ps.layer.edit"), onClick: (event) => {
 											// 点在行里的控件上（眼睛 / 混合模式 / 不透明度 / 蒙版 / 上下移 / 删除）不算「打开这层」：
 											// 以前没拦，点一下不透明度滑杆就进了单层编辑会话
-											if (!psLayerRowActivate(event)) return;
+											if (layerControlsLocked || !psLayerRowActivate(event)) return;
 											void enterLayer(layer);
 										} },
 										h(
 											"button",
 											{
 												className: "vig-ps-layer-eye",
-												title: t("ps.layer.visible"),
+												title: t("ps.layer.visible"), disabled: layerControlsLocked,
 												"aria-pressed": layer.visible !== false,
 												onClick: () =>
-													setLayers((list) => list.map((item) => (item.id === layer.id ? { ...item, visible: item.visible === false } : item)))
+													toggleLayer(layer.id)
 											},
 											h(Icon, { name: layer.visible === false ? "close" : "check", size: 12 })
 										),
@@ -11157,31 +11164,19 @@ h(
 										h(
 											"select",
 											{
-												className: "vig-ps-layer-mode",
-												value: layer.mode || "normal",
-												title: t("ps.layer.mode"),
-												onChange: (event) =>
-													setLayers((list) => list.map((item) => (item.id === layer.id ? { ...item, mode: event.target.value } : item)))
+												className: "vig-ps-layer-mode", ...layerModeProps(layer)
 											},
 											PS_BLEND_MODES.map((mode) => h("option", { key: mode.id, value: mode.id }, t(mode.labelKey)))
 										),
 										h(
 											"input",
 											{
-												className: "vig-ps-layer-opacity",
-												type: "range",
-												min: 0,
-												max: 100,
-												step: 1,
-												value: Math.round((layer.opacity ?? 1) * 100),
-												title: t("ps.layer.opacity"),
-												onChange: (event) =>
-													setLayers((list) => list.map((item) => (item.id === layer.id ? { ...item, opacity: Number(event.target.value) / 100 } : item)))
+												className: "vig-ps-layer-opacity", ...layerOpacityProps(layer)
 											}
 										),
 										h(
 											"button",
-											{ className: "vig-ps-layer-mini", title: t("ps.layer.up"), onClick: () => setLayers((list) => psMoveLayer(list, index, 1)) },
+											{ className: "vig-ps-layer-mini", title: t("ps.layer.up"), disabled: layerControlsLocked || index === layers.length - 1, onClick: () => moveLayer(index, 1) },
 											h(Icon, { name: "chevron", size: 11 })
 										),
 										// 蒙版：有选区就用选区，没有就是整张可见（之后可以反转）
@@ -11189,46 +11184,26 @@ h(
 											"button",
 											{
 												className: `vig-ps-layer-mini${layer.mask ? " is-on" : ""}`,
-												title: layer.mask ? t("ps.layer.maskInvert") : t("ps.layer.maskAdd"),
-												onClick: () => {
-													if (!layer.mask) {
-														// 新蒙版按当前底图（= 屏幕上看到的框）出覆盖率；没有底图才退回图层尺寸
-														const dims = psMaskDims(null, source?.canvas ?? layer.canvas);
-														const alpha = psMaskAlpha(dims.w, dims.h, selection);
-														setLayers((list) =>
-															list.map((item) =>
-																item.id === layer.id ? { ...item, mask: { canvas: psMaskCanvas(dims.w, dims.h, alpha), alpha } } : item
-															)
-														);
-														return;
-													}
-													// 已经有蒙版：再点一下 = 反转。按蒙版自己的尺寸重铺（图层被裁过也不会把蒙版挤错位）
-													const dims = psMaskDims(layer.mask, layer.canvas);
-													const alpha = psInvertAlpha(layer.mask.alpha);
-													setLayers((list) =>
-														list.map((item) =>
-															item.id === layer.id ? { ...item, mask: { canvas: psMaskCanvas(dims.w, dims.h, alpha), alpha } } : item
-														)
-													);
-												}
+												title: layer.mask ? t("ps.layer.maskInvert") : t("ps.layer.maskAdd"), disabled: layerControlsLocked,
+													onClick: () => toggleLayerMask(layer)
 											},
 											h(Icon, { name: layer.mask ? "marquee" : "crop", size: 11 })
 										),
 										layer.mask
 											? h(
 													"button",
-													{ className: "vig-ps-layer-mini is-danger", title: t("ps.layer.maskRemove"), onClick: () => setLayers((list) => list.map((item) => (item.id === layer.id ? { ...item, mask: null } : item))) },
+													{ className: "vig-ps-layer-mini is-danger", title: t("ps.layer.maskRemove"), disabled: layerControlsLocked, onClick: () => editLayer(layer.id, "ps.layer.maskRemove", l => l.mask ? {...l, mask:null} : l) },
 													h(Icon, { name: "close", size: 11 })
 												)
 											: null,
 										h(
 											"button",
-											{ className: "vig-ps-layer-mini", title: t("ps.layer.down"), onClick: () => setLayers((list) => psMoveLayer(list, index, -1)) },
+											{ className: "vig-ps-layer-mini", title: t("ps.layer.down"), disabled: layerControlsLocked || index === 0, onClick: () => moveLayer(index, -1) },
 											h(Icon, { name: "chevronDown", size: 11 })
 										),
 										h(
 											"button",
-											{ className: "vig-ps-layer-mini is-danger", title: t("ps.layer.remove"), onClick: () => setLayers((list) => list.filter((item) => item.id !== layer.id)) },
+											{ className: "vig-ps-layer-mini is-danger", title: t("ps.layer.remove"), disabled: layerControlsLocked, onClick: () => removeLayer(layer.id) },
 											h(Icon, { name: "trash", size: 11 })
 										)
 									)
@@ -11322,7 +11297,7 @@ h(
 							panels.params
 								? h("div", { className: "vig-ps-foot" },
 										h("button", { className: "vig-btn", onClick: () => fileRef.current?.click() }, h(Icon, { name: "upload" }), t("ps.replace")),
-										h("button", { className: "vig-btn", disabled: !source, onClick: () => loadImage({ name: source.name, canvas: stage }) }, t("ps.reload"))
+										h("button", { className: "vig-btn", disabled: !source, onClick: () => resetPsToolDrafts(stageW, stageH) }, t("ps.reload"))
 									)
 								: null
 						)
@@ -11342,7 +11317,7 @@ h(
 				pickOpen
 					? h(
 							WorkbenchDialog,
-							{ label: t("panel.pick"), onDismiss: () => setPickOpen(false) },
+							{ label: t("panel.pick"), onDismiss: () => { setLayerPick(false); setPickOpen(false); } },
 							h(
 								"div",
 								{ className: "vig-modal", onClick: (event) => event.stopPropagation() },
@@ -11364,23 +11339,9 @@ h(
 													{
 														key: asset.id,
 														className: "vig-tile",
-														onClick: async () => {
-															setPickOpen(false);
-															setBusy("读图");
-															try {
-																const dataUrl = await urlToDataUrl(asset.url);
-																// 从图库挑图：普通打开 = 换底图；「加图层」= 叠成一层
-																if (layerPick) {
-																	await addLayerFrom({ name: asset.name, dataUrl });
-																	setLayerPick(false);
-																} else {
-																	await loadImage({ name: asset.name, dataUrl });
-																}
-															} catch (error) {
-																notify(String(error?.message ?? error), "err");
-															} finally {
-																setBusy("");
-															}
+														onClick: () => {
+															setPickOpen(false); setLayerPick(false);
+															void (layerPick ? addLayerFrom : loadImage)({name:asset.name,url:asset.url});
 														}
 													},
 													h("img", { src: asset.url, alt: asset.name, loading: "lazy" })
@@ -11633,13 +11594,15 @@ h(
 		function psReadDpi(dataUrl) {
 			const comma = String(dataUrl || "").indexOf(",");
 			if (comma < 0) return null;
-			const bytes = psB64Decode(String(dataUrl).slice(comma + 1));
+			return psReadDpiBytes(psB64Decode(String(dataUrl).slice(comma + 1, comma + 1 + 349524)));
+		}
+		function psReadDpiBytes(bytes) {
 			if (psIsPng(bytes)) {
 				let at = 8;
 				while (at + 12 <= bytes.length) {
 					const length = psReadU32(bytes, at);
 					const type = psPngChunk(bytes, at);
-					if (type === "pHYs" && length >= 9) {
+					if (type === "pHYs" && length >= 9 && at + 17 <= bytes.length) {
 						const unit = bytes[at + 8 + 8];
 						const perMeter = psReadU32(bytes, at + 8);
 						if (unit === 1 && perMeter > 0) return Math.round(perMeter * 0.0254);
@@ -11650,7 +11613,7 @@ h(
 				}
 				return null;
 			}
-			if (psIsJpeg(bytes) && bytes[2] === 0xff && bytes[3] === 0xe0) {
+			if (bytes.length >= 18 && psIsJpeg(bytes) && bytes[2] === 0xff && bytes[3] === 0xe0) {
 				const units = bytes[13];
 				const x = psReadU16(bytes, 14);
 				const y = psReadU16(bytes, 16);
@@ -12718,18 +12681,13 @@ h(
 				viewerUseReference: async (image) => {
 					if (await addAssetReference(image, true)) setViewer(null);
 				},
-				/** 查看器里「图片处理」：把图读成 dataUrl 交给 PsView 载入。 */
-				viewerEdit: async (image) => {
-					try {
-						const dataUrl = await urlToDataUrl(new URL(image.url, window.location.origin).toString());
-						setViewer(null);
-						setPsImage({ name: image.name || "image.png", dataUrl });
-						setView("ps");
-					} catch (error) {
-						toast(String(error?.message ?? error), "err");
-					}
+				/** 交接意图后立即导航；由 PsView 而不是旧查看器负责取消读图。 */
+				viewerEdit: (image) => {
+					if (!image?.url) return;
+					setPsImage({name:image.name || "image.png", url:image.url});
+					setViewer(null); setView("ps");
 				},
-				clearPsImage: () => setPsImage(null),
+				clearPsImage: request => setPsImage(current => current === request ? null : current),
 				viewerDelete: async (image) => {
 					const id = libraryIdFor(image);
 					if (viewer?.source !== "library" || !id || deletingAssetIds.current.has(id)) return;
@@ -13826,7 +13784,7 @@ h(
 			psCanvasLayers,
 			psMoveLayer,
 			psLayerById,
-			psLayerCommit,
+			psLayerThumb, psLayerCommit,
 			psLayerSessionStart,
 			psLayerSessionExit,
 			// 底图几何 → 图层 / 蒙版联动 + 带图层的撤销快照（纯函数，Node 里可测）
@@ -13839,8 +13797,8 @@ h(
 			psWarpAlpha,
 			psTransformLayers,
 			psStraightenGeometry,
-			psHistorySnapshot,
-			psHistoryRestore,
+			psHistorySnapshot, psHistoryPush, psHistorySeek,
+			psHistoryRestore, psReadChannel, psDecodeInput, psReadDpiBytes,
 			psLayerRowActivate,
 			// 曲线 / 色阶 / 自然饱和度 / 滤镜（像素引擎，Node 里可测）
 			psIdentityLut,

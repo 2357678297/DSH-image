@@ -1550,7 +1550,7 @@ const PRESETS = [
     );
 
     check("透视引擎仍支持联动，但导出只读取已提交的文档或当前图层", ui3.PS_GEOMETRY_KINDS.includes("warp") &&
-      /const toDataUrl = \(\) => \{\s*const out = psExportComposite\(stage, layers, Boolean\(layerSession\)\);/.test(SOURCE));
+      /const committedPixels = \(\) => psExportComposite\(stage, layers, Boolean\(layerSession\)\)/.test(SOURCE) && /const toDataUrl = \(\) => \{\s*const out = committedPixels\(\)/.test(SOURCE));
 
     /* ---- PsView 接线：几何提交点 / undo / redo 真的用了上面这些纯函数 ---- */
     const psViewBody = SOURCE.slice(SOURCE.indexOf("function PsView("), SOURCE.indexOf("function psHandles("));
@@ -1573,11 +1573,11 @@ const PRESETS = [
       (() => {
         const undoBody = psViewBody.slice(psViewBody.indexOf("const applySnapshot"), psViewBody.indexOf("/* ---- 画布上的指针交互"));
         return (
-          /psHistoryRestore\(snapshot, \{ layers, layerSession \}\)/.test(undoBody) &&
+          /psHistoryRestore\(snapshot, \{ layers, layerSession, activeLayerId, warpResultId \}\)/.test(undoBody) &&
           /setLayers\(restored\.layers\)/.test(undoBody) &&
           /setLayerSession\(restored\.layerSession\)/.test(undoBody) &&
           /layerSessionRef\.current = restored\.layerSession/.test(undoBody) &&
-          /psHistorySnapshot\(source, layers, layerSession\)/.test(undoBody)
+          /psHistorySeek\(history, currentSnapshot\(\),/.test(undoBody) && /setActiveLayerId\(restored\.activeLayerId\)/.test(undoBody)
         );
       })()
     );
@@ -3001,10 +3001,10 @@ check(
   check(
     "图片处理能接收「查看器 → 图片处理」带进来的图（initialUrl 载入一次就清）",
     /function PsView\(\{ state, actions, initial, initialUrl, onConsumeInitialUrl \}\)/.test(SOURCE) &&
-      /if \(!initialUrl\?\.dataUrl\) return undefined;/.test(SOURCE) &&
-      /await loadImage\(\{ name: initialUrl\.name, dataUrl: initialUrl\.dataUrl \}\);/.test(SOURCE) &&
+      /if \(!initialUrl\?\.url && !initialUrl\?\.dataUrl\) return;/.test(SOURCE) &&
+      /void loadImage\(initialUrl\)/.test(SOURCE) && /onConsumeInitialUrl\?\.\(initialUrl\)/.test(SOURCE) &&
       /initialUrl: psImage, onConsumeInitialUrl: actions\.clearPsImage/.test(SOURCE) &&
-      /setPsImage\(\{ name: image\.name/.test(SOURCE)
+      /setPsImage\(\{\s*name:\s*image\.name/.test(SOURCE) && /current === request \? null : current/.test(SOURCE)
   );
 
   const makeRequest = (references = [], settings = {}) => w.buildGenerationRequest({

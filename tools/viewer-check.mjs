@@ -9,6 +9,9 @@
 //   4. 把这坨拖拽数据丢进输入区 → 真走 /upload，挂成参考图；
 //   5. 供应商页的「素材目录」块：显示当前目录、保存时 POST /config(stateDir)、打开目录打 /state/reveal。
 
+import { auditPSReads } from "../test/ps-load-audit.test.mjs";
+import { auditPSLayers } from "../test/ps-layer-audit.test.mjs";
+import { auditPsPixels } from "../test/ps-pixels-audit.test.mjs";
 import { auditGridUI, runGridPage } from "../test/grid-ui.test.mjs";
 import { auditGridPixels } from "../test/grid-pixels.test.mjs";
 import { auditChatScroll } from "../test/chat-scroll.test.mjs";
@@ -376,6 +379,18 @@ flushSync(() => root.render(React.createElement(ui.Workbench, { onOpenInRightbar
 const shot = await waitFor(() => host.querySelector(".vig-grid.is-duo .vig-shot-img") ?? host.querySelector(".vig-shot-img"), 6000);
 check("结果卡挂起来了（有可点的图）", Boolean(shot), shot ? "" : "没有 .vig-shot-img");
 
+if (new URLSearchParams(location.search).get("audit")==="psreads") {
+ await (${auditPSReads.toString()})({host,check,wait,flushSync,ui,React,createRoot});
+ const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
+if (new URLSearchParams(location.search).get("audit")==="pslayers") {
+ await (${auditPSLayers.toString()})({host,check,wait,flushSync,ui,React,createRoot});
+ const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
+if (new URLSearchParams(location.search).get("audit")==="pspixels") {
+ await (${auditPsPixels.toString()})({host,check,wait,flushSync,ui,React,root});
+ const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
 if (new URLSearchParams(location.search).get("audit")==="grid") {
  await (${auditGridPixels.toString()})({ui,check});
  await (${auditGridUI.toString()})({host,check,wait,flushSync,posts});

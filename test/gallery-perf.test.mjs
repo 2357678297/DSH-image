@@ -97,14 +97,72 @@ async function inBrowser(baseline) {
     search('only-last');await until(()=>$('.vig-tile-name')?.textContent==='item-200.png','filter searches full index');
     check($$('.vig-tile').length===1,'filter result length');search('');check($('.vig-tile-name')?.textContent==='item-001.png','clear search resets page');
   }
+  if(!baseline) host.parentElement.style.width='1255px';
   const stagePrior=created;click(view()[1]);await until(()=>loaded($('.vig-stage-img')),'stage original');await wait(250);
   report.stage={stripImages:$$('.vig-strip-item img').length,stripElements:$('.vig-strip').querySelectorAll('*').length,createdOnSwitch:created-stagePrior,mainWidth:$('.vig-stage-img').naturalWidth};
-  check(report.stage.stripImages===(baseline?200:12),'stage strip cap',report.stage);
+  if (baseline) check(report.stage.stripImages===200,'baseline stage strip',report.stage);
   if(!baseline){
-    click($('[data-lib-next]'));await until(()=>$$('.vig-strip-item').some(b=>b.title==='item-013.png'),'stage page next');
-    click($$('.vig-strip-item').find(b=>b.title==='item-024.png'));const stage=$('.vig-stage-main');stage.focus();flush(()=>stage.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY:120})));
-    await until(()=>$('.vig-strip-item.is-on')?.title==='item-025.png','wheel crosses stage page 2/3 boundary');
-    check($$('.vig-strip-item').length===12,'stage stays bounded after wheel');
+    const stripItems=()=>$$('.vig-strip-item');
+    const id=name=>Number(/^item-(\d+)\.png$/.exec(name)?.[1]);
+    const sourceId=()=>id($('.vig-stage-img')?.alt);
+    const chosenId=()=>id($('.vig-strip-item.is-on')?.title);
+    const next=()=>$('[data-lib-next]'), prev=()=>$('[data-lib-prev]');
+    const range=()=>stripItems().map(el=>id(el.title));
+    const fourFrames=async()=>{for(let i=0;i<4;i++)await new Promise(requestAnimationFrame);};
+    const stripSize=async()=>{
+      await fourFrames(); // Deliver CSS container queries, ResizeObserver and the subsequent React commit.
+      const strip=$('.vig-strip');
+      await Promise.all(strip.getAnimations({subtree:true}).filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));
+      const items=stripItems(), box=strip.getBoundingClientRect(), style=getComputedStyle(strip);
+      const a=items[0].getBoundingClientRect(), b=items.at(-1).getBoundingClientRect();
+      const measured={width:box.width, count:items.length,leftGap:a.left-box.left,rightGap:box.right-b.right,
+        leftInset:parseFloat(style.paddingLeft)+parseFloat(style.borderLeftWidth),rightInset:parseFloat(style.paddingRight)+parseFloat(style.borderRightWidth),
+        overflow:strip.scrollWidth-strip.clientWidth, tileWidth:b.width, tileHeight:b.height};
+      check(measured.count>0 && measured.count<=48 && measured.overflow<=1 && Math.abs(measured.leftGap-measured.leftInset)<=1 && Math.abs(measured.rightGap-measured.rightInset)<=1,
+        'filled group uses both strip edges (padding only), zero horizontal overflow, bounded mounted items',measured);
+      check(items.every(el=>getComputedStyle(el.querySelector('img')).objectFit==='cover'),'thumbnails use object-fit:cover');
+      return measured;
+    };
+    const assertGroup=(first,last)=>{
+      const ids=range(), expected=Array.from({length:last-first+1},(_,i)=>first+i);
+      const output=$('.vig-lib-pages output')?.textContent.trim();
+      check(ids.length===expected.length && ids.every((v,i)=>v===expected[i]),'group covers a contiguous logical range',{ids,expected});
+      check(output===`${first}–${last} / 200`,'pager range equals the actual visible strip',{first,last,output});
+      check(chosenId()===sourceId() && ids.includes(chosenId()) && stripItems().filter(el=>el.getAttribute('aria-pressed')==='true').length===1,'current original remains selected in the strip',{chosen:chosenId(),source:sourceId(),ids});
+    };
+    const wide=await stripSize(), cap=wide.count;
+    check(wide.width>1210 && wide.width<=1255 && cap>12,'~1255px host uses more than 12 thumbnail slots',wide);assertGroup(1,cap);
+    click(stripItems().at(-1)); const picked=sourceId();
+    host.parentElement.style.width='320px';const narrow=await stripSize();
+    check(narrow.width>300 && narrow.width<=320 && narrow.count<cap && picked===sourceId() && picked===chosenId(),'narrowing the host changes capacity, not the current image',{narrow,cap,picked,chosen:chosenId()});
+    host.parentElement.style.width='1255px';const restored=await stripSize();
+    check(restored.count===cap && picked===sourceId() && picked===chosenId(),'widening restores capacity and keeps current image',{restored,picked,chosen:chosenId()});assertGroup(1,cap);
+    report.stage.sizes={wide,narrow,restored};
+    click(next());assertGroup(cap+1,cap*2);
+    click(stripItems().at(-1));const stage=$('.vig-stage-main');stage.focus();flush(()=>stage.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY:120})));
+    await until(()=>chosenId()===cap*2+1,'wheel from last thumbnail reaches next group');assertGroup(cap*2+1,cap*3);
+    // Keep the preceding group's boundaries so we can verify the padded last group overlaps it.
+    let previous;
+    for(let i=0;i<200&&!next().disabled;i++){previous=range();click(next());}
+    check(next().disabled && !prev().disabled,'last group controls');const tail=await stripSize();
+    const tailStart=201-cap;
+    assertGroup(tailStart,200);check(tail.count===cap && sourceId()===previous.at(-1)+1,'last page selects the first new original instead of backing up to a borrowed thumbnail',{tail,tailStart,previousEnd:previous.at(-1),active:sourceId()});
+    const firstNew=sourceId();
+    const shared=previous?.filter(v=>v>=tailStart)??[];check(shared.length>0,'chosen host width exercises a partially overlapping final group',{cap,previous,tailStart});
+    const sharedId=shared.at(-1);click(stripItems().find(el=>id(el.title)===sharedId));assertGroup(tailStart,200);
+    check(next().disabled && sourceId()===sharedId,'clicking a shared thumbnail does not jump to the preceding group');
+    click(stripItems().at(-1));check(sourceId()===200,'last image reachable');
+    click(view()[0]);check($$('.vig-tile').length===8 && $('.vig-tile-name')?.textContent==='item-193.png','back to grid: current image 200 lies on the last 12-item page');
+    click(view()[1]);await fourFrames();check(chosenId()===200 && sourceId()===200,'grid/stage round-trip keeps the exact image');
+    for(let i=0;i<200 && !prev().disabled;i++)click(prev());assertGroup(1,cap);click(stripItems()[0]);check(sourceId()===1 && prev().disabled,'return to first group and first original');
+    report.stage.lastGroup={first:tailStart,last:200,firstNew,overlap:shared.length,clicked:sharedId,count:tail.count};
+    search('only-last');await fourFrames();
+    const solo=stripItems();check(solo.length===1 && chosenId()===200,'one-result filter still shows and selects the matching original');
+    await Promise.all(solo[0].getAnimations().map(anim=>anim.finished.catch(()=>{})));
+    const single=solo[0].getBoundingClientRect(), rail=$('.vig-strip').getBoundingClientRect();
+    report.stage.singleResult={width:single.width, height:single.height, leftGap:single.left-rail.left,rightGap:rail.right-single.right};
+    check(Math.abs((single.left-rail.left)-(rail.right-single.right))<=1 && Math.abs(single.width-wide.tileWidth)<=2,
+      'one-result filter centers the thumbnail without stretching it across the strip',report.stage.singleResult);
     click(view()[0]);const searchInput=$('.vig-toolbar input');searchInput.focus();search('only-last');await until(()=>$('.vig-tile-name')?.textContent==='item-200.png','search refreshes current page');search('');
     for(let n=0;n<16;n++){const next=$('[data-lib-next]');check(next&&!next.disabled,'next exists before last',n);click(next);}
     check($$('.vig-tile').length===8 && $('[data-lib-next]')?.disabled && $$('.vig-tile-name').at(-1)?.textContent==='item-200.png','last page exposes final 8 assets');

@@ -2219,7 +2219,7 @@ body[data-ds-dark-theme] .vig-send:hover{background:#fff}
 .vig-tile-name{font-size:12px;font-weight:600;letter-spacing:-.005em}
 .vig-tile-sub{color:var(--vig-text-faint);letter-spacing:.02em;font-variant-numeric:tabular-nums;
 	white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* 视图切换：网格 / 大图（大图 = 上方固定大图 + 下方缩略条横向滚动） */
+/* 视图切换：网格 / 大图（大图 = 上方固定大图 + 下方缩略条按容器宽度分页） */
 .vig-viewmode{display:inline-flex;align-items:center;gap:2px;padding:2px;border:1px solid var(--vig-line);
 	border-radius:var(--vig-r-pill);background:var(--vig-surface-soft)}
 .vig-viewmode-btn{height:24px;min-width:34px;padding:0 8px;border:0;border-radius:var(--vig-r-pill);background:transparent;
@@ -2253,15 +2253,15 @@ body[data-ds-dark-theme] .vig-send:hover{background:#fff}
 .vig-stage-bar .vig-count{margin-left:0}
 .vig-stage-acts{display:inline-flex;align-items:center;gap:4px;padding-left:12px;margin-left:2px;
 	border-left:1px solid var(--vig-line)}
-.vig-strip{display:flex;gap:8px;padding:10px 14px;overflow-x:auto;overflow-y:hidden;
-	border-top:1px solid var(--vig-line);flex:none;position:relative;scroll-behavior:smooth}
-.vig-strip-item{width:64px;height:64px;flex:none;padding:0;border:2px solid transparent;border-radius:10px;
+.vig-strip{--vig-thumb-edge:64px;--vig-thumb-gap:8px;display:flex;justify-content:center;gap:var(--vig-thumb-gap);padding:10px 14px;overflow:hidden;
+	border-top:1px solid var(--vig-line);flex:none;min-width:0;position:relative}
+.vig-strip-item{min-width:0;height:var(--vig-thumb-edge);flex:0 1 calc((100% + var(--vig-thumb-gap)) / var(--vig-strip-cols, 1) - var(--vig-thumb-gap));padding:0;border:2px solid transparent;border-radius:10px;
 	overflow:hidden;background:var(--vig-surface-sunken);cursor:pointer;
 	transition:border-color var(--vig-dur) var(--vig-ease)}
 .vig-strip-item img{width:100%;height:100%;object-fit:cover;display:block}
 .vig-strip-item:hover{border-color:var(--vig-line-strong)}
 .vig-strip-item.is-on{border-color:var(--vig-accent)}
-/* 跟随滚动到位时给选中项一个 Q 弹（reduced-motion 下由全局规则关掉） */
+/* 切换当前图时给选中项一个 Q 弹（reduced-motion 下由全局规则关掉） */
 @keyframes vig-strip-pop{0%{transform:scale(.94)}58%{transform:scale(1.07)}100%{transform:scale(1)}}
 .vig-strip-item.is-on{animation:vig-strip-pop .34s cubic-bezier(.34,1.56,.64,1)}
 /* ============================================================
@@ -2589,7 +2589,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
  .vig-stage-bar,.vig-mask-pill{position:static;transform:none;align-self:stretch;max-width:100%;margin:4px;flex-wrap:wrap;justify-content:flex-start;border-radius:var(--vig-r-tile);padding:4px 8px;gap:4px}
  .vig-stage-bar .vig-stage-name,.vig-stage-bar .vig-stage-meta{flex:1 1 80px;min-width:0}.vig-stage-acts{max-width:100%;flex-wrap:wrap;padding-left:0;border-left:0}
  .vig-mask-input{flex:1 1 100px;min-width:64px;max-width:100%}.vig-mask-pill .vig-brush-range{width:64px}
- .vig-strip-item{width:48px;height:48px}.vig-strip{padding:5px 8px}
+ .vig-strip{--vig-thumb-edge:48px;padding:5px 8px}
 }
 .vig-tiles[data-density="large"]{grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr))}
 @media (hover:none){.vig-stage-nav{opacity:1;pointer-events:auto}.vig-stage-view.is-painting .vig-stage-nav{display:none}}
@@ -5346,6 +5346,30 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			});
 		}
 
+		const GALLERY_GRID_PAGE_SIZE = 12;
+		// 只观察图片带本身，不用桌面宽度；记忆的大图模式、分栏拖动和筛选恢复都走这里。
+		function useFilmstripCapacity(ref, mounted) {
+			const [capacity, setCapacity] = useState(1);
+			useMeasureEffect(() => {
+				const el = mounted && ref.current;
+				if (!el) return;
+				function measure() {
+					const css = getComputedStyle(el);
+					const width = el.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+					if (!(width > 0)) return;
+					const target = parseFloat(css.getPropertyValue("--vig-thumb-edge")) || 64;
+					const gap = parseFloat(css.columnGap) || 0;
+					setCapacity(Math.max(1, Math.min(48, Math.round((width + gap) / (target + gap)))));
+				}
+				measure();
+				if (typeof ResizeObserver !== "undefined") {
+					const observer = new ResizeObserver(measure); observer.observe(el); return () => observer.disconnect();
+				}
+				window.addEventListener("resize", measure); return () => window.removeEventListener("resize", measure);
+			}, [ref, mounted]);
+			return capacity;
+		}
+
 		function LibraryView({ state, actions }) {
 			const [selected, setSelected] = useState([]);
 			const [query, setQuery] = useState("");
@@ -5366,7 +5390,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					/* 隐私模式里写不了就只活这一次 */
 				}
 			};
-			/* 视图：网格（三档密度）/ 大图（上方固定大图 + 下方缩略条横向滚动），选择也记忆 */
+			/* 视图：网格（三档密度）/ 大图（上方固定大图 + 下方缩略条按容器宽度分页），选择也记忆 */
 			const [mode, setMode] = useState(() => {
 				try {
 					return localStorage.getItem("vig.library.mode") || "grid";
@@ -5376,8 +5400,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			});
 			const pickMode = (value) => {
 				if (value === mode) return;
-				if (value === "grid") setGridPage(page);
-				else if (Math.floor(activeIndex / pageSize) !== page) setActiveId(items[start]?.id || "");
+				if (value === "grid") setGridPage(Math.max(0, Math.floor(activeIndex / GALLERY_GRID_PAGE_SIZE)));
+				else {
+					setStripGroup(0);
+					if (activeIndex < start || activeIndex >= start + GALLERY_GRID_PAGE_SIZE) setActiveId(items[start]?.id || "");
+				}
 				setSelected([]);
 				setMode(value);
 				try {
@@ -5387,7 +5414,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				}
 			};
 			// 只限制卡片的 DOM，不截断检索、查看器或方向键可达的索引。
-			const pageSize = 12;
+			const [stripGroup, setStripGroup] = useState(0);
+			const stripRef = useRef(null);
 			const [gridPage, setGridPage] = useState(0);
 			const gridRef = useRef(null);
 			const [activeId, setActiveId] = useState("");
@@ -5399,18 +5427,26 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			}, [state.library, model, query]);
 			const activeIndex = items.length ? Math.max(0, items.findIndex((asset) => asset.id === activeId)) : -1;
 			const current = items[activeIndex] || null;
+			const stage = mode === "stage";
+			const stripCapacity = useFilmstripCapacity(stripRef, stage && items.length > 0);
+			const pageSize = stage ? stripCapacity : GALLERY_GRID_PAGE_SIZE;
 			const pages = Math.max(1, Math.ceil(items.length / pageSize));
-			const page = mode === "stage" ? Math.max(0, Math.floor(activeIndex / pageSize)) : Math.min(gridPage, pages - 1);
-			const start = page * pageSize;
-			const pageItems = useMemo(() => items.slice(start, start + pageSize), [items, start]);
+			// 尾组借前面的相邻图片补齐。显式保留组号：点重叠缩略图时不把整排跳回前一组。
+			const groupStart = n => stage ? Math.min(n * pageSize, Math.max(0, items.length - pageSize)) : n * pageSize;
+			const preferred = Math.min(stripGroup, pages - 1), preferredStart = groupStart(preferred);
+			const activeGroup = activeIndex >= preferredStart && activeIndex < preferredStart + pageSize
+				? preferred : Math.max(0, Math.floor(activeIndex / pageSize));
+			const page = stage ? activeGroup : Math.min(gridPage, pages - 1);
+			const start = groupStart(page);
+			const pageItems = useMemo(() => items.slice(start, start + pageSize), [items, start, pageSize]);
 			const visibleIds = useMemo(() => new Set(pageItems.map((item) => item.id)), [pageItems]);
 			const changePage = (index) => {
 				if (index < 0 || index >= pages) return;
 				setSelected([]);
-				if (mode === "stage") setActiveId(items[index * pageSize].id);
+				if (stage) { setStripGroup(index); setActiveId(items[index * pageSize].id); }
 				else setGridPage(index);
 			};
-			const resetFilter = (setter, value) => { setter(value); setGridPage(0); setActiveId(""); };
+			const resetFilter = (setter, value) => { setter(value); setGridPage(0); setStripGroup(0); setActiveId(""); };
 			useEffect(() => { if (gridRef.current) gridRef.current.scrollTop = 0; }, [page, query, model]);
 			const visibleSelected = selected.filter((id) => visibleIds.has(id));
 			const deletingRef = useRef(false);
@@ -5431,28 +5467,14 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				return merged;
 			}, [state.providers, models]);
 			const stageRef = useRef(null);
-			const stripRef = useRef(null);
-			/* 缩略条跟随选中项滚动：切图（箭头/滚轮/键盘/点击）后把选中缩略图滚到中间，带 Q 弹 */
-			useEffect(() => {
-				if (mode !== "stage") return undefined;
-				const strip = stripRef.current;
-				if (!strip) return undefined;
-				const node = strip.querySelector(".vig-strip-item.is-on");
-				if (!node) return undefined;
-				const stripRect = strip.getBoundingClientRect();
-				const nodeRect = node.getBoundingClientRect();
-				const delta = nodeRect.left + nodeRect.width / 2 - (stripRect.left + stripRect.width / 2);
-				if (Math.abs(delta) < 1) return undefined;
-				strip.scrollTo({ left: Math.max(0, strip.scrollLeft + delta), behavior: "smooth" });
-				return undefined;
-			}, [mode, current?.id, items.length]);
 			const lastWheelSwitch = useRef(-Infinity);
 			/* 切上一张 / 下一张（箭头、键盘、滚轮共用） */
 			const stepActive = (direction) => {
 				if (items.length === 0) return;
 				const index = Math.max(0, items.indexOf(current));
-				const nextId = items[(index + direction + items.length) % items.length]?.id || "";
-				setActiveId(nextId);
+				const next = (index + direction + items.length) % items.length;
+				setStripGroup(next >= start && next < start + pageSize ? page : Math.floor(next / pageSize));
+				setActiveId(items[next].id);
 			};
 			const onStageKey = (event) => {
 				if (event.target !== event.currentTarget || event.defaultPrevented || items.length < 2 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.nativeEvent?.isComposing) return;
@@ -5480,7 +5502,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				};
 				node.addEventListener("wheel", onWheel, { passive: false });
 				return () => node.removeEventListener("wheel", onWheel);
-			}, [mode, items, current]);
+			}, [mode, items, current, start, page, pageSize]);
 
 			/* ---- 局部改图：框选（矩形）+ 画笔（自由笔迹）都产出 mask（白=重画）---- */
 			const [tool, setTool] = useState("");
@@ -5988,7 +6010,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								),
 								h(
 									"div",
-									{ className: "vig-strip", ref: stripRef },
+									{ className: "vig-strip", ref: stripRef, style: { "--vig-strip-cols":stripCapacity } },
 									pageItems.map((asset) =>
 										h(
 											"button",
@@ -5998,7 +6020,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												className: `vig-strip-item${current && asset.id === current.id ? " is-on" : ""}`,
 												title: asset.name,
 												"aria-pressed": Boolean(current && asset.id === current.id),
-												onClick: () => setActiveId(asset.id),
+												onClick: () => { setStripGroup(page); setActiveId(asset.id); },
 												...imageDragProps(asset)
 											},
 											h(GalleryThumb, { asset, draggable: false })

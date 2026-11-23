@@ -35,6 +35,44 @@ export async function auditGridUI({host, check, wait, flushSync, posts}) {
     if(!c || c.width!==W || c.height!==H) return false;
     return samples(c).every((v,i)=>v===(applied && i%W>=x0 && i%W<x0+cw && Math.floor(i/W)>=y0 && Math.floor(i/W)<y0+ch ? pink : before[i]));
   };
+  const shown = node => !!node && node.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}) && node.getBoundingClientRect().width>0;
+  const actionable = node => {
+    if (!node || !shown(node) || node.disabled) return false;
+    node.scrollIntoView({block:'nearest',inline:'nearest'});
+    const r=node.getBoundingClientRect(), bounds=ctrl('editor').closest('dialog').getBoundingClientRect();
+    return r.width>=24 && r.height>=24 && r.left>=bounds.left-1 && r.top>=bounds.top-1 && r.right<=bounds.right+1 && r.bottom<=bounds.bottom+1 && node.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2));
+  };
+  const auditLayout = (wide, reviewing=false) => {
+    const editor=ctrl('editor'), area=editor.querySelector('.vig-grid-workarea'), preview=ctrl('preview'), inspector=ctrl('inspector'), footer=ctrl('exports');
+    if (![area,preview,inspector,footer].every(shown)) throw Error('缺少可见的预览、单格操作区或导出页脚');
+    const P=preview.getBoundingClientRect(), I=inspector.getBoundingClientRect(), A=area.getBoundingClientRect(), F=footer.getBoundingClientRect(), D=editor.closest('dialog').getBoundingClientRect();
+    const layout=wide ? P.right<=I.left+1 && Math.min(P.bottom,I.bottom)>Math.max(P.top,I.top)+24 : P.bottom<=I.top+1 && Math.min(P.right,I.right)>Math.max(P.left,I.left)+100;
+    const ordered=area.contains(preview) && area.contains(inspector) && !area.contains(footer) && !!(area.compareDocumentPosition(footer)&Node.DOCUMENT_POSITION_FOLLOWING) && F.top>=A.bottom-1;
+    const noSpill=[area,preview,inspector,footer,editor].every(n=>n.scrollWidth<=n.clientWidth+1) && [P,I,F,A].every(r=>r.left>=D.left-1 && r.right<=D.right+1);
+    const exportsInFooter=['export-cell','export-all'].every(k=>footer.contains(ctrl(k))) && !ctrl('export-sheet'); // these checkpoints precede the first applied patch
+    const acceptsInput=shown(ctrl('prompt')) && inspector.contains(ctrl('prompt')) && inspector.contains(ctrl('generate'));
+    const review=ctrl('review'), candidateActions=shown(review) && inspector.contains(review) && ['candidate','apply','discard'].every(k=>review.contains(ctrl(k))) && !shown(ctrl('prompt')) && inspector.textContent.includes(calls.at(-1)?.prompt);
+    check((wide?'1059×854':'320×360')+(reviewing?' 候选态':' 编辑态')+'：预览及编辑分区、导出在后、无横向溢出', layout && ordered && noSpill && exportsInFooter && preview.contains(ctrl('canvas')) && (reviewing ? candidateActions : acceptsInput), JSON.stringify({preview:[P.left,P.top,P.width,P.height],inspector:[I.left,I.top,I.width,I.height],footerTop:F.top,workBottom:A.bottom,layout,ordered,noSpill,exportsInFooter,acceptsInput,candidateActions}));
+  };
+  const auditCompare = async (wide) => {
+    auditLayout(wide,true);
+    const compare=ctrl('compare'), candidate=ctrl('candidate'), sheet=ctrl('canvas');
+    const overlay=()=>q('.vig-grid-stage img.vig-grid-overlay'), crop=()=>q('.vig-grid-stage [aria-pressed="true"]');
+    const sameBox=()=>{
+      if(!shown(overlay()) || !crop())return false;
+      const a=overlay().getBoundingClientRect(), b=crop().getBoundingClientRect();
+      return ['left','top','right','bottom'].every(k=>Math.abs(a[k]-b[k])<1.25);
+    };
+    const still={src:candidate.currentSrc,job:calls.length,uploads:uploads.length,downloads:downloads.length};
+    const intact=()=>ctrl('candidate')===candidate && candidate.currentSrc===still.src && candidate.naturalWidth===96 && ctrl('canvas')===sheet && isWorkingSheet(sheet) && calls.length===still.job && uploads.length===still.uploads && downloads.length===still.downloads;
+    const reachable=['discard','apply','compare'].every(k=>actionable(ctrl(k)));
+    const accessible=compare instanceof HTMLButtonElement && !compare.disabled && !!(compare.getAttribute('aria-label')||compare.textContent).trim() && compare.tabIndex>=0 && compare.getAttribute('aria-pressed')==='false';
+    compare.focus({preventScroll:true});click(compare);
+    await until(()=>!shown(overlay()),'查看修改前，只隐藏舞台覆盖层');
+    const original=compare.getAttribute('aria-pressed')==='true' && document.activeElement===compare && intact();
+    click(compare);await until(()=>sameBox(),'恢复候选至所选格');
+    check((wide?'宽屏':'窄屏')+'：对照开关可聚焦可点击，切换只影响舞台，不替换候选、不写画布也不提交',accessible && reachable && original && compare.getAttribute('aria-pressed')==='false' && intact(),JSON.stringify({accessible,reachable,original,pressed:compare.getAttribute('aria-pressed')}));
+  };
   const decode = async (url) => {const img=new Image();img.src=url; await img.decode();const c=canvas(img.naturalWidth,img.naturalHeight);c.getContext('2d').drawImage(img,0,0);return c;};
   const origFetch=window.fetch, origConfirm=window.confirm;
   const origCreate=URL.createObjectURL, origRevoke=URL.revokeObjectURL, origClick=HTMLAnchorElement.prototype.click;
@@ -86,6 +124,7 @@ export async function auditGridUI({host, check, wait, flushSync, posts}) {
       if((init.method||'GET').toUpperCase()!=='GET') writes.push(route);
       return origFetch(input,init); // original is already viewer-check's local mock, not network fetch.
     };
+    host.style.width='1059px';host.style.height='854px';
     // Actual large result PNG: the first request may load the card; prohibit all subsequent network reads.
     const largeImg=await until(()=>shot(big)?.querySelector('img'),'8192 卡片出现'); await largeImg.decode();
     const cold=(await fixture('lock')).bigReads; traceSource=largeImg; traced=0; click(shotButton(big));
@@ -95,7 +134,7 @@ export async function auditGridUI({host, check, wait, flushSync, posts}) {
     const hot=(await fixture('stats')).bigReads;
     check('8192×3456 六宫格断网打开：直接绘制卡片自身、无二次HTTP或fetch，6处实际像素正确',largeImg.naturalWidth===8192 && largeImg.naturalHeight===3456 && cold>0 && cold===hot && bigFetch===0 && traced>0 && large?.height===3456 && pixels && host.querySelectorAll('[data-grid-cell]').length===6,JSON.stringify({w:large?.width,h:large?.height,cold,hot,bigFetch,draws:traced,pixels}));
     click(ctrl('close'));traceSource=null;
-    await open();
+    await open();auditLayout(true);
     check('宫格从真实 PNG 结果卡打开，使用解码像素而不是任务元数据',sourceRead===0 && isWorkingSheet(ctrl('canvas')) && !ctrl('candidate'));
     setValue(ctrl('rows'),rows);setValue(ctrl('cols'),cols);await until(()=>host.querySelectorAll('[data-grid-cell]').length===6,'2 行 3 列');
     click(q('[data-grid-cell="4"]'));setValue(ctrl('prompt'),'把第二行中间一格改成洋红色');
@@ -109,9 +148,11 @@ export async function auditGridUI({host, check, wait, flushSync, posts}) {
     check('局部重绘保留提示词和当前生图设置，发送单格且不重复图字节',body?.prompt==='把第二行中间一格改成洋红色' && body.model==='gpt-image-2.5-c' && body.providerId==='pv_gpt' && body.conversationId==='conv_default' && body.quality==='LOW' && body.n===1 && body.endpoint==='images_edits' && body.mode==='edit' && !body.images?.length && !body.image && body.referenceUrl===refUrls[0] && body.referenceUrls?.length===1 && body.referenceUrls[0]===refUrls[0] && uploads.length===1 && /^data:image\/png;base64,/.test(uploads[0]?.data),JSON.stringify({model:body?.model,mode:body?.mode,n:body?.n,endpoint:body?.endpoint}));
     const cut=await decode(uploads[0].data);
     check('提交的 PNG 就是所选格：原生尺寸和所有像素都匹配',cut.width===cw && cut.height===ch && samples(cut).every((v,i)=>v===before[(y0+Math.floor(i/cw))*W+x0+i%cw]));
+    await auditCompare(true);
     check('候选尚未处理时不能切格/重分布局',ctrl('rows').disabled && ctrl('cols').disabled && q('[data-grid-cell="0"]').disabled);
     click(ctrl('apply'));await until(()=>!ctrl('candidate'),'应用候选并退出预览');
     check('填回只修改目标矩形，整张工作稿其它像素逐点不变',isWorkingSheet(ctrl('canvas'),true));
+    check('填回后才在导出页脚出现整图 PNG，按钮可命中',ctrl('exports').contains(ctrl('export-sheet')) && actionable(ctrl('export-sheet')));
     window.confirm=()=>false;click(ctrl('close'));check('取消关闭会保留工作稿',!!ctrl('editor') && isWorkingSheet(ctrl('canvas'),true));
     window.confirm=()=>true;
     const cell=await getDownload('export-cell','png'), cellPng=await decodedFile(cell);
@@ -147,14 +188,16 @@ export async function auditGridUI({host, check, wait, flushSync, posts}) {
     window.confirm=()=>true;click(ctrl('close'));await until(()=>!ctrl('editor'),'关闭工作稿');
     const focusReturned=document.activeElement===opener;
     // A 320×360 embedded right pane. The modal must remain inside its panel and the scrollable form must expose its footer.
-    host.style.width='320px';host.style.height='360px';await wait(100);await open();
+    host.style.width='320px';host.style.height='360px';await wait(100);await open();auditLayout(false);
     const editor=ctrl('editor'), panel=editor.closest('dialog'), bounds=host.getBoundingClientRect(), box=panel.getBoundingClientRect();
     const focusEntered=editor.contains(document.activeElement); const reach=node=>{node.scrollIntoView({block:'nearest',inline:'nearest'});const rect=node.getBoundingClientRect();return rect.width>15 && rect.height>15 && rect.left>=box.left-1 && rect.right<=box.right+1 && rect.top>=box.top-1 && rect.bottom<=box.bottom+1 && node.contains(document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2));};
+    const canReachExports=['export-cell','export-all'].every(k=>actionable(ctrl(k)));
     const canReachRows=reach(ctrl('rows'));const canReachPrompt=reach(ctrl('prompt')); const canReachClose=reach(ctrl('close')); const canReachGenerate=reach(ctrl('generate'));
-    check('320×360 窄面板：模态焦点进入/归还，首尾控件能通过滚动完整到达',panel.matches(':modal') && box.width<=bounds.width+1 && box.height<=bounds.height+1 && focusEntered && focusReturned && canReachRows && canReachPrompt && canReachClose && canReachGenerate,JSON.stringify({focusEntered,focusReturned,canReachRows,canReachPrompt,canReachClose,canReachGenerate,box:box.toJSON(),host:bounds.toJSON()}));
+    check('320×360 窄面板：模态焦点进入/归还，首尾控件能通过滚动完整到达',panel.matches(':modal') && box.width<=bounds.width+1 && box.height<=bounds.height+1 && focusEntered && focusReturned && canReachExports && canReachRows && canReachPrompt && canReachClose && canReachGenerate,JSON.stringify({focusEntered,focusReturned,canReachExports,canReachRows,canReachPrompt,canReachClose,canReachGenerate,box:box.toJSON(),host:bounds.toJSON()}));
     setValue(ctrl('mode'),'generate');setValue(ctrl('prompt'),'保留失败以后重试这段文字');failNext=true;click(ctrl('generate'));await until(()=>editor.querySelector('[role=alert]') && !ctrl('generate').disabled,'提交失败后解锁');
     check('提交失败有错误反馈：原图与提示词不变，仍可重试',editor.querySelector('[role=alert]').textContent.includes('服务暂时不可用') && isWorkingSheet(ctrl('canvas')) && ctrl('prompt').value==='保留失败以后重试这段文字' && !ctrl('candidate'));
-    click(ctrl('generate'));await until(()=>ctrl('candidate')?.naturalWidth,'失败后手动重试返回候选',6500);check('重试仅产生一个新任务，必须再确认才填回',calls.length===4 && isWorkingSheet(ctrl('canvas')) && !!ctrl('apply'));click(ctrl('discard'));
+    click(ctrl('generate'));await until(()=>ctrl('candidate')?.naturalWidth,'失败后手动重试返回候选',6500);check('重试仅产生一个新任务，必须再确认才填回',calls.length===4 && isWorkingSheet(ctrl('canvas')) && !!ctrl('apply'));
+    await auditCompare(false);click(ctrl('discard'));
     check('重新打开仍是原图，之前的工作稿没有覆盖原件',isWorkingSheet(ctrl('canvas')));
     setValue(ctrl('prompt'),'关闭后不接受这个迟回候选');delayPoll=true;click(ctrl('generate'));await until(()=>release,'有一个轮询正等待返回',6500);
     check('轮询期间布局和目标已锁定，生成按钮阻止重复请求',ctrl('generate').disabled && ctrl('rows').disabled && ctrl('cols').disabled);

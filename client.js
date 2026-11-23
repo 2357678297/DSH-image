@@ -200,6 +200,9 @@ function writeConvSetting(id, settings) {
 
 		const zh = {
 			"grid.title": "宫格拆分",
+			"grid.intro": "选中一格，可单独导出或重新生成。", "grid.overview": "宫格预览", "grid.selectHint": "点击画面中的编号选择格子。",
+			"grid.editor": "编辑单格", "grid.review": "确认候选", "grid.description": "画面描述", "grid.before": "对照修改前", "grid.showingBefore": "正在查看修改前", "grid.pending": "候选预览 · 尚未填回",
+			"grid.reviewNote": "确认只替换当前格；弃用可返回修改描述。", "grid.exports": "导出图片", "grid.exportPending": "先确认或弃用候选，再导出。", "grid.exportHint": "导出不会覆盖原图。",
 			"grid.cell": "当前格", "grid.uploadLimit": "这格的 PNG 超出上传限制。请增加行列数，或改用纯文字生成。",
 			"grid.rows": "行",
 			"grid.cols": "列",
@@ -765,6 +768,9 @@ function writeConvSetting(id, settings) {
 
 		const en = {
 			"grid.title": "Split grid",
+			"grid.intro": "Select a cell to export or regenerate it.", "grid.overview": "Grid preview", "grid.selectHint": "Select a numbered cell in the image.",
+			"grid.editor": "Edit cell", "grid.review": "Review candidate", "grid.description": "Image description", "grid.before": "Compare with previous", "grid.showingBefore": "Showing previous version", "grid.pending": "Candidate preview · not applied",
+			"grid.reviewNote": "Apply to change only this cell, or discard to edit your prompt.", "grid.exports": "Export images", "grid.exportPending": "Apply or discard the candidate before exporting.", "grid.exportHint": "Exports leave the original unchanged.",
 			"grid.cell": "Cell", "grid.uploadLimit": "This cell is too large to upload. Increase the row/column count or generate from text.",
 			"grid.rows": "Rows",
 			"grid.cols": "Columns",
@@ -2537,16 +2543,27 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-dialog-frame>.vig-modal{min-width:0;max-width:100%;max-height:100%;overscroll-behavior:contain}
 .vig-dialog-frame>.vig-modal>*{flex-shrink:0}
 .vig-dialog-frame label,.vig-dialog-frame input,.vig-dialog-frame textarea{min-width:0;max-width:100%}
-.vig-grid-editor{width:min(860px,100%);gap:10px}
-.vig-grid-editor .vig-grid-line{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;min-width:0}
-.vig-grid-editor label{display:inline-flex;align-items:center;gap:6px}.vig-grid-editor .vig-muted{overflow-wrap:anywhere;font-size:12px}
-.vig-grid-editor .vig-sel{width:auto}.vig-grid-editor textarea{width:100%;min-height:48px}
-.vig-grid-stage{position:relative;align-self:center;max-width:100%;overflow:hidden;background:var(--vig-surface-sunken);border-radius:8px}
-.vig-grid-raster,.vig-grid-raster canvas{display:block;width:100%;height:100%}
+.vig-grid-editor{container:vig-grid-panel / inline-size;width:min(1040px,100%);padding:0;gap:0;color:var(--vig-text);isolation:isolate}
+.vig-grid-editor :is(h2,h3,p,figure){margin:0}.vig-grid-editor h2{font:600 18px/1.35 var(--vig-font);letter-spacing:-.02em}.vig-grid-editor h3{font:600 14px/1.4 var(--vig-font)}
+.vig-grid-head,.vig-grid-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px}.vig-grid-head{border-bottom:1px solid var(--vig-line)}
+.vig-grid-ident,.vig-grid-line,.vig-grid-foot-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0}.vig-grid-ident{gap:12px;flex:1;flex-wrap:nowrap}.vig-grid-ident>div{min-width:0}.vig-grid-symbol{flex:none;display:grid;place-items:center;width:38px;height:38px;background:var(--vig-accent);color:var(--vig-surface);border-radius:12px}
+.vig-grid-editor .vig-muted,.vig-grid-note{color:var(--vig-text-muted);font:400 12px/1.55 var(--vig-font);overflow-wrap:anywhere}.vig-grid-head .vig-icon-btn{width:36px;height:36px;flex:none}
+.vig-grid-workarea{display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:20px;padding:18px 20px}.vig-grid-workarea>section{min-width:0}.vig-grid-preview,.vig-grid-inspector,.vig-grid-form,.vig-grid-review{display:grid;gap:12px;align-content:start}
+.vig-grid-subhead{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.vig-grid-editor label{display:inline-flex;align-items:center;gap:6px;font-size:13px}.vig-grid-editor .vig-sel{width:auto;max-width:100%;height:34px;color:var(--vig-text);background-color:var(--vig-surface);border-color:var(--vig-line-strong)}
+.vig-grid-board{display:grid;place-items:center;min-height:90px;padding:8px;background:var(--vig-surface-sunken);border:1px solid var(--vig-line);border-radius:var(--vig-r-tile)}
+.vig-grid-stage{position:relative;min-width:0;max-width:100%;overflow:hidden;border-radius:5px}.vig-grid-raster,.vig-grid-raster canvas{display:block;width:100%;height:100%}
 .vig-grid-overlay{position:absolute;display:block;object-fit:cover;pointer-events:none;background:var(--vig-surface-sunken)}
-.vig-grid-editor .vig-grid-region{position:absolute;box-sizing:border-box;display:flex;align-items:flex-start;justify-content:flex-start;padding:0;background:transparent;border:0;border-radius:0;box-shadow:inset 0 0 0 1px #ffffffa6;cursor:pointer}
-.vig-grid-editor .vig-grid-region[aria-pressed=true]{box-shadow:inset 0 0 0 3px #00ae76;z-index:1}.vig-grid-region span{margin:3px;padding:1px 5px;border-radius:4px;color:#fff;background:#172026ce;font-size:11px;line-height:1.5;pointer-events:none}
-.vig-grid-editor .vig-grid-region:focus-visible{outline:2px dashed white;outline-offset:-5px}.vig-grid-candidate{width:110px;max-width:38%;max-height:150px;object-fit:cover;border-radius:8px}
+.vig-grid-editor .vig-grid-region{position:absolute;box-sizing:border-box;display:flex;align-items:flex-start;justify-content:flex-start;padding:0;background:transparent;border:0;border-radius:0;box-shadow:inset 0 0 0 1px #ffffff99;cursor:pointer}
+.vig-grid-editor .vig-grid-region[aria-pressed=true]{box-shadow:inset 0 0 0 3px #00886a,inset 0 0 0 4px #fff;z-index:1}.vig-grid-region span{display:inline-flex;align-items:center;gap:2px;margin:4px;padding:1px 6px;border-radius:5px;color:#fff;background:#172026d9;font-size:11px;line-height:1.6;pointer-events:none}.vig-grid-region[aria-pressed=true] span{background:#045e49}
+.vig-grid-editor .vig-grid-region:focus-visible{outline:2px dashed white;outline-offset:-6px}.vig-grid-editor :is(.vig-btn,.vig-sel,.vig-input,.vig-icon-btn):focus-visible{outline:2px solid var(--vig-text);outline-offset:2px}
+.vig-grid-inspector{border:1px solid var(--vig-line);background:var(--vig-surface-soft);border-radius:var(--vig-r-tile);padding:16px}.vig-grid-target{padding-bottom:12px;border-bottom:1px solid var(--vig-line);display:grid;gap:8px}.vig-grid-cell-meta{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap}.vig-grid-field{display:grid!important;gap:5px!important;font-weight:500}.vig-grid-field .vig-sel{width:100%}
+.vig-grid-editor textarea.vig-input{display:block;width:100%;min-height:76px;resize:vertical;padding:9px 11px;border:1px solid var(--vig-line-strong);border-radius:9px;background:var(--vig-surface);color:var(--vig-text)}
+.vig-grid-editor .vig-btn{min-height:34px;height:auto;padding:6px 11px;line-height:1.35;white-space:normal}.vig-grid-inspector .is-primary{min-height:38px;flex:1}.vig-grid-actions{display:flex;gap:8px;flex-wrap:wrap}
+.vig-grid-review-body{display:flex;align-items:center;gap:10px;min-width:0}.vig-grid-candidate{width:auto;height:auto;max-width:38%;max-height:96px;object-fit:cover;border-radius:7px}.vig-grid-summary{color:var(--vig-text);overflow-wrap:anywhere;white-space:pre-wrap;font-size:13px;max-height:7em;overflow:auto}.vig-grid-preview-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.vig-grid-preview-meta [aria-pressed=true]{background:var(--vig-accent);border-color:var(--vig-accent);color:var(--vig-surface)}
+.vig-grid-status{font-size:12px;line-height:1.5;color:var(--vig-text-muted)}.vig-grid-foot{border-top:1px solid var(--vig-line);flex-wrap:wrap;background:var(--vig-surface-soft)}.vig-grid-foot-actions{gap:6px}.vig-grid-editor .vig-grid-foot .vig-btn{background:var(--vig-surface)}
+@container vig-grid-panel (min-width:720px){.vig-grid-workarea{grid-template-columns:minmax(0,1fr) minmax(258px,31%);gap:18px}}
+@container vig-grid-panel (max-width:440px){.vig-grid-head,.vig-grid-workarea,.vig-grid-foot{padding:12px}.vig-grid-workarea{gap:12px}.vig-grid-inspector{padding:12px}.vig-grid-editor .vig-btn,.vig-grid-editor .vig-sel,.vig-grid-head .vig-icon-btn{min-height:40px}.vig-grid-foot-actions{width:100%}.vig-grid-foot-actions .vig-btn{flex:1 1 auto}}
 .vig-dialog-frame .vig-modal-title,.vig-prov-test,.vig-item-title,.vig-tag,.vig-block .vig-muted{overflow-wrap:anywhere}
 .vig-item-head{flex-wrap:wrap}.vig-item-head .vig-tag{max-width:100%}
 .vig-root{container:vig-workbench / inline-size}
@@ -3413,6 +3430,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const [dimensions, setDimensions] = useState(null), [prompt, setPrompt] = useState(""), [mode, setMode] = useState("edit");
 			const [hasEdits, setHasEdits] = useState(false);
 			const [loadAttempt, setLoadAttempt] = useState(0);
+			const [showBefore, setShowBefore] = useState(false);
 			const [busy, setBusy] = useState("load"), [error, setError] = useState(""), [patch, setPatch] = useState(null), [dirty, setDirty] = useState(false);
 			const mount = useRef(null), sheet = useRef(null), lifecycle = useRef(null), lock = useRef(false), candidate = useRef(null);
 			const tracking = useRef(null);
@@ -3477,7 +3495,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					if (done.status !== "succeeded" || !done.images?.[0]?.url) throw new Error(String(done.error || t("grid.missingResult")));
 					const loaded = await gridLoadImage(done.images[0].url, signal);
 					if (signal.aborted) { loaded.release(); return; }
-					candidate.current = { ...loaded, rect, index }; setPatch(candidate.current);
+					setShowBefore(false); candidate.current = { ...loaded, rect, index }; setPatch(candidate.current);
 				});
 			};
 			const applyPatch = () => {
@@ -3495,19 +3513,39 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			});
 			const button = (key, label, action, disabled, primary=false) => h("button", {type:"button", className:`vig-btn${primary ? " is-primary" : ""}`, [`data-grid-${key}`]:"1", disabled, onClick:action}, t(label));
 			const dimSelect = (key, val, max, set) => h("label", null, t(`grid.${key}`), h("select", {className:"vig-sel", value:val, [`data-grid-${key}`]:"1", disabled:blocked, onChange:(e)=>{set(Number(e.target.value));setIndex(0);setError("");}}, Array.from({length:Math.min(6,max)},(_,i)=>h("option",{key:i+1,value:i+1},i+1))));
-			return h(WorkbenchDialog, {label:t("grid.title"), onDismiss:dismiss}, h("section", {className:"vig-modal vig-grid-editor", "data-grid-editor":"1"},
-				h("div", {className:"vig-grid-line"}, h("strong", {className:"vig-modal-title"}, t("grid.title")), h("span", {className:"vig-spacer"}), h("button", {type:"button", className:"vig-icon-btn", title:t("grid.close"), "aria-label":t("grid.close"), "data-grid-close":"1", onClick:dismiss},h(Icon,{name:"close"}))),
-				h("div", {className:"vig-grid-line"}, dimSelect("rows",rows,dimensions?.h || 2,setRows), dimSelect("cols",cols,dimensions?.w || 3,setCols), rect && h("label",null,t("grid.cell"),h("select",{className:"vig-sel",disabled:blocked,value:index,onChange:(e)=>{setIndex(Number(e.target.value));setError("");}},cells.map((_,i)=>h("option",{key:i,value:i},cellName(i))))), rect && h("span", {className:"vig-muted"}, `${rect.w} × ${rect.h}`)),
-				h("div", {className:"vig-grid-stage", style:dimensions ? {width:`min(100%, ${Math.min(820, 300 * dimensions.w / dimensions.h)}px)`,aspectRatio:`${dimensions.w}/${dimensions.h}`} : undefined},
-					h("div", {className:"vig-grid-raster",ref:mount}),
-					patch && h("img", {className:"vig-grid-overlay", src:patch.url, alt:"", style:boxStyle(patch.rect)}),
-					dimensions && cells.map((cell,i)=>h("button",{key:i,type:"button",className:"vig-grid-region", "data-grid-cell":String(i), "aria-label":cellName(i), "aria-pressed":index===i, title:cellName(i), disabled:blocked, onClick:()=>{setIndex(i);setError("");}, style:boxStyle(cell)},h("span", null, i+1)))),
-				h("div",{className:"vig-grid-line"}, button("export-cell","grid.cellPNG",()=>download("cell"),blocked), button("export-all","grid.allZIP",()=>download("all"),blocked), button("export-sheet","grid.sheetPNG",()=>download("sheet"),blocked || !hasEdits)),
-				h("div",{className:"vig-grid-line"},h("label",null,t("grid.fill"),h("select",{className:"vig-sel","data-grid-mode":"1", value:mode,disabled:blocked,onChange:(e)=>setMode(e.target.value)},h("option",{value:"edit"},t("grid.edit")),h("option",{value:"generate"},t("grid.generate")))),h("span",{className:"vig-muted"},config.defaultModel)),
-				h("textarea",{className:"vig-input", rows:2,maxLength:2000, "aria-label":t("grid.prompt"),placeholder:t("grid.prompt"),"data-grid-prompt":"1",value:prompt,disabled:blocked,onChange:(e)=>setPrompt(e.target.value)}),
-				patch ? h("div",{className:"vig-grid-line"}, h("img", {className:"vig-grid-candidate","data-grid-candidate":"1", src:patch.url, alt:t("grid.preview"),style:{width:`min(38%, ${Math.min(130, 150*rect.w/rect.h)}px)`,aspectRatio:`${rect.w}/${rect.h}`}}),h("span",{className:"vig-muted"},t("grid.preview")),button("apply","grid.apply",applyPatch,false,true),button("discard","grid.discard",()=>{releasePatch();setPatch(null);},false)) : h("div",{className:"vig-grid-line"}, button("generate","grid.submit",generate,blocked || !prompt.trim() || !canGenerate,true),h("span",{role:"status",className:"vig-muted"},busy ? t(`grid.busy.${busy}`) : !canGenerate ? t("grid.needModel") : t(dirty ? "grid.dirty" : "grid.safe"))),
-				error && h("div",{role:"alert",className:"vig-error"},error),
-				!dimensions && !busy && error && button("retry-load", "grid.retryLoad", ()=>setLoadAttempt(n=>n+1), false)));
+			// 正在编辑与审核候选是互斥步骤；导出始终在独立页脚，不截断选格→填回的操作顺序。
+			const current = rect && h("div", {className:"vig-grid-target"},
+				h("h3",null,t(patch ? "grid.review" : "grid.editor")),
+				h("div",{className:"vig-grid-cell-meta"},h("label",null,t("grid.cell"),h("select",{className:"vig-sel",disabled:blocked,value:index,onChange:e=>{setIndex(Number(e.target.value));setError("");}},cells.map((_,i)=>h("option",{key:i,value:i},cellName(i))))),
+					h("span",{className:"vig-muted"},`${rect.w} × ${rect.h} px`)));
+			const board = h("section",{className:"vig-grid-preview","data-grid-preview":"1","aria-label":t("grid.overview")},
+				h("div",{className:"vig-grid-subhead"},h("h3",null,t("grid.overview")),h("div",{className:"vig-grid-line"},dimSelect("rows",rows,dimensions?.h || 2,setRows),dimSelect("cols",cols,dimensions?.w || 3,setCols))),
+				h("div",{className:"vig-grid-board"},h("div",{className:"vig-grid-stage",style:dimensions ? {width:`min(100%, ${360 * dimensions.w/dimensions.h}px)`,aspectRatio:`${dimensions.w}/${dimensions.h}`} : undefined},
+					h("div",{className:"vig-grid-raster",ref:mount}),
+					patch && !showBefore && h("img",{className:"vig-grid-overlay",src:patch.url,alt:"",style:boxStyle(patch.rect)}),
+					dimensions && cells.map((cell,i)=>h("button",{key:i,type:"button",className:"vig-grid-region","data-grid-cell":String(i),"aria-label":cellName(i),"aria-pressed":index===i,title:cellName(i),disabled:blocked,onClick:()=>{setIndex(i);setError("");},style:boxStyle(cell)},h("span",null,index===i && h(Icon,{name:"check",size:12}),i+1))))),
+				h("div",{className:"vig-grid-preview-meta"},h("span",{className:"vig-grid-note",role:"status"},!dimensions ? (error ? "" : t("grid.busy.load")) : patch ? t(showBefore ? "grid.showingBefore" : "grid.pending") : t("grid.selectHint")),
+					patch ? h("button",{type:"button",className:"vig-btn","data-grid-compare":"1","aria-pressed":showBefore,onClick:()=>setShowBefore(v=>!v)},t("grid.before")) : dimensions && h("span",{className:"vig-muted"},`${dimensions.w} × ${dimensions.h} px`)),
+				!dimensions && error && h("div",{role:"alert",className:"vig-error"},error),
+				!dimensions && !busy && error && button("retry-load","grid.retryLoad",()=>setLoadAttempt(n=>n+1),false));
+			const form = rect && !patch && h("div",{className:"vig-grid-form"},
+				h("label",{className:"vig-grid-field"},t("grid.fill"),h("select",{className:"vig-sel","data-grid-mode":"1",value:mode,disabled:blocked,onChange:e=>setMode(e.target.value)},h("option",{value:"edit"},t("grid.edit")),h("option",{value:"generate"},t("grid.generate")))),
+				h("label",{className:"vig-grid-field"},t("grid.description"),h("textarea",{className:"vig-input",rows:3,maxLength:2000,placeholder:t("grid.prompt"),"data-grid-prompt":"1",value:prompt,disabled:blocked,onChange:e=>setPrompt(e.target.value)})),
+				h("div",{className:"vig-grid-actions"},button("generate",busy==="generate" ? "grid.busy.generate" : "grid.submit",generate,blocked || !prompt.trim() || !canGenerate,true)),
+				h("p",{className:"vig-grid-status",role:"status"},busy ? t(`grid.busy.${busy}`) : !canGenerate ? t("grid.needModel") : t("grid.safe")),
+				h("p",{className:"vig-muted"},config.defaultModel));
+			const review = patch && h("div",{className:"vig-grid-review","data-grid-review":"1"},
+				h("div",{className:"vig-grid-review-body"},h("img",{className:"vig-grid-candidate","data-grid-candidate":"1",src:patch.url,alt:t("grid.preview"),style:{width:`min(38%, ${Math.min(108, 96*rect.w/rect.h)}px)`,aspectRatio:`${rect.w}/${rect.h}`}}),
+					h("div",{style:{minWidth:0}},h("span",{className:"vig-muted"},t("grid.description")),h("p",{className:"vig-grid-summary"},prompt))),
+				h("p",{className:"vig-grid-note"},t("grid.reviewNote")),
+				h("div",{className:"vig-grid-actions"},button("apply","grid.apply",applyPatch,false,true),button("discard","grid.discard",()=>{releasePatch();setPatch(null);},false)));
+			const inspector = dimensions && h("section",{className:"vig-grid-inspector","data-grid-inspector":"1","aria-label":t(patch ? "grid.review" : "grid.editor")},current,form,review,error && h("div",{role:"alert",className:"vig-error"},error));
+			const exportsBar = dimensions && h("footer",{className:"vig-grid-foot","data-grid-exports":"1"},
+				h("div",null,h("h3",null,t("grid.exports")),h("p",{className:"vig-grid-note",role:"status"},t(patch ? "grid.exportPending" : dirty ? "grid.dirty" : busy==="export" ? "grid.busy.export" : "grid.exportHint"))),
+				h("div",{className:"vig-grid-foot-actions"},button("export-cell","grid.cellPNG",()=>download("cell"),blocked),button("export-all","grid.allZIP",()=>download("all"),blocked),hasEdits && button("export-sheet","grid.sheetPNG",()=>download("sheet"),blocked)));
+			return h(WorkbenchDialog,{label:t("grid.title"),onDismiss:dismiss},h("section",{className:"vig-modal vig-grid-editor","data-grid-editor":"1"},
+				h("header",{className:"vig-grid-head"},h("div",{className:"vig-grid-ident"},h("span",{className:"vig-grid-symbol","aria-hidden":true},h(Icon,{name:"grid",size:18})),h("div",null,h("h2",null,t("grid.title")),h("p",{className:"vig-muted"},t("grid.intro")))),h("button",{type:"button",className:"vig-icon-btn",title:t("grid.close"),"aria-label":t("grid.close"),"data-grid-close":"1",onClick:dismiss},h(Icon,{name:"close"}))),
+				h("div",{className:"vig-grid-workarea"},board,inspector),exportsBar));
 		}
 
 		/* ------------------------------------------------------------------ *

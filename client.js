@@ -1352,18 +1352,14 @@ body[data-ds-dark-theme] .vig-mark{background:var(--vig-accent);color:var(--vig-
 .vig-tool{width:28px;height:28px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;color:var(--vig-text-muted)}
 .vig-tool:hover{background:var(--vig-surface-sunken);color:var(--vig-text)}
 .vig-tool.is-on{background:var(--vig-accent-soft);color:var(--vig-accent)}
-/* 对话（会话）切换：标题右边一条；窄了就缩左栏的下拉宽度 */
-.vig-conv{display:flex;align-items:center;gap:2px;min-width:0;max-width:250px}
-/* 会话列表：一排直观按钮（横向可滚），当前会话深色高亮 */
-.vig-conv-tabs{display:flex;align-items:center;gap:6px;overflow-x:auto;overflow-y:hidden;max-width:min(40vw,480px);padding:1px;scrollbar-width:none;flex:0 1 auto;min-width:0}
-.vig-conv-tabs::-webkit-scrollbar{display:none}
-.vig-conv-tab{flex:none;width:28px;height:28px;padding:0;border-radius:50%;border:1px solid var(--vig-line);background:var(--vig-surface);color:var(--vig-text-muted);font-size:12px;font-weight:600;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:background-color var(--vig-dur) var(--vig-ease),color var(--vig-dur) var(--vig-ease),border-color var(--vig-dur) var(--vig-ease)}
-.vig-conv-tab:hover{color:var(--vig-text);border-color:var(--vig-line-strong)}
-.vig-conv-tab.is-active{background:var(--vig-ink,#0b0b0c);color:#fff;border-color:transparent}
-.vig-root[data-compact="1"] .vig-conv-tabs{max-width:min(34vw,360px)}
+/* 选中对话生图时，数字会话展开在导航项下方，不占内容区标题宽度。 */
+.vig-conv{display:flex;align-items:center;gap:2px;flex:none}
 .vig-conv .vig-icon-btn{width:24px;height:24px}
-.vig-root[data-compact="1"] .vig-conv{max-width:190px}
-.vig-root[data-compact="1"] .vig-conv-tab{width:26px;height:26px}
+.vig-conv-tabs{display:flex;align-content:flex-start;flex-wrap:wrap;gap:4px;flex:none;min-width:0;max-width:100%;max-height:clamp(64px,calc(var(--vig-host-height,100vh)*.24),180px);overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;margin:0 0 2px 4px;padding:2px 2px 2px 6px;border-inline-start:1px solid var(--vig-line)}
+.vig-conv-tab{flex:none;min-width:28px;height:28px;padding:0 5px;border-radius:999px;border:1px solid var(--vig-line);background:var(--vig-surface);color:var(--vig-text-muted);font-size:12px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.vig-conv-tab:hover{color:var(--vig-text);border-color:var(--vig-line-strong)}
+.vig-conv-tab.is-active{background:var(--vig-accent);color:var(--vig-surface);border-color:transparent}
+.vig-conv-tab:focus-visible{outline:2px solid var(--vig-text);outline-offset:-2px}
 /* 信息卡快捷选择：一级浮层列卡片，点一张直接插进输入框；二级「管理」才跳信息管理页 */
 .vig-note-pick{position:relative;display:inline-flex}
 .vig-note-pop{position:absolute;left:0;bottom:calc(100% + 8px);z-index:30;width:min(300px,78vw);max-height:320px;overflow:auto;
@@ -2479,6 +2475,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
  .vig-root .vig-shell{flex-direction:column;gap:10px}
  .vig-root .vig-shell>.vig-nav{width:auto;flex:none;flex-flow:row wrap;gap:2px;padding:5px}
  .vig-root .vig-nav-item{width:auto;flex:none;height:auto;padding:7px 10px}
+ .vig-nav .vig-conv-tabs{flex:0 0 100%;order:1;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;max-width:100%;box-sizing:border-box;margin:2px 0 0;padding:4px 2px 1px;border-inline-start:0;border-top:1px solid var(--vig-line)}
  .vig-root .vig-nav-foot{display:none}
  .vig-root .vig-shell>.vig-side:not(.is-collapsed){width:auto;flex:none}
  .vig-root .vig-main-head{flex-wrap:wrap}
@@ -2486,8 +2483,6 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-main{container:vig-page / inline-size}
 @container vig-page (max-width: 580px){
  .vig-main-head{flex-wrap:wrap;gap:5px 8px;padding:8px 10px}
- .vig-main-head .vig-conv{flex:1 1 160px;max-width:100%}
- .vig-main-head .vig-conv-tabs{max-width:100%}
  .vig-toolbar{gap:5px 8px;padding:8px 10px}.vig-toolbar .vig-in{max-width:100%}
  .vig-prov{flex-direction:column;align-items:stretch}.vig-prov-acts{margin-left:0;justify-content:flex-start}
  .vig-prov-name,.vig-prov-line{overflow-wrap:anywhere}.vig-prov-acts .vig-btn{flex-shrink:0}
@@ -3843,6 +3838,38 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			);
 		}
 
+		function ConversationNav({ items, selected, onSelect }) {
+			const list = useRef(null);
+			const position = items.findIndex((item) => item.id === selected);
+			// 只滚动编号区。切换页面或新建后显示当前编号，不滚动整张工作台。
+			useMeasureEffect(() => {
+				const box = list.current, active = box?.querySelector('[aria-current="true"]');
+				if (!active) return;
+				const showActive = () => {
+					const bounds = box.getBoundingClientRect(), button = active.getBoundingClientRect();
+					const bottom = bounds.top + box.clientTop + box.clientHeight, right = bounds.left + box.clientLeft + box.clientWidth;
+					if (button.bottom > bottom) box.scrollTop += Math.ceil(button.bottom - bottom);
+					else if (button.top < bounds.top) box.scrollTop += button.top - bounds.top;
+					if (button.right > right) box.scrollLeft += Math.ceil(button.right - right);
+					else if (button.left < bounds.left) box.scrollLeft += button.left - bounds.left;
+				};
+				showActive();
+				if (typeof ResizeObserver === "undefined") return;
+				const observer = new ResizeObserver(showActive);
+				observer.observe(box);
+				return () => observer.disconnect();
+			}, [selected, position, items.length]);
+			return h("div", { ref:list, className:"vig-conv-tabs", role:"group", "aria-label":t("chat.convList") },
+				items.map((item, index) => {
+					const title = item.title || t("chat.untitledConv");
+					return h("button", {
+						key:item.id, type:"button", className:`vig-conv-tab${item.id === selected ? " is-active" : ""}`,
+						"aria-current":item.id === selected ? "true" : undefined, "aria-label":`${index + 1} · ${title}`,
+						title:`${title}${item.count ? ` · ${item.count}` : ""}`, "data-conv":item.id, onClick:() => onSelect(item.id)
+					}, String(index + 1));
+				}));
+		}
+
 		function ChatView({ state, actions }) {
 			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, isVideoEndpoint, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft, sizeRaw, toggleJsonSize } = state;
 			const [overLimit, setOverLimit] = useState(false);
@@ -4122,30 +4149,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					{ className: "vig-main-head" },
 					h(Icon, { name: "chat" }),
 					h("span", { className: "vig-item-title" }, t("nav.chat")),
-					// 对话（会话）切换：每个会话的历史互相隔离，新建不带上一段记忆
+					// 会话选择属于导航；头部只保留当前会话的管理操作。
 					h(
 						"div",
 						{ className: "vig-conv", title: t("chat.convMemory") },
-						/* 会话列表：直接铺成一排可点的按钮（不再用下拉展开） */
-						h(
-							"div",
-							{ className: "vig-conv-tabs", role: "tablist", "aria-label": t("chat.convList") },
-							(conversations || []).map((item, index) =>
-								h(
-									"button",
-									{
-										key: item.id,
-										className: `vig-conv-tab${item.id === conversationId ? " is-active" : ""}`,
-										role: "tab",
-										"aria-selected": item.id === conversationId ? "true" : "false",
-										title: `${item.title || t("chat.untitledConv")}${item.count ? ` · ${item.count}` : ""}`,
-										"data-conv": item.id,
-										onClick: () => void actions.switchConversation(item.id)
-									},
-									String(index + 1)
-								)
-							)
-						),
 						h(
 							"button",
 							{ className: "vig-icon-btn", title: t("chat.newConv"), onClick: () => void actions.newConversation() },
@@ -12648,18 +12655,16 @@ h(
 					h(
 						"nav",
 						{ className: "vig-nav vig-card" },
-						navItems.map((item) =>
-							h(
-								"button",
-								{
-									key: item.id,
-									className: `vig-nav-item${view === item.id ? " is-on" : ""}`,
-									onClick: () => setView(item.id)
-								},
-								h(Icon, { name: item.icon }),
-								item.label
-							)
-						),
+						navItems.map((item) => {
+							const active = view === item.id, chat = item.id === "chat";
+							return h(react.Fragment, { key:item.id },
+								h("button", {
+									type:"button", className:`vig-nav-item${active ? " is-on" : ""}`, "data-page":item.id,
+									"aria-current":active ? "page" : undefined, "aria-expanded":chat ? active && conversations.length > 0 : undefined,
+									onClick:() => setView(item.id)
+								}, h(Icon, { name:item.icon }), item.label),
+								chat && active && conversations.length > 0 ? h(ConversationNav, { items:conversations, selected:conversationId, onSelect:actions.switchConversation }) : null);
+						}),
 						// 更新入口（先设计、后端未接壤）：点一下检查，进度条按需出现
 						h(
 							"div",

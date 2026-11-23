@@ -99,6 +99,9 @@ let conversations = [
 	{ id: "conv_default", title: "默认对话", createdAt: "", updatedAt: "", count: 2, lastPrompt: "一只戴眼镜的橘猫" },
 	{ id: "conv_old", title: "旧对话", createdAt: "", updatedAt: "", count: 0, lastPrompt: "" }
 ];
+if (new URLSearchParams(location.search).get("audit") === "convnav") {
+ for (let i=3; i<=48; i++) conversations.push({id:"conv_"+i,title:"会话 "+i});
+}
 const convJobs = { conv_default: [JOB, SINGLE_JOB], conv_old: [] };
 const withConvCounts = () => conversations.map((item) => ({ ...item, count: (convJobs[item.id] || []).length }));
 let config = {
@@ -368,6 +371,27 @@ flushSync(() => root.render(React.createElement(ui.Workbench, { onOpenInRightbar
 const shot = await waitFor(() => host.querySelector(".vig-grid.is-duo .vig-shot-img") ?? host.querySelector(".vig-shot-img"), 6000);
 check("结果卡挂起来了（有可点的图）", Boolean(shot), shot ? "" : "没有 .vig-shot-img");
 
+if (new URLSearchParams(location.search).get("audit")==="convnav") {
+ const get=s=>host.querySelector(s), page=id=>get('[data-page="'+id+'"]'), list=()=>get('nav .vig-conv-tabs');
+ const click=el=>flushSync(()=>el.click()), last=()=>get('[data-conv="conv_48"]');
+ for(const width of [945,320]) {
+  host.style.width=width+"px"; await wait(140);
+  const group=list(), chat=page('chat'), header=get('.vig-main-head');
+  const box=group.getBoundingClientRect(), bounds=host.getBoundingClientRect();
+  const layout=JSON.stringify({host:bounds.width,compact:get(".vig-root").dataset.compact,group:box.toJSON(),chat:chat.getBoundingClientRect().toJSON(),provider:page("providers").getBoundingClientRect().toJSON(),scroll:group.scrollWidth,client:group.clientWidth});
+  check(width+'px 编号只在对话导航之下；标题保留三个操作',chat.nextElementSibling===group && group.querySelectorAll('button').length===48 && !header.querySelector('[data-conv]') && header.querySelectorAll('.vig-conv button').length===3 && box.top>=chat.getBoundingClientRect().bottom-1 && box.right<=bounds.right+1,layout);
+  check(width+'px 编号有独立滚动范围',width===945 ? group.scrollHeight>group.clientHeight && box.bottom<=page('library').getBoundingClientRect().top+1 : group.scrollWidth>group.clientWidth && box.top>=page('providers').getBoundingClientRect().bottom-1,layout);
+  if(width===945) group.scrollTop=group.scrollHeight;else group.scrollLeft=group.scrollWidth;
+  click(last());await wait(100);check(width+'px 选中末项可切换会话',last().getAttribute('aria-current')==='true' && !!get('.vig-empty'));
+  click(page('library'));await wait(100);check(width+'px 离开对话后子导航收起',!get('[data-conv]') && page('chat').getAttribute('aria-expanded')==='false');
+  click(page('chat')); const restored=await waitFor(()=>{
+   const button=last(), g=list()?.getBoundingClientRect(), r=button?.getBoundingClientRect();
+   return r && g && r.top>=g.top-1 && r.bottom<=g.bottom+1 && r.left>=g.left-1 && r.right<=g.right+1 && button.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));
+  },1500);
+  check(width+'px 返回时展开，选中编号可见且可点',page('chat').getAttribute('aria-expanded')==='true' && last().classList.contains('is-active') && !!restored);
+ }
+ const pre=document.createElement('pre');pre.id='vig-viewer-out';pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
 if (new URLSearchParams(location.search).get("audit")==="chatscroll") {
  await (${auditChatScroll.toString()})({host,check,wait,flushSync,ui,React,createRoot});
  const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
@@ -1478,12 +1502,10 @@ check("Esc 关闭查看器", !host.querySelector(".vig-viewer"));
 	const convTabs = Array.from(host.querySelectorAll(".vig-conv-tab"));
 	const convOptions = convTabs.map((node) => text(node));
 	check(
-		"对话切换：头部列出圆形编号按钮（1/2…，当前高亮，title 带会话名）",
-		convTabs.length >= 2 &&
-			convTabs.every((node) => /^[0-9]+$/.test(String(node.textContent || "").trim())) &&
-
-
-		JSON.stringify({ count: convTabs.length, tabTexts: convOptions, detail: convTabs.map((node) => ({ text: String(node.textContent || "").trim(), title: node.getAttribute("title") || "" })) })
+		"会话编号只在导航内展开，标题保留管理操作",
+		convTabs.length >= 2 && convTabs.every((node) => node.closest(".vig-nav") && /^[0-9]+$/.test(text(node)) && node.title) &&
+			convTabs.filter((node) => node.getAttribute("aria-current") === "true").length === 1 && !host.querySelector(".vig-main-head [data-conv]"),
+		JSON.stringify({ count: convTabs.length, tabTexts: convOptions })
 	);
 	// 会话隔离：切到空会话 → 消息清空
 	const selectSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value").set;

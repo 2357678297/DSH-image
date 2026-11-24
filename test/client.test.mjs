@@ -2753,8 +2753,10 @@ check(
         eight.includes('data-count="8"') &&
         /\.vig-grid\{display:grid;width:min\(100%,640px\);grid-template-columns:repeat\(auto-fill,minmax\(min\(100%,148px\),1fr\)\)/.test(SOURCE) &&
         /\.vig-grid\.is-single\{width:min\(100%,360px\)/.test(SOURCE) &&
-        /\.vig-shot img\{display:block;width:100%;height:auto;max-height:420px;object-fit:contain\}/.test(SOURCE) &&
-        /\.vig-grid:not\(\.is-single\) \.vig-shot-img\{aspect-ratio:4\/3/.test(SOURCE) &&
+         /\.vig-shot-img\{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;aspect-ratio:var\(--vig-image-ratio,1\);height:auto;max-height:none;min-width:0;align-self:start;justify-self:center/.test(SOURCE) &&
+         /\.vig-shot img\{display:block;width:100%;height:100%;object-fit:contain\}/.test(SOURCE) &&
+         /\.vig-grid\.is-single \.vig-shot-img\{width:min\(100%,var\(--vig-image-width,360px\)\)\}/.test(SOURCE) &&
+         !/\.vig-grid:not\(\.is-single\) \.vig-shot-img\{aspect-ratio:4\/3/.test(SOURCE) &&
         /\.vig-root\[data-compact="1"\] \.vig-grid\{width:100%;max-width:640px;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/.test(SOURCE) &&
         /\.vig-root\[data-compact="1"\] \.vig-grid\.is-trio\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}/.test(SOURCE)
       );

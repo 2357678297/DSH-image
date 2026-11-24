@@ -1430,13 +1430,13 @@ body[data-ds-dark-theme] .vig-mark{background:var(--vig-accent);color:var(--vig-
 /* 结果卡：图片自己带一个圆角边框；下面三个动作只是纯文字按键 ——
    不要白底面板、不要分隔线（以前那一整块看起来像又一张卡）。 */
 .vig-shot{position:relative;margin:0;background:none;border:0;border-radius:0;overflow:visible;min-width:0}
-.vig-shot-img{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;padding:0;max-height:420px;border-radius:var(--vig-r-tile);overflow:hidden;border:1px solid var(--vig-line);background:var(--vig-surface-sunken)}
-.vig-shot img{display:block;width:100%;height:auto;max-height:420px;object-fit:contain}
+			.vig-shot-img{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;aspect-ratio:var(--vig-image-ratio,1);height:auto;max-height:none;min-width:0;align-self:start;justify-self:center;padding:0;border-radius:var(--vig-r-tile);overflow:hidden;border:1px solid var(--vig-line);background:var(--vig-surface-sunken)}
+.vig-shot img{display:block;width:100%;height:100%;object-fit:contain}
+			.vig-grid.is-single .vig-shot-img{width:min(100%,var(--vig-image-width,360px))}
+.vig-grid.is-single .vig-shot-img{width:min(100%,360px,calc(var(--vig-image-ratio,1)*420px))}
 .vig-bubble:has(>.vig-grid){container:vig-results / inline-size}
 @container vig-results (max-width:450px){.vig-grid:not(.is-single){grid-template-columns:repeat(2,minmax(0,1fr))}}
 @container vig-workbench (width < 660px){.vig-grid:not(.is-single){grid-template-columns:repeat(2,minmax(0,1fr))}}
-.vig-grid:not(.is-single) .vig-shot-img{aspect-ratio:4/3;height:auto;max-height:none}
-.vig-grid:not(.is-single) .vig-shot img{width:100%;height:100%;object-fit:contain}
 .vig-shot-bar{display:flex;gap:2px;padding:2px 0 0;justify-content:space-around;background:none;border-top:0;flex-wrap:wrap}
 /* 卡片本身只有 132~160px 宽：三个动作一律用短名字（重绘 / 复制 / 原图）排一行，
    完整说法进 title。没有底色、没有边框、没有分隔线，就是三个文字按键。 */
@@ -3286,9 +3286,12 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const displayed = useRef(null);
 			const [busy, setBusy] = useState(false);
 			const safeName = (image.name || "image").replace(/[\\/:*?"<>|]+/g, "_");
+			const naturalWidth = Number(image.width), naturalHeight = Number(image.height);
+			const imageRatio = naturalWidth > 0 && naturalHeight > 0 && Number.isFinite(naturalWidth / naturalHeight) ? naturalWidth / naturalHeight : 1;
+			const ratioStyle = { "--vig-image-ratio": imageRatio, "--vig-image-width": `${420 * imageRatio}px` };
 			return h(
 				"figure",
-				{ className: "vig-shot", style: { margin: 0 } },
+				{ className: "vig-shot", style: { margin: 0, ...ratioStyle } },
 				// 点图开查看器（放大 / 缩放 / 翻页）；拖出去可以当参考图、拖进图片处理、拖到文件夹保存。
 				h(
 					"button",

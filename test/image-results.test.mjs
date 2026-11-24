@@ -19,14 +19,19 @@ export async function auditImageResults({host, check, waitFor, wait, flushSync})
     const one = byCount(1), two = byCount(2), three = byCount(3), eight = byCount(8);
     const singleRect = one?.querySelector('.vig-shot-img')?.getBoundingClientRect();
     const frames = [...(eight?.querySelectorAll('.vig-shot-img') || [])];
-    const ratio = frames[0] && getComputedStyle(frames[0]).aspectRatio;
+    const frameMetrics = frames.map(el => {
+      const box=el.getBoundingClientRect(), image=el.querySelector('img');
+      const original=Number(image.naturalWidth)/Number(image.naturalHeight), shown=box.width/box.height;
+      return {shown,original,width:box.width,height:box.height,declared:el.parentElement.style.getPropertyValue('--vig-image-ratio'),fit:getComputedStyle(image).objectFit};
+    });
+    const ratioMatches = rows => rows.every(item => Number.isFinite(item.original) && Math.abs(item.shown-item.original)<.025 && Math.abs(Number(item.declared)-item.original)<.01);
     const compact = width < 660 || eight.parentElement.clientWidth <= 450;
     check(`${width}px 单张竖图限制在 360×420 且不溢出`, !!singleRect && singleRect.width <= 361 && singleRect.height <= 421 && overflow(one) === 0,
       JSON.stringify(singleRect?.toJSON()));
     check(`${width}px 两张保持双列、三张按栏宽排布`, columns(two) === 2 && columns(three) === (compact ? 2 : 3) && overflow(two) === 0 && overflow(three) === 0,
       JSON.stringify({two:columns(two),three:columns(three),compact}));
-    check(`${width}px 八张最多四列、统一 4:3 contain 格，网格无横向溢出`, columns(eight) === (compact ? 2 : 4) && ratio === '4 / 3' && overflow(eight) === 0 && frames.every(el => getComputedStyle(el.querySelector('img')).objectFit === 'contain'),
-      JSON.stringify({columns:columns(eight),ratio,overflow:overflow(eight)}));
+    check(`${width}px 八张按原图比例填框，无 4:3 留白且无横向溢出`, columns(eight) === (compact ? 2 : 4) && ratioMatches(frameMetrics) && frameMetrics.every(item=>item.fit==='contain') && overflow(eight) === 0,
+      JSON.stringify({columns:columns(eight),frames:frameMetrics,overflow:overflow(eight)}));
   }
   host.style.width = '1200px';
   await wait(120);

@@ -19,6 +19,7 @@ import { auditChatFlow } from "../test/chat-flow.test.mjs";
 import { auditGallery } from "../test/library-audit.test.mjs";
 import { auditGeminiUI } from "../test/gemini-ui.test.mjs";
 import { auditStorageMove } from "../test/storage-move-ui.test.mjs";
+import { auditImageResults } from "../test/image-results.test.mjs";
 import { auditWorkbench } from "./workbench-audit.mjs";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -79,6 +80,8 @@ const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72
 const ART = (color) =>
 	"data:image/svg+xml;utf8," +
 	encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><rect width='100%' height='100%' fill='" + color + "'/><circle cx='200' cy='200' r='120' fill='#fff'/></svg>");
+const ART_RATIO = (w,h,c) => 'data:image/svg+xml;utf8,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='"+w+"' height='"+h+"'><rect width='100%' height='100%' fill='"+c+"'/></svg>");
+const imageResultsFixture = new URLSearchParams(location.search).get("audit") === "results";
 const IMAGES = [
 	{ id: "img_1", assetId: "img_1", name: "cat.png", url: ART("#f0a020"), width: 1024, height: 1024, bytes: 70, model: "gpt-image-2.5-c", size: "1024x1024", prompt: "一只戴眼镜的橘猫" },
 	{ id: "img_2", assetId: "img_2", name: "dog.png", url: ART("#4a90d9"), width: 512, height: 512, bytes: 70, model: "nano-banana-2.1", size: "512x512", prompt: "一只柴犬" }
@@ -115,6 +118,16 @@ if (new URLSearchParams(location.search).get("audit") === "convnav") {
  for (let i=3; i<=48; i++) conversations.push({id:"conv_"+i,title:"会话 "+i});
 }
 const convJobs = { conv_default: [JOB, SINGLE_JOB], conv_old: [] };
+if (imageResultsFixture) {
+	const image = (index, width, height) => ({assetId:'result_'+index,name:'result-'+index+'.svg',url:ART_RATIO(width,height,["#277da1","#f9844a","#43aa8b","#9b5de5"][index%4]),width,height,bytes:70});
+	const result = (id, images) => ({...JOB,id,status:"succeeded",count:images.length,createdAt:new Date().toISOString(),prompt:'布局测试 '+images.length+' 张',images});
+	convJobs.conv_default = [
+		result("result_single",[image(0,900,1600)]),
+		result("result_two",[image(1,1600,900),image(2,900,900)]),
+		result("result_three",[image(0,900,1600),image(1,1600,900),image(2,900,900)]),
+		result("result_eight",Array.from({length:8},(_,i)=>image(i,[900,1600,900,1600,900,1600,900,1600][i],[1600,900,900,1600,1600,900,900,1600][i])))
+	];
+}
 const withConvCounts = () => conversations.map((item) => ({ ...item, count: (convJobs[item.id] || []).length }));
 let config = {
 	baseUrl: "https://gank.velapi.cc/v1",
@@ -393,6 +406,10 @@ flushSync(() => root.render(React.createElement(ui.Workbench, { onOpenInRightbar
 // 专门点两张图那一轮里的图，后面的翻页用例才有对象。
 const shot = await waitFor(() => host.querySelector(".vig-grid.is-duo .vig-shot-img") ?? host.querySelector(".vig-shot-img"), 6000);
 check("结果卡挂起来了（有可点的图）", Boolean(shot), shot ? "" : "没有 .vig-shot-img");
+if (imageResultsFixture) {
+	await (${auditImageResults.toString()})({host,check,wait,waitFor,flushSync});
+	const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
 
 if (geminiFixture) {
  const remount=async kind=>{geminiAuditKind=kind;flushSync(()=>root.render(null));flushSync(()=>root.render(React.createElement(ui.Workbench,{onOpenInRightbar:()=>{}})));await waitFor(()=>host.querySelector('.vig-shot-img'),2000);};
@@ -462,8 +479,8 @@ const ratioOf = (grid) => {
 /* many=1 时 20 条全是双图任务：单图占比断言不适用，跳过 */
 if (new URLSearchParams(location.search).get("many") !== "1") {
 	check(
-		"结果图尺寸：单图约一半宽（0.44~0.54），两张收敛到三成六（0.3~0.42）",
-		Boolean(singleGrid) && Boolean(duoGrid) && ratioOf(singleGrid) >= 0.44 && ratioOf(singleGrid) <= 0.54 && ratioOf(duoGrid) >= 0.3 && ratioOf(duoGrid) <= 0.42,
+		"结果图尺寸：单图限宽 360px，双图等宽并排",
+		Boolean(singleGrid) && Boolean(duoGrid) && singleGrid.offsetWidth <= 360 && ratioOf(singleGrid) > .99 && ratioOf(duoGrid) > .46 && ratioOf(duoGrid) < .51,
 		JSON.stringify({ single: ratioOf(singleGrid).toFixed(3), duo: ratioOf(duoGrid).toFixed(3) })
 	);
 }

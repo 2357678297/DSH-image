@@ -2737,33 +2737,29 @@ check(
     })(),
     "vig-shot-img / 5 个 vig-shot-act 图标"
   );
-  /* 结果图按张数给画面占比：单图最大一半宽，多图收敛，四张起回到小格 */
+  /* 结果图只作缩略预览：单图受尺寸上限约束，多图网格排列 */
   check(
-    "结果图尺寸按张数自适应：单图最多占一半宽，两张/三张收敛，四张起回到小格",
+    "结果图占比受控：单图最大 360×420，多图最多 640px，窄栏保持双列",
     (() => {
       const images = (count) => Array.from({ length: count }, (_, index) => ({ assetId: `a${index}`, name: `p${index}.png`, url: `/api/velapi-image-go/asset/a${index}.png`, width: 512, height: 512 }));
       const turn = (count) =>
         renderToStaticMarkup(React.createElement(w.JobTurn, { job: { id: "j", status: "succeeded", prompt: "p", model: "m", size: "512x512", images: images(count) }, onToast: () => {}, onPreview: () => {} }));
-      const one = turn(1);
-      const two = turn(2);
-      const three = turn(3);
-      const four = turn(4);
+      const one = turn(1), two = turn(2), three = turn(3), four = turn(4), eight = turn(8);
       return (
-        one.includes('class="vig-grid is-single"') &&
-        one.includes('data-count="1"') &&
-        two.includes('class="vig-grid is-duo"') &&
-        two.includes('data-count="2"') &&
-        three.includes('class="vig-grid is-trio"') &&
-        three.includes('data-count="3"') &&
-        four.includes('class="vig-grid"') &&
-        !four.includes("is-single") &&
-        /\.vig-grid\.is-single\{grid-template-columns:minmax\(0,50%\)\}/.test(SOURCE) &&
-        /\.vig-grid\.is-duo\{grid-template-columns:repeat\(2,minmax\(0,36%\)\)\}/.test(SOURCE) &&
-        /\.vig-grid\.is-trio\{grid-template-columns:repeat\(3,minmax\(0,30%\)\)\}/.test(SOURCE) &&
-        /\.vig-root\[data-compact="1"\] \.vig-grid\.is-single\{grid-template-columns:minmax\(0,62%\)\}/.test(SOURCE)
+        one.includes('class="vig-grid is-single"') && one.includes('data-count="1"') &&
+        two.includes('class="vig-grid is-duo"') && two.includes('data-count="2"') &&
+        three.includes('class="vig-grid is-trio"') && three.includes('data-count="3"') &&
+        four.includes('class="vig-grid"') && four.includes('data-count="4"') &&
+        eight.includes('data-count="8"') &&
+        /\.vig-grid\{display:grid;width:min\(100%,640px\);grid-template-columns:repeat\(auto-fill,minmax\(min\(100%,148px\),1fr\)\)/.test(SOURCE) &&
+        /\.vig-grid\.is-single\{width:min\(100%,360px\)/.test(SOURCE) &&
+        /\.vig-shot img\{display:block;width:100%;height:auto;max-height:420px;object-fit:contain\}/.test(SOURCE) &&
+        /\.vig-grid:not\(\.is-single\) \.vig-shot-img\{aspect-ratio:4\/3/.test(SOURCE) &&
+        /\.vig-root\[data-compact="1"\] \.vig-grid\{width:100%;max-width:640px;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/.test(SOURCE) &&
+        /\.vig-root\[data-compact="1"\] \.vig-grid\.is-trio\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}/.test(SOURCE)
       );
     })(),
-    "1/2/3/4 张的 class 与 CSS"
+    "1/2/3/4/8 张的卡片结构和响应式尺寸契约"
   );
   /* 图片查看器：大图 + 翻页 + 缩放 + 动作；快捷拖拽：一张图能被拖到哪儿去 */
   {

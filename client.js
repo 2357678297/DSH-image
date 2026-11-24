@@ -1422,18 +1422,21 @@ body[data-ds-dark-theme] .vig-mark{background:var(--vig-accent);color:var(--vig-
 .vig-bubble{min-width:0;flex:1;display:flex;flex-direction:column;gap:8px}
 .vig-who{font-size:11px;color:var(--vig-text-faint);letter-spacing:.2px}
 .vig-text{white-space:pre-wrap;word-break:break-word}
-/* 结果图按张数给画面占比：一张最多占一半宽（大图才看得清），两张收敛到三成六，
-   三张各三成；四张起回到小格排开。「按需显示」= 图少放大、图多收敛，
-   别让单独一张图还缩在 132px 一条里。 */
-.vig-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px;justify-content:start}
-.vig-grid.is-single{grid-template-columns:minmax(0,50%)}
-.vig-grid.is-duo{grid-template-columns:repeat(2,minmax(0,36%))}
-.vig-grid.is-trio{grid-template-columns:repeat(3,minmax(0,30%))}
+/* 结果图只做消息内的预览：单图限制尺寸，多图定宽网格；点击仍可在查看器看原图。 */
+.vig-grid{display:grid;width:min(100%,640px);grid-template-columns:repeat(auto-fill,minmax(min(100%,148px),1fr));gap:8px;justify-content:start;min-width:0}
+.vig-grid.is-single{width:min(100%,360px);grid-template-columns:minmax(0,1fr)}
+.vig-grid.is-duo{grid-template-columns:repeat(2,minmax(0,1fr))}
+.vig-grid.is-trio{grid-template-columns:repeat(3,minmax(0,1fr))}
 /* 结果卡：图片自己带一个圆角边框；下面三个动作只是纯文字按键 ——
    不要白底面板、不要分隔线（以前那一整块看起来像又一张卡）。 */
-.vig-shot{position:relative;margin:0;background:none;border:0;border-radius:0;overflow:visible}
-.vig-shot-img{display:block;border-radius:var(--vig-r-tile);overflow:hidden;border:1px solid var(--vig-line);background:var(--vig-surface-sunken)}
-.vig-shot img{display:block;width:100%;height:auto}
+.vig-shot{position:relative;margin:0;background:none;border:0;border-radius:0;overflow:visible;min-width:0}
+.vig-shot-img{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;padding:0;max-height:420px;border-radius:var(--vig-r-tile);overflow:hidden;border:1px solid var(--vig-line);background:var(--vig-surface-sunken)}
+.vig-shot img{display:block;width:100%;height:auto;max-height:420px;object-fit:contain}
+.vig-bubble:has(>.vig-grid){container:vig-results / inline-size}
+@container vig-results (max-width:450px){.vig-grid:not(.is-single){grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container vig-workbench (width < 660px){.vig-grid:not(.is-single){grid-template-columns:repeat(2,minmax(0,1fr))}}
+.vig-grid:not(.is-single) .vig-shot-img{aspect-ratio:4/3;height:auto;max-height:none}
+.vig-grid:not(.is-single) .vig-shot img{width:100%;height:100%;object-fit:contain}
 .vig-shot-bar{display:flex;gap:2px;padding:2px 0 0;justify-content:space-around;background:none;border-top:0;flex-wrap:wrap}
 /* 卡片本身只有 132~160px 宽：三个动作一律用短名字（重绘 / 复制 / 原图）排一行，
    完整说法进 title。没有底色、没有边框、没有分隔线，就是三个文字按键。 */
@@ -1791,11 +1794,9 @@ body[data-ds-dark-theme] .vig-toast.is-err{background:rgba(48,26,30,.96)}
 .vig-root[data-compact="1"] .vig-main{min-height:360px;flex:1 0 auto}
 .vig-root[data-compact="1"] .vig-main-body{overflow:visible}
 .vig-root[data-compact="1"] .vig-tiles{grid-template-columns:repeat(auto-fill,minmax(118px,1fr));padding:12px}
-.vig-root[data-compact="1"] .vig-grid{grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}
-/* 窄栏里也一样按张数给占比（不然上面那条会把单图又压回 112px） */
-.vig-root[data-compact="1"] .vig-grid.is-single{grid-template-columns:minmax(0,62%)}
-.vig-root[data-compact="1"] .vig-grid.is-duo{grid-template-columns:repeat(2,minmax(0,46%))}
-.vig-root[data-compact="1"] .vig-grid.is-trio{grid-template-columns:repeat(3,minmax(0,31%))}
+.vig-root[data-compact="1"] .vig-grid{width:100%;max-width:640px;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.vig-root[data-compact="1"] .vig-grid.is-single{width:min(100%,360px);grid-template-columns:minmax(0,1fr)}
+.vig-root[data-compact="1"] .vig-grid.is-trio{grid-template-columns:repeat(2,minmax(0,1fr))}
 .vig-root[data-compact="1"] .vig-mini{padding:3px 7px;font-size:11.5px;border-radius:7px}
 /* 窄栏里缩略图那一行放不下「用这张重绘 / 复制链接 / 打开原图」三个全称，
    用 data-short 里的短文案换掉（title 里仍有全称，鼠标悬停能看到）。 */
@@ -3294,7 +3295,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					{
 						type: "button",
 						className: "vig-shot-img",
-						title: `${t("viewer.title")} · ${t("common.dragHint")}`,
+						title: `${t("chat.open")} · ${image.name || t("viewer.title")} · ${t("common.dragHint")}`,
+						"aria-label": `${t("chat.open")} · ${image.name || t("viewer.title")}`,
 						onClick: () => onPreview?.(image),
 						...imageDragProps(image)
 					},

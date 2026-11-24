@@ -2990,13 +2990,13 @@ check(
 
   /* 素材目录设置：默认本地，能改、能打开；换目录由宿主把素材复制过去 */
   check(
-    "素材目录：设置块接到 /config(stateDir) 与 /state/reveal，并提示默认目录",
+    "素材目录：应用内迁移走共享提交锁，原件保留，显示生效目录",
     /title: t\("prov\.storage"\), icon: "folder"/.test(SOURCE) &&
-      /saveStateDir: async \(dir\) => \{/.test(SOURCE) &&
+      /saveStateDir: dir => storageMoveLock\.run\(/.test(SOURCE) && !/window\.prompt\(t\("prov\.storageMovePick"/.test(SOURCE) &&
       /await call\("\/config", \{ method: "POST", body: \{ stateDir: dir \} \}\);/.test(SOURCE) &&
       /revealDir: async \(\) => \{/.test(SOURCE) &&
       /await call\("\/state\/reveal", \{ method: "POST", body: \{\} \}\);/.test(SOURCE) &&
-      /t\("prov\.storageDefault"\)/.test(SOURCE)
+      /t\("prov\.storageCurrent"\)/.test(SOURCE)
   );
   check(
     "图片处理能接收「查看器 → 图片处理」带进来的图（initialUrl 载入一次就清）",

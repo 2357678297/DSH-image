@@ -26,6 +26,7 @@
     "preversion": "node tools/release-guard.mjs npm-version",
     "wiring": "node tools/verify-wiring.mjs",
     "audit:workbench": "node tools/viewer-check.mjs --query audit=workbench && node tools/viewer-check.mjs --query audit=gallery && node tools/dock-check.mjs",
+    "audit:storage": "node tools/viewer-check.mjs --hold providers --query \"hold=providers&move=1\"",
     "audit:chat": "node tools/viewer-check.mjs --query audit=chatflow && node tools/viewer-check.mjs --query audit=chatscroll && node tools/viewer-check.mjs --query audit=convnav",
     "test:grid-desktop": "node test/grid-desktop.test.mjs",
     "audit:ps": "node test/ps-history-audit.test.mjs && node test/ps-load-audit.test.mjs && node tools/viewer-check.mjs --query audit=psreads && node tools/viewer-check.mjs --query audit=pslayers && node tools/viewer-check.mjs --query audit=pspixels && node test/ps-open-perf.test.mjs && node test/ps-entry-perf.test.mjs",

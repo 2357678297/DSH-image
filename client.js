@@ -674,10 +674,18 @@ function writeConvSetting(id, settings) {
 			"update.notWired": "更新通道还没接壤（宿主未实现 /update/check）",
 			"update.networkBlocked": "网络无法链接，需要特殊网络环境",
 			"update.prFlow": "PR 流程",
-			"prov.storageMovePick": "输入新的素材目录路径；现有素材会复制过去，旧目录原样保留。",
+			"prov.storageMoveTitle": "迁移素材目录",
+			"prov.storageTarget": "新目录的完整路径",
+			"prov.storageMovePick": "素材和供应商配置都会复制过去。建议使用自己的空目录，旧目录不会删除。",
+			"prov.storageUnconfirmed": "宿主未确认切换目录。请核对当前目录；若使用旧宿主，请更新并重新加载后再试。",
+			"prov.storageAbsolute": "请输入完整路径，不要使用相对路径。",
+			"prov.storageSame": "这是当前素材目录，请填写其他目录。",
+			"prov.storageConfirm": "确认迁移",
+			"prov.storageBusy": "正在复制素材，请稍候…",
+			"prov.storageRefreshFailed": "目录已切换，但图库刷新失败，请到图片管理点击刷新。",
 			"prov.storageSaved": "已切到 {dir}",
 			"prov.storageMoved": "复制了 {files} 个文件、{indexes} 份索引",
-			"prov.storageDefault": "默认目录",
+			"prov.storageCurrent": "当前目录",
 			"prov.storageNeedRestart": "素材目录设置要重启 DSH 后才生效（宿主还是旧版本）",
 			/* 图片查看器 */
 			"viewer.title": "图片查看器",
@@ -1157,10 +1165,18 @@ function writeConvSetting(id, settings) {
 			"update.notWired": "Update channel not wired yet (host has no /update/check)",
 			"update.networkBlocked": "Network unreachable — a specialized network environment (proxy/VPN) is required",
 			"update.prFlow": "PR flow",
-			"prov.storageMovePick": "Enter the new media folder path; existing files are copied there and the old folder is kept.",
+			"prov.storageMoveTitle": "Move media folder",
+			"prov.storageTarget": "Full path to the new folder",
+			"prov.storageMovePick": "Media and provider settings are copied. Use a private empty folder if possible. The old folder is kept.",
+			"prov.storageUnconfirmed": "The host did not confirm the folder change. Check the current folder. If the host is outdated, update and reload it before trying again.",
+			"prov.storageAbsolute": "Enter a full folder path, not a relative path.",
+			"prov.storageSame": "This is the current media folder. Choose another folder.",
+			"prov.storageConfirm": "Confirm move",
+			"prov.storageBusy": "Copying media. Please wait…",
+			"prov.storageRefreshFailed": "Folder switched, but the library did not refresh. Open the library and select Refresh.",
 			"prov.storageSaved": "Switched to {dir}",
 			"prov.storageMoved": "copied {files} files, {indexes} indexes",
-			"prov.storageDefault": "Default folder",
+			"prov.storageCurrent": "Current folder",
 			"prov.storageNeedRestart": "Saved, but the host is still the old build — restart DSH for the media folder switch to take effect",
 			"viewer.title": "Image viewer",
 			"viewer.prev": "Previous",
@@ -6247,6 +6263,43 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		 * 供应商管理
 		 * ------------------------------------------------------------------ */
 
+		function storageTargetIssue(raw, current) {
+			const target = raw.trim();
+			const winPath = p => /^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/.test(p);
+			const windows = winPath(current) || (!current && winPath(target));
+			if (!target || /[\0\r\n]/.test(target) || !(windows ? winPath(target) : target.startsWith("/"))) return "prov.storageAbsolute";
+			const key = p => (windows ? p.replace(/\\/g, "/").toLowerCase() : p).replace(/\/+$/, "");
+			return key(target) === key(current) && current ? "prov.storageSame" : "";
+		}
+
+		function StorageMoveDialog({ current, initialTarget, busy, onMove, onClose }) {
+			const [target, setTarget] = useState(initialTarget);
+			const [error, setError] = useState("");
+			const lock = useSubmitLock();
+			const pending = busy || lock.busy, issue = storageTargetIssue(target, current);
+			const dismiss = () => { if (!pending) onClose(); };
+			return h(WorkbenchDialog, {label:t("prov.storageMoveTitle"), onDismiss:dismiss},
+				h("form", {className:"vig-modal", "data-storage-dialog":"1", "aria-busy":pending, onSubmit:e => {
+					e.preventDefault(); if (pending || issue) return;
+					void lock.run(async () => {
+						setError("");
+						const result = await onMove(target.trim());
+						if (result?.ok) onClose(); else setError(result?.message || t("common.failed"));
+					});
+				}},
+					h("strong", {className:"vig-modal-title"}, t("prov.storageMoveTitle")),
+					h("div", {className:"vig-muted", style:{overflowWrap:"anywhere"}}, `${t("prov.storageCurrent")}：${current || "—"}`),
+					h("label", {className:"vig-field"}, h("span", {className:"vig-label"}, t("prov.storageTarget")),
+						h("input", {className:"vig-in", "data-storage-target":"1", value:target, disabled:pending, spellCheck:false, autoComplete:"off",
+							placeholder:/^(?:[A-Za-z]:|\\\\)/.test(current) ? "D:\\Media\\Studio" : "/data/studio", "aria-invalid":Boolean(target && issue),
+							onChange:e => { setTarget(e.target.value); setError(""); }})),
+					h("div", {className:"vig-muted"}, t("prov.storageMovePick")),
+					pending ? h("div", {role:"status"}, t("prov.storageBusy")) : error || (issue && target) ? h("div", {className:"vig-prov-test is-bad", role:"alert"}, error || t(issue)) : null,
+					h("div", {className:"vig-row", style:{justifyContent:"flex-end", flexWrap:"wrap"}},
+						h("button", {type:"button", className:"vig-btn", "data-storage-cancel":"1", disabled:pending, onClick:dismiss}, t("chat.cancel")),
+						h("button", {type:"submit", className:"vig-btn is-primary", "data-storage-confirm":"1", disabled:pending || Boolean(issue)}, t("prov.storageConfirm")))));
+		}
+
 		function ProvidersView({ state, actions, initialDialog = null }) {
 			// initialDialog 只有预览/测试会传：真跑起来永远是空手打开（点「编辑」才弹）。
 			const toDraft = (provider) => provider && ({ ...provider, apiKey: "", useRuntimeKey: Boolean(provider.useRuntimeKey ?? provider.usesRuntimeKey), modelsText: (provider.models || []).join(", ") });
@@ -6269,6 +6322,15 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const runtimeRevision = useRef(0);
 			const editRuntime = (key, value) => { runtimeRevision.current += 1; setRuntimeEdits((prev) => ({ ...prev, [key]: value })); };
 			const [runtimeKey, setRuntimeKey] = useState("");
+			const [moveDraft, setMoveDraft] = useState(null);
+			const [storageResult, setStorageResult] = useState(null);
+			const moveStorage = async dir => {
+				setStorageResult(null);
+				const result = await actions.saveStateDir(dir);
+				if (result?.ok) setRuntimeEdits(prev => { const {dir: unused, ...rest} = prev; return rest; });
+				setStorageResult(result || null);
+				return result;
+			};
 
 			const blank = { id: "", name: "", baseUrl: state.config.baseUrl, apiKey: "", useRuntimeKey: false, models: [], note: "" };
 
@@ -6398,9 +6460,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								h("span", { className: "vig-label" }, t("prov.storage")),
 								h("input", {
 									className: "vig-in",
-									value: runtime.dir || "",
+									value: runtime.dir || "", disabled: state.storageBusy,
 									placeholder: state.config.stateDir || "",
-									onChange: (event) => editRuntime("dir", event.target.value)
+									onChange: (event) => { setStorageResult(null); editRuntime("dir", event.target.value); }
 								})
 							),
 							h("div", { className: "vig-muted", style: { fontSize: 12 } }, t("prov.storageHint")),
@@ -6411,10 +6473,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									"button",
 									{
 										className: "vig-btn is-primary",
-										disabled: (runtime.dir || "").trim() === (state.config.stateDir || ""),
-										onClick: async () => {
-											await actions.saveStateDir(runtime.dir);
-										}
+										disabled: state.storageBusy || !(runtime.dir || "").trim() || (runtime.dir || "").trim() === (state.config.stateDir || ""),
+										onClick: () => void moveStorage(runtime.dir.trim())
 									},
 									t("prov.save")
 								),
@@ -6423,22 +6483,16 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								h(
 									"button",
 									{
-										className: "vig-btn",
-										onClick: async () => {
-											const picked = window.prompt(t("prov.storageMovePick"), String(runtime.dir || state.config.stateDir || ""));
-											if (picked == null) return;
-											const next = picked.trim();
-											if (!next || next === (state.config.stateDir || "")) return;
-											editRuntime("dir", next);
-											await actions.saveStateDir(next);
-										}
+										className: "vig-btn", type:"button", "data-storage-move":"1", disabled:state.storageBusy,
+										onClick: () => setMoveDraft(runtime.dir !== state.config.stateDir ? runtime.dir || "" : "")
 									},
 									h(Icon, { name: "folder", size: 13 }),
 									t("prov.storageMove")
 								),
 								h("div", { className: "vig-spacer" }),
-								h("span", { className: "vig-muted", style: { fontSize: 12 } }, `${t("prov.storageDefault")}：${state.config.stateDir || "-"}`)
-							)
+								h("span", { className: "vig-muted", style: { fontSize: 12 } }, `${t("prov.storageCurrent")}：${state.config.stateDir || "-"}`)
+							),
+							moveDraft == null && (state.storageBusy || storageResult) ? h("div", { className:`vig-prov-test${state.storageBusy ? "" : storageResult?.ok ? " is-ok" : " is-bad"}`, role:storageResult && !storageResult.ok ? "alert" : "status" }, state.storageBusy ? t("prov.storageBusy") : storageResult.message) : null
 						),
 						state.providers.length === 0
 							? h("div", { className: "vig-empty" }, t("prov.empty"))
@@ -6499,6 +6553,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								)
 					)
 				),
+				moveDraft !== null ? h(StorageMoveDialog, {current:state.config.stateDir || "", initialTarget:moveDraft, busy:state.storageBusy, onMove:moveStorage, onClose:() => setMoveDraft(null)}) : null,
 				dialog
 					? h(
 							WorkbenchDialog,
@@ -11769,6 +11824,7 @@ h(
 			const [libraryLoadingMore, setLibraryLoadingMore] = useState(false);
 			const libraryRevision = useRef(0);
 			const morePending = useRef(false);
+			const storageMoveLock = useSubmitLock();
 			const replaceLibrary = (payload) => {
 				++libraryRevision.current;
 				const rows = payload.items || [];
@@ -12825,29 +12881,24 @@ h(
 					await saveConfig({ activeProviderId: id });
 				},
 				/* ---- 素材目录：默认在本地，可改；换目录由宿主把现有素材复制过去 ---- */
-				saveStateDir: async (dir) => {
+				saveStateDir: dir => storageMoveLock.run(async () => {
 					try {
 						const payload = await call("/config", { method: "POST", body: { stateDir: dir } });
-						setConfig((previous) => ({ ...previous, ...payload.config }));
-						const moved = payload.moved;
-						// 老宿主不认识 stateDir：它只回一份原配置（没有 moved），得说清楚要重启
-						if (!moved) {
-							toast(t("prov.storageNeedRestart"));
-							return false;
-						}
+						if (!payload?.moved) throw new Error(t("prov.storageUnconfirmed"));
+						const { moved } = payload, actual = payload.stateDir || moved.stateDir || payload.config?.stateDir || dir;
+						setConfig(previous => ({...previous, stateDir:actual}));
+						let message = t("prov.storageSaved", {dir:actual});
 						if (moved.changed) {
-							toast(`${t("prov.storageSaved", { dir: payload.stateDir || dir })} · ${t("prov.storageMoved", { files: moved.copied?.files ?? 0, indexes: moved.copied?.indexes ?? 0 })}`);
-						} else {
-							toast(t("prov.storageSaved", { dir: payload.stateDir || dir }));
+							message += ` · ${t("prov.storageMoved", {files:moved.copied?.files ?? 0, indexes:moved.copied?.indexes ?? 0})}`;
+							try { await actions.reloadLibrary(); }
+							catch { message += ` · ${t("prov.storageRefreshFailed")}`; }
 						}
-						// 图库索引在新目录里：重新拉一遍，界面上看到的还是那些素材
-						await actions.reloadLibrary();
-						return true;
+						toast(message); return {ok:true, message};
 					} catch (error) {
-						toast(String(error?.message ?? error), "err");
-						return false;
+						const message = String(error?.message ?? error);
+						toast(message, "err"); return {ok:false, message};
 					}
-				},
+				}),
 				revealDir: async () => {
 					try {
 						const payload = await call("/state/reveal", { method: "POST", body: {} });
@@ -12909,7 +12960,7 @@ h(
 			const state = {
 				config,
 				providers,
-				library, libraryTotal, libraryLoadingMore,
+				library, libraryTotal, libraryLoadingMore, storageBusy:storageMoveLock.busy,
 				notes,
 				presets,
 				protocols,

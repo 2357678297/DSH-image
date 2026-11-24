@@ -17,6 +17,7 @@ import { auditGridPixels } from "../test/grid-pixels.test.mjs";
 import { auditChatScroll } from "../test/chat-scroll.test.mjs";
 import { auditChatFlow } from "../test/chat-flow.test.mjs";
 import { auditGallery } from "../test/library-audit.test.mjs";
+import { auditStorageMove } from "../test/storage-move-ui.test.mjs";
 import { auditWorkbench } from "./workbench-audit.mjs";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -157,6 +158,7 @@ const sc = sample.getContext("2d");
 ["#ff0000", "#00ff00", "#0000ff", "#ffff00"].forEach((color, i) => { sc.fillStyle = color; sc.fillRect(i % 2 * 240, Math.floor(i / 2) * 120, 240, 120); });
 const sampleBlob = await new Promise((resolve) => sample.toBlob(resolve));
 const posts = [];
+let moveReply = null;
 const json = (payload) => new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
 window.fetch = async (url, init) => {
 	const raw = String(url);
@@ -249,6 +251,7 @@ window.fetch = async (url, init) => {
 	}
 	if (pathname.startsWith("/config")) {
 		if (body && typeof body.stateDir === "string") {
+			if (moveReply) return moveReply(body);
 			config = { ...config, stateDir: body.stateDir };
 			return json({ ok: true, config: { ...config }, stateDir: config.stateDir, moved: { changed: true, copied: { files: 2, indexes: 7 }, stateDir: config.stateDir } });
 		}
@@ -766,23 +769,10 @@ if (new URLSearchParams(location.search).get("audit") === "json") {
 				}
 			}
 		}
-		// 供应商页：&move=1 时点「迁移到…」，宿主收到 /config 新 stateDir（复制素材由宿主做）
+		// 桌面宿主不支持 window.prompt：验收组件弹窗、取消、失败重试与防连点。
 		if (holdView === "providers" && new URLSearchParams(location.search).get("move") === "1") {
-			const moveTarget = "C:/Users/demo/.dsh/state/velapi-image-go-moved";
-			const originalPrompt = window.prompt;
-			window.prompt = () => moveTarget;
-			const moveBtn = Array.from(host.querySelectorAll("button")).find((node) => text(node) === "迁移到…");
-			if (moveBtn) {
-				flushSync(() => moveBtn.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-				await wait(900);
-			}
-			window.prompt = originalPrompt;
-			const movePost = posts.filter((item) => item.path === "/config" && item.body && item.body.stateDir).pop();
-			check(
-				"素材目录迁移键：走 /config 换 stateDir（宿主负责复制素材）",
-				Boolean(movePost) && movePost.body.stateDir === moveTarget,
-				JSON.stringify({ stateDir: movePost?.body?.stateDir ?? null })
-			);
+			await (${auditStorageMove.toString()})({host, check, flushSync, waitFor, posts,
+				current:${JSON.stringify(STATE_DIR)}, target:${JSON.stringify(NEXT_DIR)}, setMoveReply:reply => { moveReply = reply; }});
 		}
 		const pre = document.createElement("pre");
 		pre.id = "vig-viewer-out";

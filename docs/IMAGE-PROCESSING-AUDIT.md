@@ -26,6 +26,20 @@
 | 仅改图层属性也重新编码整排缩略图；切块列表同步编码并持有每一格的全尺寸 PNG 和画布。 | 底图 + 两层：首次编码三张 56px 缩略图，后续显隐、拖透明度、排序与撤销没有新增编码。401×202 切块预览为 160×81，下载仍是 401×202、300 DPI。切块组共享一次合成；只在打开或下载某块时按原尺寸裁切。已提交内容变化或修改行列后旧切块失效。 |
 | 百分比面板将比例预设的像素数当百分比，撤销也可能混用单位；系统取消标尺指针却触发拉直。 | 32×16 在百分比模式应用 1:1 得到 32×32，撤销回到 32×16 并显示 100% / 100%；`pointercancel` 不改尺寸、不记历史。 |
 
+## 首次打开大图的缓冲预算
+
+打开卡顿的热点是编辑器把屏幕预览和空选区覆盖层都分配成原图大小。8K 8192×3456 的两张额外 RGBA backing store 估算 **216 MiB**，即使预览实际只有 627×264 CSS 像素。现在适应屏幕后，主预览以不超过 2×设备 DPR 绘制，空闲覆盖层为 1×1；选区/标尺/透视草稿出现时，覆盖层再按预览尺寸创建。源画布仍保留完整 8K 像素，切块、导出、滤镜和几何编辑继续使用原尺寸。
+
+本机 Chrome、同一合成 8K PNG（以本地 data URL 输入，**不计网络传输**），在空闲环境 A/B 测得：旧 `9d0264a` 首帧可读 **446ms**、显示 backing store **216 MiB**；当前版首帧 **284ms**、显示缓冲约 **0.6 MiB**。该轮首帧约快 **36%**，显示缓冲少约 **99.7%**。毫秒值会受系统负载影响；实时基准重复值在 284–343ms，脚本只硬断言分辨率/缓冲边界，不把毫秒作为 CI 门槛。解码后的原始文档仍约 **108 MiB RGBA**，这项源数据内存并未消失。
+
+```powershell
+node test/ps-open-perf.test.mjs --before
+node test/ps-open-perf.test.mjs
+npm run test:ps-open-perf
+```
+
+`--before` 从 Git 读取旧版源码，仅加载到一次性测试页，不切换工作树。8K 测试只生成合成 PNG，不访问用户图库或供应商。
+
 ## 维护者复验
 
 在仓库根目录运行。浏览器用例用内存画布、生成的 PNG 与本地测试响应，不访问用户图库，不发起生图请求。
@@ -38,6 +52,6 @@ node test/engine.test.mjs
 npm run warp
 ```
 
-`audit:ps` 包含[历史](../test/ps-history-audit.test.mjs)、[读取](../test/ps-load-audit.test.mjs)、[图层操作](../test/ps-layer-audit.test.mjs)和[像素输出](../test/ps-pixels-audit.test.mjs)。`--before` 读取旧提交的客户端做历史故障对照，不切换当前工作树。Chrome 和 React 依赖路径可按测试说明通过 `VIG_CHROME`、`VIG_REACT_ROOT` 指定。
+`audit:ps` 包含[历史](../test/ps-history-audit.test.mjs)、[读取](../test/ps-load-audit.test.mjs)、[图层操作](../test/ps-layer-audit.test.mjs)、[像素输出](../test/ps-pixels-audit.test.mjs)和[实时大图打开基准](../test/ps-open-perf.test.mjs)。`--before` 读取旧提交的客户端做故障/性能对照，不切换当前工作树。Chrome 和 React 依赖路径可按测试说明通过 `VIG_CHROME`、`VIG_REACT_ROOT` 指定。
 
 **仍有的边界：**本次没有实现项目级自动保存，切走页面或刷新前应先导出需要保留的工作。解码、全分辨率滤镜与最终 PNG 编码仍使用浏览器 Canvas；裁剪预览和复用快照减少了重复工作，但不能等同于任意 8K 多图层机器都不卡。本次没有实测这种负载的峰值内存或帧率，也没有改变宿主或桌面协议实现。

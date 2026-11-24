@@ -9138,6 +9138,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const shownW = stageW, shownH = stageH;
 			const canvasW = Math.max(1, Math.round(stageW * scale));
 			const canvasH = Math.max(1, Math.round(stageH * scale));
+			// 预览缓冲跟随实际屏幕像素，不按源文件分辨率复制；原件仍保存在 source 用于编辑/导出。
+			const renderScale = stage ? Math.min(1, scale * Math.min(2, typeof window === "undefined" ? 1 : Math.max(1, Number(window.devicePixelRatio) || 1))) : 1;
+			const renderW = Math.max(1, Math.ceil(stageW * renderScale));
+			const renderH = Math.max(1, Math.ceil(stageH * renderScale));
 			useEffect(() => {
 				if (!stage || tool !== "warp") return;
 				setWarp(warpInitial(warp.mode, stage.width, stage.height));
@@ -9145,25 +9149,32 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				setDrag(null);
 			}, [stage, warp.mode, tool]);
 
-			/** 底图只在换图/改图时重画（3000×4000 的图每个 pointermove 都重画会卡死）。 */
+			/** 主预览按屏幕像素绘制，避免为 8K 原图分配同尺寸副本。 */
 			useEffect(() => {
 				const canvas = viewRef.current;
 				const shown = stage;
 				if (!canvas || !shown) return;
-				if (canvas.width !== shown.width) canvas.width = shown.width;
-				if (canvas.height !== shown.height) canvas.height = shown.height;
+				if (canvas.width !== renderW) canvas.width = renderW;
+				if (canvas.height !== renderH) canvas.height = renderH;
 				psPaintStack(canvas, shown, psCanvasLayers(layers, Boolean(layerSession)));
-			}, [stage, layers, layerSession]);
+			}, [stage, layers, layerSession, renderW, renderH]);
 
 			/** 选区 / 切割线画在第二层：拖动时只重画这一层。线宽按缩放比折算，视觉粗细恒定。 */
+			const needsOverlay = Boolean(selection || tool === "split" || ruler || (tool === "warp" && !warpLocked && ((warpSide === "dst" ? warp.dst : warp.src)?.length)));
 			useEffect(() => {
 				const canvas = overlayRef.current;
 				const shown = stage;
 				if (!canvas || !shown) return;
-				if (canvas.width !== shown.width) canvas.width = shown.width;
-				if (canvas.height !== shown.height) canvas.height = shown.height;
+				if (!needsOverlay) {
+					if (canvas.width !== 1) canvas.width = 1;
+					if (canvas.height !== 1) canvas.height = 1;
+					return;
+				}
+				if (canvas.width !== renderW) canvas.width = renderW;
+				if (canvas.height !== renderH) canvas.height = renderH;
 				const ctx = canvas.getContext("2d");
-				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				ctx.setTransform(renderW / stage.width, 0, 0, renderH / stage.height, 0, 0);
+				ctx.clearRect(0, 0, stage.width, stage.height);
 				const thin = 1.4 / scale;
 				if (selection) {
 					ctx.save();
@@ -9250,10 +9261,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					});
 					ctx.restore();
 				}
-			}, [stage, selection, tool, splitCols, splitRows, scale, ruler, warp, warpSide, warpLocked]);
+			}, [stage, selection, tool, splitCols, splitRows, scale, ruler, warp, warpSide, warpLocked, needsOverlay, renderW, renderH]);
 
 			/** 适应窗口的比例：容器尺寸变了就重算（用户手动放大过就不动它）。 */
-			useEffect(() => {
+			useMeasureEffect(() => {
 				if (!stage) return undefined;
 				const measure = () => {
 					const host = stageRef.current;
@@ -9537,8 +9548,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				const rect = canvas.getBoundingClientRect();
 				if (!(rect.width > 0) || !(rect.height > 0)) return { x: 0, y: 0 };
 				/* 显示尺寸 → 图片像素：x/y 分别按 canvas 与显示框的比例换算（CSS 非等比拉伸也不会偏） */
-				const sx = canvas.width / Math.max(1, rect.width);
-				const sy = canvas.height / Math.max(1, rect.height);
+				const sx = stage.width / Math.max(1, rect.width);
+				const sy = stage.height / Math.max(1, rect.height);
 				const x = (event.clientX - rect.left) * sx;
 				const y = (event.clientY - rect.top) * sy;
 				return { x, y };

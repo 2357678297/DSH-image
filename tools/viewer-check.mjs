@@ -35,7 +35,10 @@ if (!existsSync(REACT_ROOT)) {
   process.exit(1);
 }
 
-const clientSource = readFileSync(path.join(ROOT, "client.js"), "utf8");
+const clientRef = process.env.VIG_CLIENT_REF;
+const clientSource = clientRef
+	? execFileSync("git", ["show", `${clientRef}:client.js`], { cwd:ROOT, encoding:"utf8", maxBuffer:16 << 20 })
+	: readFileSync(path.join(ROOT, "client.js"), "utf8");
 const PACKAGE_VERSION = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
 const STATE_DIR = "C:\\Users\\demo\\.dsh\\state\\velapi-image-go";
 const NEXT_DIR = "D:\\素材\\velapi";

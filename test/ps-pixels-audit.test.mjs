@@ -37,6 +37,17 @@ export async function auditPsPixels({ui,React,root,flushSync,wait,check,host}) {
   await click(host.querySelector('.vig-toolbar button[title="撤销"]'));
   const dims=[...host.querySelectorAll('.vig-ps-params input[type=number]')];
   check('撤销后恢复 32×16，继续显示 100% 而非误用像素数',view().width===32&&view().height===16&&dims.length>=2&&dims[0].value==='100'&&dims[1].value==='100',dims.map(d=>d.value).join(','));
+  const original8k=canvas(8192,3456,'#345678');
+  flushSync(()=>root.render(React.createElement(ui.PsView,{key:'large-open',state:{library:[],presets:[]},actions:{toast(){}},initial:{name:'8k.png',canvas:original8k,width:8192,height:3456,tool:'select'}})));
+  await wait(120);
+  const perfPreview=view(),perfOverlay=host.querySelector('.vig-ps-overlay');
+  const previewPixels=perfPreview.width*perfPreview.height,overlayPixels=perfOverlay.width*perfOverlay.height,cssW=parseFloat(perfPreview.style.width)||1,cssH=parseFloat(perfPreview.style.height)||1;
+  check('8K 打开只建立接近屏幕像素的预览，不复制整张源图',original8k.width===8192&&original8k.height===3456&&perfPreview.width<4096&&perfPreview.height<2048&&previewPixels+overlayPixels<10_000_000,JSON.stringify({source:[original8k.width,original8k.height],preview:[perfPreview.width,perfPreview.height],css:[cssW,cssH],dpr:+(perfPreview.width/cssW).toFixed(2),bufferMP:+((previewPixels+overlayPixels)/1e6).toFixed(2)}));
+  check('无选区时覆盖层保持 1×1',perfOverlay.width===1&&perfOverlay.height===1,[perfOverlay.width,perfOverlay.height]);
+  await click(button('全选'));
+  check('选区出现后才创建屏幕分辨率覆盖层，整图选区坐标仍正确',perfOverlay.width===perfPreview.width&&perfOverlay.height===perfPreview.height&&px(perfOverlay,Math.floor(perfOverlay.width/2),Math.floor(perfOverlay.height/2)).endsWith(',31'),{view:[perfPreview.width,perfPreview.height],overlay:[perfOverlay.width,perfOverlay.height],center:px(perfOverlay,Math.floor(perfOverlay.width/2),Math.floor(perfOverlay.height/2))});
+  const selectionText=host.querySelector('.vig-ps-readout')?.textContent||'';
+  check('缩小预览仍以8K原图尺寸维护选区',/8192/.test(selectionText)&&/3456/.test(selectionText),selectionText);
   const result=canvas(32,16,null);result.getContext('2d').fillRect(6,6,16,4);
   const layer={id:'replacement',canvas:result,compositeResult:true,visible:true,mode:'normal',opacity:1};
   const out=ui.psExportComposite(base,[layer],false);

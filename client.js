@@ -670,7 +670,7 @@ function writeConvSetting(id, settings) {
 			"prov.endpointHint": "按协议决定生成打到哪条路由；自动检测＝带参考图走编辑、不带参考图走生成",
 			/* 素材目录（默认本地，可改） */
 			"prov.storage": "素材目录",
-			"prov.storageHint": "素材默认存在本地；换目录会把现有素材复制过去（旧目录原样保留），有任务在跑时不能换。",
+			"prov.storageHint": "迁移成功后清理已核对的旧副本，其他文件保留。有任务运行时不能迁移。",
 			"prov.storageOpen": "打开目录",
 			"prov.storageMove": "迁移到…",
 			"update.check": "检查更新",
@@ -687,7 +687,7 @@ function writeConvSetting(id, settings) {
 			"update.prFlow": "PR 流程",
 			"prov.storageMoveTitle": "迁移素材目录",
 			"prov.storageTarget": "新目录的完整路径",
-			"prov.storageMovePick": "素材和供应商配置都会复制过去。建议使用自己的空目录，旧目录不会删除。",
+			"prov.storageMovePick": "素材和供应商配置会迁到新目录。确认迁移后，已核对的旧副本将被删除。请使用自己的专用空目录。",
 			"prov.storageUnconfirmed": "宿主未确认切换目录。请核对当前目录；若使用旧宿主，请更新并重新加载后再试。",
 			"prov.storageAbsolute": "请输入完整路径，不要使用相对路径。",
 			"prov.storageSame": "这是当前素材目录，请填写其他目录。",
@@ -696,6 +696,9 @@ function writeConvSetting(id, settings) {
 			"prov.storageRefreshFailed": "目录已切换，但图库刷新失败，请到图片管理点击刷新。",
 			"prov.storageSaved": "已切到 {dir}",
 			"prov.storageMoved": "复制了 {files} 个文件、{indexes} 份索引",
+			"prov.storageCleaned": "已清理 {removed} 个旧文件",
+			"prov.storageRetained": "有 {retained} 项保留在旧位置，请检查旧目录",
+			"prov.storageCleanupUnknown": "宿主未报告旧目录清理结果",
 			"prov.storageCurrent": "当前目录",
 			"prov.storageNeedRestart": "素材目录设置要重启 DSH 后才生效（宿主还是旧版本）",
 			/* 图片查看器 */
@@ -1164,7 +1167,7 @@ function writeConvSetting(id, settings) {
 			"prov.endpointAuto": "Auto detect (default)",
 			"prov.endpointHint": "Picks the route per protocol; auto = edits with a reference image, generations without",
 			"prov.storage": "Media folder",
-			"prov.storageHint": "Media lives on this machine by default; switching copies the current files over (the old folder is kept). Not allowed while a job is running.",
+			"prov.storageHint": "Verified old copies are removed after migration. Other files are kept. Migration is unavailable while jobs are running.",
 			"prov.storageOpen": "Open folder",
 			"prov.storageMove": "Move to…",
 			"update.check": "Check for updates",
@@ -1181,7 +1184,7 @@ function writeConvSetting(id, settings) {
 			"update.prFlow": "PR flow",
 			"prov.storageMoveTitle": "Move media folder",
 			"prov.storageTarget": "Full path to the new folder",
-			"prov.storageMovePick": "Media and provider settings are copied. Use a private empty folder if possible. The old folder is kept.",
+			"prov.storageMovePick": "Media and provider settings will move to the new folder. Verified old copies will be deleted. Choose a private, empty folder.",
 			"prov.storageUnconfirmed": "The host did not confirm the folder change. Check the current folder. If the host is outdated, update and reload it before trying again.",
 			"prov.storageAbsolute": "Enter a full folder path, not a relative path.",
 			"prov.storageSame": "This is the current media folder. Choose another folder.",
@@ -1190,6 +1193,9 @@ function writeConvSetting(id, settings) {
 			"prov.storageRefreshFailed": "Folder switched, but the library did not refresh. Open the library and select Refresh.",
 			"prov.storageSaved": "Switched to {dir}",
 			"prov.storageMoved": "copied {files} files, {indexes} indexes",
+			"prov.storageCleaned": "removed {removed} old files",
+			"prov.storageRetained": "{retained} items retained; check the old folder",
+			"prov.storageCleanupUnknown": "the host did not report cleanup of the old folder",
 			"prov.storageCurrent": "Current folder",
 			"prov.storageNeedRestart": "Saved, but the host is still the old build — restart DSH for the media folder switch to take effect",
 			"viewer.title": "Image viewer",
@@ -6529,7 +6535,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									t("prov.save")
 								),
 								h("button", { className: "vig-btn", onClick: () => actions.revealDir() }, h(Icon, { name: "folder", size: 13 }), t("prov.storageOpen")),
-								// 独立的「迁移到…」：就地填一个新目录，宿主把现有素材复制过去（旧目录保留）
+										// 弹窗确认目标路径，清理结果以宿主回执为准。
 								h(
 									"button",
 									{
@@ -12953,13 +12959,16 @@ h(
 				/* ---- 素材目录：默认在本地，可改；换目录由宿主把现有素材复制过去 ---- */
 				saveStateDir: dir => storageMoveLock.run(async () => {
 					try {
-						const payload = await call("/config", { method: "POST", body: { stateDir: dir } });
+						const payload = await call("/config", { method: "POST", body: { stateDir: dir, cleanupSource: true } });
 						if (!payload?.moved) throw new Error(t("prov.storageUnconfirmed"));
 						const { moved } = payload, actual = payload.stateDir || moved.stateDir || payload.config?.stateDir || dir;
 						setConfig(previous => ({...previous, stateDir:actual}));
 						let message = t("prov.storageSaved", {dir:actual});
 						if (moved.changed) {
 							message += ` · ${t("prov.storageMoved", {files:moved.copied?.files ?? 0, indexes:moved.copied?.indexes ?? 0})}`;
+							const cleanup = moved.cleanup;
+							message += ` · ${Number.isInteger(cleanup?.removed) ? t("prov.storageCleaned", cleanup) : t("prov.storageCleanupUnknown")}`;
+							if (cleanup?.retained > 0) message += ` · ${t("prov.storageRetained", cleanup)}`;
 							try { await actions.reloadLibrary(); }
 							catch { message += ` · ${t("prov.storageRefreshFailed")}`; }
 						}

@@ -1397,16 +1397,100 @@ await new Promise((resolve) => badKeyServer.close(resolve));
       fs.existsSync(path.join(nextDir, "uploads")),
     JSON.stringify({ stateDir: after?.stateDir })
   );
-  const back = await call("/config", { method: "POST", body: { stateDir } });
+  const back = await call("/config", { method: "POST", body: { stateDir, cleanupSource: false } });
   check(
     "再换回原目录：同样带素材复制，索引还在",
-    back.body?.ok === true && path.resolve(back.body?.stateDir ?? "") === path.resolve(stateDir) && ((await call("/library?limit=5")).body?.items?.length ?? 0) >= 1,
+    back.body?.ok === true && back.body?.moved?.cleanup?.removed === 0 && fs.existsSync(path.join(nextDir,"library","index.json")) && path.resolve(back.body?.stateDir ?? "") === path.resolve(stateDir) && ((await call("/library?limit=5")).body?.items?.length ?? 0) >= 1,
     JSON.stringify({ stateDir: back.body?.stateDir })
   );
   const emptyDir = await call("/config", { method: "POST", body: { stateDir: "   " } });
   check("空目录拒收（400），不会把素材指到空字符串", emptyDir.status === 400 && emptyDir.body?.code === "state_dir_failed", JSON.stringify(emptyDir.body));
   const revealMissing = await call("/state/reveal", { method: "POST", body: { dir: path.join(nextDir, "nope") } });
   check("打开一个不存在的目录：400，不乱 spawn", revealMissing.status === 400 && revealMissing.body?.code === "reveal_failed", JSON.stringify(revealMissing.body));
+}
+
+/* 显式清理仅作用于本机临时目录：冲突必须原子拒绝；成功时只删可证明且逐字节验证过的插件文件。 */
+{
+  const makeFixture = async (name, conflicting) => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), `vig-clean-${name}-home-`));
+    const source = fs.mkdtempSync(path.join(os.tmpdir(), `vig-clean-${name}-source-`));
+    const target = fs.mkdtempSync(path.join(os.tmpdir(), `vig-clean-${name}-target-`));
+    const defaultRoot = path.join(home, "state", "velapi-image-go");
+    const ownedBytes = Buffer.from(tinyPng, "base64"), targetConflict = Buffer.from("pre-existing user content");
+    const index = [{ id:"img_owned", name:"owned.png", file:"owned.png", url:"/api/velapi-image-go/asset/owned.png", bytes:ownedBytes.length, format:"png", mime:"image/png", width:1, height:1, prompt:"fixture" }];
+    const conversations = [{ id:"conv_cleanup_fixture", title:"Temporary migration fixture", createdAt:"2026-01-01T00:00:00.000Z", updatedAt:"2026-01-01T00:00:00.000Z" }];
+    fs.mkdirSync(path.join(source,"library","files"),{recursive:true}); fs.mkdirSync(path.join(source,"uploads"),{recursive:true});
+    fs.writeFileSync(path.join(source,"library","files","owned.png"),ownedBytes);
+    fs.writeFileSync(path.join(source,"library","files","manual.txt"),"unindexed user file");
+    fs.writeFileSync(path.join(source,"uploads","personal.png"),ownedBytes);
+    fs.mkdirSync(path.join(source,"uploads","user-folder"));
+    fs.writeFileSync(path.join(source,"uploads","user-folder","personal.txt"),"keep nested file");
+    fs.writeFileSync(path.join(source,"library","index.json"),JSON.stringify(index));
+    fs.writeFileSync(path.join(source,"conversations.json"),JSON.stringify(conversations));
+    fs.writeFileSync(path.join(source,"jobs.json"),"[]");
+    fs.writeFileSync(path.join(source,"config.json"),JSON.stringify({stateDir:source,baseUrl:BASE,apiKeyEnv:"VIG_KEY"}));
+    fs.writeFileSync(path.join(source,"location.json"),JSON.stringify({stateDir:"user-owned marker"}));
+    fs.writeFileSync(path.join(source,"README.user"),"unrelated state file");
+    fs.mkdirSync(defaultRoot,{recursive:true});
+    fs.writeFileSync(path.join(defaultRoot,"location.json"),JSON.stringify({stateDir:source}));
+    if(conflicting){fs.mkdirSync(path.join(target,"library","files"),{recursive:true});fs.writeFileSync(path.join(target,"library","files","owned.png"),targetConflict);}
+    const previousHome=process.env.DSH_HOME;process.env.DSH_HOME=home;
+    const localRoutes=[];
+    const localCtx={
+      effect(fn){const disposer=fn();return()=>{if(typeof disposer==="function")disposer();};},
+      logger:{info:()=>{},warn:()=>{}},
+      webServer:{register(route){localRoutes.push(route);return()=>{};}}
+    };
+    let instance, server;
+    try {
+      instance=apply(localCtx,{baseUrl:BASE,apiKey:KEY,apiKeyEnv:"VIG_KEY",timeoutMs:300000});
+      await new Promise(resolve=>setImmediate(resolve));
+      server=http.createServer((request,response)=>localRoutes[0].handler(request,response).catch(error=>response.writeHead(500).end(String(error?.message??error))));
+      await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
+    } finally {process.env.DSH_HOME=previousHome;}
+    const base=`http://127.0.0.1:${server.address().port}/api/velapi-image-go`;
+    const localCall=async (pathname,init={})=>{
+      const options={...init};if(options.body!==undefined&&typeof options.body!=="string"){options.headers={"content-type":"application/json",...(options.headers??{})};options.body=JSON.stringify(options.body);}
+      const response=await fetch(base+pathname,options),text=await response.text();let body;try{body=text?JSON.parse(text):null;}catch{body=text;}return{status:response.status,body};
+    };
+    return {home,source,target,defaultRoot,ownedBytes,targetConflict,conversations,index,instance,server,call:localCall};
+  };
+  const disposeFixture=async fixture=>{await new Promise(resolve=>fixture.server.close(resolve));for(const dir of [fixture.home,fixture.source,fixture.target])fs.rmSync(dir,{recursive:true,force:true});};
+
+  const conflict=await makeFixture("conflict",true);
+  try {
+    const response=await conflict.call("/config",{method:"POST",body:{stateDir:conflict.target,cleanupSource:true}});
+    const active=(await conflict.call("/status")).body;
+    check("清理迁移遇到异字节同名图：409 并留在源目录",response.status===409&&response.body?.code==="state_dir_conflict"&&path.resolve(response.body?.stateDir??"")===path.resolve(conflict.source)&&path.resolve(active?.stateDir??"")===path.resolve(conflict.source),JSON.stringify({status:response.status,body:response.body,stateDir:active?.stateDir}));
+    check("冲突不删源索引图/元数据/上传，也不覆盖目标和默认指针",fs.readFileSync(path.join(conflict.source,"library","files","owned.png")).equals(conflict.ownedBytes)&&fs.existsSync(path.join(conflict.source,"library","index.json"))&&fs.existsSync(path.join(conflict.source,"conversations.json"))&&fs.existsSync(path.join(conflict.source,"uploads","personal.png"))&&fs.readFileSync(path.join(conflict.target,"library","files","owned.png")).equals(conflict.targetConflict)&&JSON.parse(fs.readFileSync(path.join(conflict.defaultRoot,"location.json"),"utf8")).stateDir===conflict.source&&response.body?.cleanup?.removed===0&&(response.body?.cleanup?.retained??0)>=1);
+  } finally {await disposeFixture(conflict);}
+
+  const success=await makeFixture("success",false);
+  try {
+    const uploaded = await success.call("/upload", {method:"POST", body:{name:"fixture.png",data:`data:image/png;base64,${tinyPng}`}});
+    const managedUpload = path.basename(uploaded.body.item.url);
+    const sourceConfig=fs.readFileSync(path.join(success.source,"config.json"));
+    const sourceIndex=fs.readFileSync(path.join(success.source,"library","index.json"));
+    const sourceConversations=fs.readFileSync(path.join(success.source,"conversations.json"));
+    const response=await success.call("/config",{method:"POST",body:{stateDir:success.target,cleanupSource:true}});
+    const active=(await success.call("/status")).body;
+    const list=(await success.call("/conversations")).body;
+    const pointer=JSON.parse(fs.readFileSync(path.join(success.defaultRoot,"location.json"),"utf8"));
+    check("成功清理仅在切换到目标后返回 removed/retained 统计",response.status===200&&response.body?.moved?.changed===true&&path.resolve(response.body?.stateDir??"")===path.resolve(success.target)&&path.resolve(active?.stateDir??"")===path.resolve(success.target)&&(response.body?.moved?.cleanup?.removed??0)>=3&&(response.body?.moved?.cleanup?.retained??0)>=1,JSON.stringify({moved:response.body?.moved}));
+    check("已索引图库图和逐字节验证过的 conversations/index/provider 元数据可清理",!fs.existsSync(path.join(success.source,"library","files","owned.png"))&&!fs.existsSync(path.join(success.source,"library","index.json"))&&!fs.existsSync(path.join(success.source,"conversations.json"))&&fs.readFileSync(path.join(success.target,"library","files","owned.png")).equals(success.ownedBytes)&&fs.readFileSync(path.join(success.target,"library","index.json")).equals(sourceIndex)&&fs.readFileSync(path.join(success.target,"conversations.json")).equals(sourceConversations)&&list?.items?.some(item=>item.id==="conv_cleanup_fixture"));
+    check("插件生成的上传清理源副本，手工命名图片和子目录保留",
+      uploaded.status === 200 && !fs.existsSync(path.join(success.source,"uploads",managedUpload)) &&
+      fs.readFileSync(path.join(success.target,"uploads",managedUpload)).equals(success.ownedBytes) &&
+      fs.readFileSync(path.join(success.source,"uploads","personal.png")).equals(success.ownedBytes) &&
+      fs.readFileSync(path.join(success.source,"uploads","user-folder","personal.txt"),"utf8") === "keep nested file");
+    check("未索引图、旧配置、无关文件及源目录指针均未更改",
+      fs.readFileSync(path.join(success.source,"library","files","manual.txt"),"utf8") === "unindexed user file" &&
+      fs.readFileSync(path.join(success.source,"config.json")).equals(sourceConfig) &&
+      fs.readFileSync(path.join(success.source,"README.user"),"utf8") === "unrelated state file" &&
+      JSON.parse(fs.readFileSync(path.join(success.source,"location.json"),"utf8")).stateDir === "user-owned marker");
+    check("默认指针和目标配置均指向新目录",pointer.stateDir===success.target &&
+      JSON.parse(fs.readFileSync(path.join(success.target,"config.json"),"utf8")).stateDir === success.target);
+  } finally {await disposeFixture(success);}
 }
 
 /* ---- 保存到本地：导出图库原图 + 拿 file:// 路径（拖出去给真文件用） ---- */

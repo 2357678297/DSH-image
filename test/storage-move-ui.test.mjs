@@ -47,7 +47,7 @@ export async function auditStorageMove({ host, check, flushSync, waitFor, posts,
     await waitFor(() => complete, 1000);
     const busyStatus = find('dialog')?.querySelector('[role="status"]');
     flushSync(() => find('dialog').dispatchEvent(new KeyboardEvent('keydown', { key:'Escape', bubbles:true, cancelable:true })));
-    check('连点确认只提交一次，进行中可读且 Esc 不会误关闭', count() === startCount+1 && writes().at(-1)?.body.stateDir === target && !!find('confirm')?.disabled && !!busyStatus?.textContent.trim());
+    check('连点确认只提交一次，进行中可读且 Esc 不会误关闭', count() === startCount+1 && writes().at(-1)?.body.stateDir === target && writes().at(-1)?.body.cleanupSource === true && !!find('confirm')?.disabled && !!busyStatus?.textContent.trim());
     if (!complete) throw Error('no stateDir write to release');
     complete(new Response(JSON.stringify({ok:false,code:'state_dir_failed',error:err}), {status:400,headers:{'content-type':'application/json'}}));
     await waitFor(() => find('dialog') && !find('confirm')?.disabled, 1500);
@@ -56,7 +56,7 @@ export async function auditStorageMove({ host, check, flushSync, waitFor, posts,
       find('dialog')?.textContent.trim());
     setMoveReply(null); click(find('confirm'));
     await waitFor(() => !find('dialog'), 1800);
-    check('重试成功：新目录生效，弹窗关闭且没有额外提交', count() === startCount+2 && writes().at(-1)?.body.stateDir === target && !find('dialog') && readDir(target) && promptCalls === 0,
+    check('重试成功：新目录生效，弹窗关闭且没有额外提交', count() === startCount+2 && writes().at(-1)?.body.stateDir === target && writes().at(-1)?.body.cleanupSource === true && !find('dialog') && readDir(target) && promptCalls === 0 && block?.querySelector('[role="status"]')?.textContent.includes('已清理 12 个旧文件'),
       JSON.stringify({writes:writes().slice(startCount).map(x=>x.body),shown:readDir(target)}));
     const fetchMock = window.fetch;
     let refreshFailures = 0;

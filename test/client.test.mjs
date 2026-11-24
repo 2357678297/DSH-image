@@ -2988,10 +2988,10 @@ check(
 
   /* 素材目录设置：默认本地，能改、能打开；换目录由宿主把素材复制过去 */
   check(
-    "素材目录：应用内迁移走共享提交锁，原件保留，显示生效目录",
+    "素材目录：应用内迁移走共享提交锁，显式请求清理，显示生效目录",
     /title: t\("prov\.storage"\), icon: "folder"/.test(SOURCE) &&
       /saveStateDir: dir => storageMoveLock\.run\(/.test(SOURCE) && !/window\.prompt\(t\("prov\.storageMovePick"/.test(SOURCE) &&
-      /await call\("\/config", \{ method: "POST", body: \{ stateDir: dir \} \}\);/.test(SOURCE) &&
+      /await call\("\/config", \{ method: "POST", body: \{ stateDir: dir, cleanupSource: true \} \}\);/.test(SOURCE) &&
       /revealDir: async \(\) => \{/.test(SOURCE) &&
       /await call\("\/state\/reveal", \{ method: "POST", body: \{\} \}\);/.test(SOURCE) &&
       /t\("prov\.storageCurrent"\)/.test(SOURCE)

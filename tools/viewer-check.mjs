@@ -275,7 +275,7 @@ window.fetch = async (url, init) => {
 		if (body && typeof body.stateDir === "string") {
 			if (moveReply) return moveReply(body);
 			config = { ...config, stateDir: body.stateDir };
-			return json({ ok: true, config: { ...config }, stateDir: config.stateDir, moved: { changed: true, copied: { files: 2, indexes: 7 }, stateDir: config.stateDir } });
+			return json({ ok: true, config: { ...config }, stateDir: config.stateDir, moved: { changed: true, copied: { files: 2, indexes: 7 }, cleanup: { removed: 12, retained: 0 }, stateDir: config.stateDir } });
 		}
 		// 普通配置写回：把 patch 合进 config（界面靠回包 config 更新；不合并的话切协议不生效）
 		if (body && typeof body === "object") config = { ...config, ...body };

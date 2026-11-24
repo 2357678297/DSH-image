@@ -2051,7 +2051,7 @@ const PRESETS = [
       initial: null
     })
   );
-  check("有图库时，空画面里摆「最近生成」，点一下就能进来", psRecent.includes("最近生成") && psRecent.includes("vig-ps-recent-grid") && (psRecent.match(/vig-ps-recent-tile/g) || []).length === 2);
+  check("空画布提供最近生成入口，但不预载图库图片", psRecent.includes('data-ps-browse="recent"') && psRecent.includes('aria-expanded="false"') && psRecent.includes("最近生成") && !psRecent.includes('<img'));
   check("有最近生成时不再重复三步说明", !psRecent.includes("vig-ps-steps"));
 
   const psSamples = renderToStaticMarkup(
@@ -2061,7 +2061,7 @@ const PRESETS = [
       initial: null
     })
   );
-  check("图库空但预设样张在：摆「预设样张」给一张练手", psSamples.includes("预设样张") && psSamples.includes("product-stand.png"));
+  check("图库空但有预设时仍能展开样张，进入页面不装载原图", psSamples.includes('data-ps-browse="samples"') && psSamples.includes("预设样张") && !psSamples.includes("product-stand.png") && !psSamples.includes('<img'));
   check("什么都没得点时才退化成三步说明", !psSamples.includes("vig-ps-steps"));
 }
 

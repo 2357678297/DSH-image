@@ -444,7 +444,7 @@ function writeConvSetting(id, settings) {
 			"ps.keys.hint": "点键帽就能改：按任意组合（可带 Ctrl / Shift / Alt），Esc 取消，Backspace 恢复这一条。",
 			"ps.empty.recent": "最近生成",
 			"ps.empty.samples": "预设样张",
-			"ps.empty.samplesHint": "点一张直接进来练手",
+			"ps.empty.more": "显示更多",
 			"ps.empty.step1": "上传本地图，或用下面的最近生成",
 			"ps.empty.step2": "左边选框工具，右边调参数",
 			"ps.empty.step3": "「设为参考图」或「下载」拿走",
@@ -946,7 +946,7 @@ function writeConvSetting(id, settings) {
 			"ps.keys.hint": "Click a key cap to rebind: press any combo (Ctrl / Shift / Alt allowed). Esc cancels, Backspace resets that one.",
 			"ps.empty.recent": "Recent",
 			"ps.empty.samples": "Preset samples",
-			"ps.empty.samplesHint": "Click one to try the tools on it",
+			"ps.empty.more": "Show more",
 			"ps.empty.step1": "Upload an image, or pick a recent one below",
 			"ps.empty.step2": "Pick a tool on the left, tune it on the right",
 			"ps.empty.step3": "Take it out via 设为参考图 or 下载",
@@ -1841,15 +1841,13 @@ body[data-ds-dark-theme] .vig-toast.is-err{background:rgba(48,26,30,.96)}
 .vig-ps-zoom-btn.is-on{border-color:var(--vig-accent);color:var(--vig-accent);background:var(--vig-accent-soft)}
 .vig-ps-zoom-val{min-width:38px;text-align:center;font-size:11.5px;color:var(--vig-text);font-variant-numeric:tabular-nums}
 .vig-ps-empty{position:absolute;inset:0;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px 18px;color:var(--vig-text-muted);text-align:center}
-/* 空画面：最近生成铺在下面，别让画布那块地方空着 */
-.vig-ps-recent{width:100%;max-width:560px;margin-top:10px;display:flex;flex-direction:column;gap:8px;text-align:left}
-.vig-ps-recent-head{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--vig-text-muted)}
+/* 空画面入口先可用，缩略图只在手动展开后占用布局和网络。 */
+.vig-ps-empty{justify-content:safe center}
+.vig-ps-recent{width:100%;max-width:560px;margin-top:10px;display:grid;gap:8px;text-align:left;flex:none}
+.vig-ps-shelf{display:grid;gap:8px;min-width:0}
+.vig-ps-shelf-toggle{display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:6px 10px;border:1px solid var(--vig-line);border-radius:var(--vig-r-input);background:var(--vig-surface);color:var(--vig-text);cursor:pointer;text-align:left}
+.vig-ps-shelf-toggle span:last-child{margin-left:auto}
 .vig-ps-recent-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:8px}
-/* v2.15：折叠/滚动/渐隐放在外层容器上 —— 网格本身不参与滚动，格子才能稳定 1:1 不重叠 */
-.vig-ps-recent-fold{max-height:224px;overflow-y:auto;overscroll-behavior:contain;
-	-webkit-mask-image:linear-gradient(180deg,#000 0,#000 181px,rgba(0,0,0,.16) 100%);
-	mask-image:linear-gradient(180deg,#000 0,#000 181px,rgba(0,0,0,.16) 100%)}
-.vig-ps-recent-fold.is-open{max-height:none;overflow:visible;-webkit-mask-image:none;mask-image:none}
 .vig-ps-recent-tile{padding:0;border:1px solid var(--vig-line);border-radius:14px;overflow:hidden;background:var(--vig-surface);cursor:pointer;
 	aspect-ratio:1/1;transition:border-color .14s ease,transform .14s ease}
 .vig-ps-recent-tile:hover{border-color:var(--vig-accent);transform:translateY(-1px)}
@@ -8933,13 +8931,35 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			} finally { if (owned) URL.revokeObjectURL(owned); }
 		}
 
+		// 未选择素材时不创建 img；原生 loading=lazy 对视口附近的折叠内容也会发请求。
+		function PsAssetShelf({ kind, label, items, onOpen }) {
+			const [limit, setLimit] = useState(0);
+			if (!items.length) return null;
+			return h("section", { className: "vig-ps-shelf" },
+				h("button", { type: "button", className: "vig-ps-shelf-toggle", "data-ps-browse": kind,
+					"aria-expanded": limit > 0, onClick: () => setLimit(n => n ? 0 : 8) },
+					h(Icon, {name: limit ? "chevronDown" : "chevron", size: 13}), label,
+					h("span", {className:"vig-muted"}, items.length)),
+				limit > 0 && h("div", { className:"vig-ps-recent-grid" }, items.slice(0, limit).map(item => {
+					const sample = kind === "samples", name = sample ? (item.title || t("ps.empty.samples")) : item.name;
+					const asset = sample ? { url:item.image, name } : item;
+					return h("button", {type:"button", key:item.id || asset.url, className:"vig-ps-recent-tile", title:name,
+						onClick:() => onOpen(sample ? `${name}.png` : name, asset.url)}, h(GalleryThumb, {asset}));
+				})),
+				limit > 0 && limit < items.length && h("button", {type:"button", className:"vig-link", onClick:() => setLimit(n => n + 8)}, t("ps.empty.more")));
+		}
+
 		function PsView({ state, actions, initial, initialUrl, onConsumeInitialUrl }) {
 			// 提示统一走宿主注入的 actions.toast：PsView 里没有提示容器，
 			// 壳里那份 .vig-toasts 才是唯一的（以前这里直接调全局 toast，等于每条提示都报 ReferenceError）
 			const notify = actions?.toast ?? (() => {});
 			const [source, setSource] = useState(initial || null); // {name, canvas, width, height}
-			// 「最近生成」默认只露 2 行 + 第三行半截渐隐，点开可看全部（内部也可滚动）
-			const [recentExpanded, setRecentExpanded] = useState(false);
+			const recentAssets = useMemo(() => (state.library || []).slice(0, 24), [state.library]);
+			const sampleAssets = useMemo(() => {
+				const found = [];
+				for (const item of state.presets || []) { if (item.image) found.push(item); if (found.length === 12) break; }
+				return found;
+			}, [state.presets]);
 			const [tool, setTool] = useState(initial?.tool || "select");
 			const [selection, setSelection] = useState(initial?.selection || null);
 			const [drag, setDrag] = useState(null);
@@ -10825,74 +10845,11 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											h("button", { className: "vig-btn is-primary", onClick: () => fileRef.current?.click() }, h(Icon, { name: "upload" }), t("preset.upload")),
 											h("button", { className: "vig-btn", onClick: () => { setLayerPick(false); setPickOpen(true); } }, h(Icon, { name: "grid" }), t("preset.fromLibrary"))
 										),
-										/* 空画面下的纵向空间别浪费：最近生成的图 + 预设样张，点一下就进来 */
-										state.library?.length || state.presets?.length
-											? h(
-													"div",
-													{ className: "vig-ps-recent" },
-													state.library?.length
-														? [
-																h("div", { className: "vig-ps-recent-head", key: "recent-head" },
-																	h("span", null, t("ps.empty.recent")),
-																	h("div", { className: "vig-spacer" }),
-																	h(
-																		"button",
-																		{
-																			className: "vig-link",
-																			"aria-expanded": recentExpanded ? "true" : "false",
-																			onClick: () => setRecentExpanded((value) => !value)
-																		},
-																		recentExpanded ? t("ps.collapse") : t("ps.expand")
-																	),
-																	h("button", { className: "vig-link", onClick: () => { setLayerPick(false); setPickOpen(true); } }, t("preset.fromLibrary"))
-																),
-																h(
-																	"div",
-																	{ className: `vig-ps-recent-fold${recentExpanded ? " is-open" : ""}`, key: "recent-fold" },
-																	h(
-																		"div",
-																		{ className: "vig-ps-recent-grid" },
-																		state.library.slice(0, 24).map((asset) =>
-																			h(
-																				"button",
-																				{
-																					key: asset.id,
-																					className: "vig-ps-recent-tile",
-																					title: asset.name,
-																					onClick: () => void loadAsset(asset.name, asset.url)
-																				},
-																				h("img", { src: asset.url, alt: asset.name, loading: "lazy" })
-																			)
-																		)
-																	)
-																)
-															]
-														: null,
-													(state.presets || []).filter((item) => item.image).length
-														? [
-																h("div", { className: "vig-ps-recent-head", key: "sample-head" },
-																	h("span", null, t("ps.empty.samples")),
-																	h("span", { className: "vig-muted" }, t("ps.empty.samplesHint"))
-																),
-																h(
-																	"div",
-																	{ className: "vig-ps-recent-grid", key: "sample-grid" },
-																	state.presets.filter((item) => item.image).slice(0, 12).map((item) =>
-																		h(
-																			"button",
-																			{
-																				key: item.id,
-																				className: "vig-ps-recent-tile",
-																				title: item.title,
-																				onClick: () => void loadAsset(`${item.title || "preset"}.png`, item.image)
-																			},
-																			h("img", { src: item.image, alt: item.title, loading: "lazy" })
-																		)
-																	)
-																)
-															]
-														: null
-												)
+										/* 进入页面只给出入口，不让浏览器预取原图。 */
+										recentAssets.length || sampleAssets.length
+											? h("div", { className:"vig-ps-recent" },
+												h(PsAssetShelf, {kind:"recent", label:t("ps.empty.recent"), items:recentAssets, onOpen:loadAsset}),
+												h(PsAssetShelf, {kind:"samples", label:t("ps.empty.samples"), items:sampleAssets, onOpen:loadAsset}))
 											: h(
 													"ol",
 													{ className: "vig-ps-steps" },
@@ -11355,7 +11312,7 @@ h(
 															void (layerPick ? addLayerFrom : loadImage)({name:asset.name,url:asset.url});
 														}
 													},
-													h("img", { src: asset.url, alt: asset.name, loading: "lazy" })
+													h(GalleryThumb, {asset})
 												)
 											)
 										)

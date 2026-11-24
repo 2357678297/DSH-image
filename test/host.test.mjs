@@ -1467,6 +1467,145 @@ await new Promise((resolve) => badKeyServer.close(resolve));
   );
 }
 
+/* Gemini 图像协议。旧 /images 路由和外链都指向这个本机夹具，误回落/下载会被逐次计数。 */
+{
+  const model = "Nano-Banana-2", legacy = "gemini-2.5-flash-image", protocol = "gemini_generate";
+  const secret = "fixture-native-gemini-only", hits = [];
+  const jpeg = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAIBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAAf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AH//Z'; // 2×1 grey JPEG, 159 bytes.
+  const markdown = `生成结果：\n\n![Generated image](data:image/jpeg;base64,${jpeg})\n\n已完成。`;
+  let releaseInspection, signalReading;
+  const inspected = new Promise(resolve => { releaseInspection = resolve; });
+  const reading = new Promise(resolve => { signalReading = resolve; });
+  const candidate = (parts, finishReason = "STOP") => ({ candidates: [{ content: { role: "model", parts }, finishReason }] });
+  const relay = http.createServer(async (req, res) => {
+    const chunks = []; for await (const chunk of req) chunks.push(chunk);
+    let body; try { body = JSON.parse(Buffer.concat(chunks).toString() || "null"); } catch { body = null; }
+    hits.push({ method:req.method, url:req.url, body, bearer:req.headers.authorization === `Bearer ${secret}`, googleKey:!!req.headers['x-goog-api-key'], type:req.headers['content-type'] });
+    const prompt = body?.contents?.[0]?.parts?.find(p => typeof p.text === "string")?.text;
+    const image = { inlineData: { mimeType:"image/png", data:tinyPng } };
+    let status = 200, result;
+    switch (prompt) {
+      case "Gemini inline": case "Gemini Flash 2.5": case "Gemini ordered refs": result = candidate([image]); break;
+      case "Gemini Markdown parts": result = candidate([{text:markdown}]); break;
+      case "Gemini Markdown choices":
+        signalReading(); await inspected;
+        result = {choices:[{message:{role:"assistant",content:markdown}}]}; break;
+      case "Gemini no image": result = candidate([{text:"Only text, no picture"}]); break;
+      case "Gemini external image": result = candidate([{text:`![external](http://127.0.0.1:${relay.address().port}/uncalled.png)`}]); break;
+      case "Gemini blocked": result = {promptFeedback:{blockReason:"SAFETY"},candidates:[candidate([image]).candidates[0]]}; break;
+      case "Gemini blocked candidate": result = candidate([image],'SAFETY'); break;
+      case "Gemini invalid image": result = candidate([{inlineData:{mimeType:"image/png",data:Buffer.from('not an image').toString('base64')}}]); break;
+      case "Gemini unauthorized": status = 401; result = {error:{code:401,status:"UNAUTHENTICATED",message:`Fixture key rejected: ${secret}`}}; break;
+      case "Gemini redirect": res.writeHead(307,{location:"/uncalled-redirect"}).end(); return;
+      default: status = 404; result = { error:{message:"Unexpected Gemini route or request"} };
+    }
+    res.writeHead(status,{'content-type':'application/json'}).end(JSON.stringify(result));
+  });
+  await new Promise(resolve => relay.listen(0,"127.0.0.1",resolve));
+  const beforeHits = mockHits.length;
+  let gemProvider;
+  try {
+    gemProvider = (await call('/providers',{method:'POST',body:{name:'Gemini loopback fixture',baseUrl:`http://127.0.0.1:${relay.address().port}/v1`,apiKey:secret,models:[model,legacy],endpoint:protocol}})).body?.item;
+    if (!gemProvider?.id) throw Error('Gemini loopback provider setup failed');
+    const submit = async (prompt, extra = {}) => {
+      const since = hits.length, submitted = await call('/generate',{method:'POST',body:{providerId:gemProvider.id,model,endpoint:protocol,size:'1K',aspect_ratio:'1:1',n:1,prompt,...extra}});
+      const id = submitted.body?.job?.id;
+      if (prompt==='Gemini Markdown choices' && id) {
+        let timer;
+        try {
+          await Promise.race([reading,new Promise(resolve=>{timer=setTimeout(resolve,2000);})]);
+          const [one,list] = await Promise.all([call(`/job?id=${encodeURIComponent(id)}`),call('/jobs?limit=200')]);
+          const records = [one.body?.job,list.body?.items?.find(j=>j.id===id),JSON.parse(fs.readFileSync(path.join(stateDir,'jobs.json'),'utf8')).find(j=>j.id===id)];
+          check('Gemini 运行中任务：详情、列表及落盘均无参考图 base64 或密钥',records.every(j=>j?.status==='running' && ![PNG_FOR_EDIT,tinyPng,secret].some(s=>JSON.stringify(j).includes(s))));
+        } finally { clearTimeout(timer); releaseInspection(); }
+      }
+      const job = id ? await pollJob(id) : null;
+      return {submitted,job,requests:hits.slice(since)};
+    };
+    check('Gemini：宿主公开图像协议而非普通对话协议',protocols.body.protocols.find(p=>p.id===protocol)?.kind==='image');
+    const cases = [
+      ['Gemini inline', {size:'1K',aspect_ratio:'16:9'}, model, '1K','16:9', tinyPng,'png'],
+      ['Gemini Markdown parts',{size:'2048x3072',aspect_ratio:undefined}, model, '2K','2:3',jpeg,'jpg'],
+      ['Gemini Markdown choices',{size:'4K',aspect_ratio:'21:9',mode:'edit',images:[`data:image/png;base64,${PNG_FOR_EDIT}`,tinyPng],referenceUrls:[upload.body.item.url]}, model,'4K','21:9',jpeg,'jpg'],
+      ['Gemini Flash 2.5',{model:legacy,size:'1K',aspect_ratio:'9:16'},legacy,undefined,'9:16',tinyPng,'png']
+    ];
+    for (const [prompt,opts,requestedModel,tier,ratio,expectedData,format] of cases) {
+      const {submitted,job,requests} = await submit(prompt,opts), [hit] = requests;
+      const expectedPath = `/v1beta/models/${requestedModel}:generateContent`, body = hit?.body;
+      check(`${prompt}：一次 JSON POST 至大小写不变的模型，不重试 /images`,requests.length===1 && hit?.method==='POST' && hit.url===expectedPath && /^application\/json/i.test(hit.type) && hit.bearer && !hit.googleKey,`requests=${requests.length}, path=${hit?.url?.split('?')[0]}`);
+      const content = body?.contents?.[0], parts = content?.parts || [], gen = body?.generationConfig;
+      check(`${prompt}：文本、图像模态、比例和分辨率映射`,body?.contents?.length===1 && parts.some(p=>p.text===prompt) && gen?.responseModalities?.includes('IMAGE') && gen?.imageConfig?.aspectRatio===ratio && gen?.imageConfig?.imageSize===tier && !['prompt','model','n','size','response_format','aspect_ratio'].some(k=>Object.hasOwn(body||{},k)),JSON.stringify({ratio:gen?.imageConfig?.aspectRatio,tier:gen?.imageConfig?.imageSize}));
+      const inputs = parts.filter(p=>p.inlineData).map(p=>[p.inlineData.mimeType,p.inlineData.data]);
+      if (opts.mode==='edit') check('Gemini 多参考：上传字节和本地 referenceUrl 一并写入两个 inlineData',JSON.stringify(inputs)===JSON.stringify([['image/png',PNG_FOR_EDIT],['image/png',tinyPng]]));
+      else check(`${prompt}：文生图不附参考图字节`,inputs.length===0);
+      const out = job?.images?.[0], asset = (await call('/library?limit=200')).body.items.find(a=>a.id===out?.assetId && a.jobId===job?.id);
+      const download = asset?.url?.startsWith('/api/velapi-image-go/asset/') ? await fetch(origin+asset.url) : null;
+      const expected = Buffer.from(expectedData, 'base64'), mime = format==='jpg' ? 'image/jpeg' : 'image/png';
+      const identical = download?.status===200 && download.headers.get('content-type')===mime && Buffer.from(await download.arrayBuffer()).equals(expected);
+      check(`${prompt}：生成成功、图库关联当前任务，GET 图片逐字节一致`,submitted.status===200 && job?.status==='succeeded' && job?.protocol===protocol && job?.images?.length===1 && asset?.url===out?.url && asset?.model===requestedModel && asset?.format===format && asset?.bytes===expected.length && asset?.width===(format==='jpg'?2:1) && asset?.height===1 && identical,`status=${job?.status}, format=${asset?.format}, bytes=${asset?.bytes??0}, verified=${!!identical}`);
+    }
+    const refA = upload.body.item.url;
+    const refB = (await call('/upload',{method:'POST',body:{name:'gemini-B.png',data:`data:image/png;base64,${PNG_FOR_EDIT}`}})).body.item.url;
+    for (const [referenceUrls,expectedOrder,label] of [
+      [[refA,refB],[tinyPng,PNG_FOR_EDIT],'完整预览次序 A,B 优先，B 不重复'],
+      [[refA],[PNG_FOR_EDIT,tinyPng],'独立内嵌 B 加本地引用 A 按 B,A 发送']
+    ]) {
+      const {job,requests} = await submit('Gemini ordered refs',{mode:'edit',images:[PNG_FOR_EDIT],referenceUrls});
+      const received = requests[0]?.body?.contents?.[0]?.parts?.filter(p=>p.inlineData).map(p=>p.inlineData.data);
+      check(`Gemini 混合参考图：${label}`,job?.status==='succeeded' && requests.length===1 && JSON.stringify(received)===JSON.stringify(expectedOrder));
+    }
+    const count = (await call('/library?limit=200')).body.items.length;
+    for (const prompt of ['Gemini no image','Gemini blocked','Gemini blocked candidate','Gemini external image','Gemini invalid image','Gemini unauthorized','Gemini redirect']) {
+      const {job,requests} = await submit(prompt);
+      check(`${prompt}：如实失败、不改打旧接口或跟随链接、不产生图片`,job?.status==='failed' && !job?.images?.length && !!job?.error && requests.length===1 && requests[0].url===`/v1beta/models/${model}:generateContent` && !JSON.stringify(job).includes(secret),`status=${job?.status}, calls=${requests.length}`);
+      if (prompt==='Gemini unauthorized') check('Gemini 401：保留上游状态和失败原因',job?.errorDetail?.status===401 && job?.error?.includes('Fixture key rejected'));
+    }
+    for (const [label,opts] of [['多张',{n:2}],['蒙版',{mode:'edit',images:[tinyPng],mask:`data:image/png;base64,${tinyPng}`}],['尺寸',{size:'1234x567'}],['旧模型高档位',{model:legacy,size:'2K'}]]) {
+      const {submitted,job,requests} = await submit('Gemini invalid options',opts);
+      check(`Gemini ${label}：不支持的请求在用户输入端或本地任务报错，不产生上游流量`,requests.length===0 && (submitted.status===400 || job?.status==='failed'),`http=${submitted.status}, calls=${requests.length}`);
+    }
+    check('Gemini 负向回归不新增素材、也不向另一个供应商发请求',(await call('/library?limit=200')).body.items.length===count && mockHits.length===beforeHits);
+  } finally {
+    if (gemProvider?.id) await call('/providers/delete',{method:'POST',body:{id:gemProvider.id}});
+    await new Promise(resolve=>relay.close(resolve));
+  }
+}
+
+/* 官方 URL 不能替换成 localhost 测 origin 分支。只放行当前工作台的回环 HTTP，
+   对 Google 精确地址直接从内存应答；其他目标一律抛错，不进行 DNS 查询。 */
+{
+  const apiOrigin = 'https://generativelanguage.googleapis.com', id = 'gemini-3.1-flash-image-preview';
+  const secret = 'unit-test-official-key', upstream = [], realFetch = globalThis.fetch;
+  const modelsRoute = '/v1beta/models?pageSize=1000', generateRoute = `/v1beta/models/${id}:generateContent`;
+  const catalog = {models:[{name:`models/${id}`,supportedGenerationMethods:['generateContent']},{name:'models/embed-only',supportedGenerationMethods:['embedContent']}]};
+  let officialId;
+  globalThis.fetch = async (input, options = {}) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    if (url.origin === origin) return realFetch(input,options);
+    if (url.origin !== apiOrigin) throw new Error('Only local host and mocked Google routes are permitted');
+    const headers = new Headers(options.headers), route = url.pathname + url.search;
+    upstream.push({route, method:options.method || 'GET', correctKey:headers.get('x-goog-api-key')===secret, hasBearer:headers.has('authorization')});
+    const payload = route===modelsRoute ? catalog : route===generateRoute ? {candidates:[{content:{parts:[{inlineData:{mimeType:'image/png',data:tinyPng}}]}}]} : {error:{message:'Unexpected fixture route'}};
+    return new Response(JSON.stringify(payload),{status:payload.error?404:200,headers:{'content-type':'application/json'}});
+  };
+  try {
+    const provider = await call('/providers',{method:'POST',body:{name:'Fixture official Gemini',baseUrl:apiOrigin+'/v1beta',apiKey:secret,models:[id],endpoint:'gemini_generate'}});
+    officialId = provider.body?.item?.id;
+    if (!officialId) throw Error('Could not create fixture Google provider');
+    const connection = await call('/providers/test',{method:'POST',body:{id:officialId,scope:'provider',baseUrl:apiOrigin}});
+    const refreshed = await call('/models/refresh',{method:'POST',body:{providerId:officialId}});
+    const hasModels = rows => Array.isArray(rows) && rows.length===1 && rows[0]===id;
+    check('Gemini 官方模型列表：根地址和 /v1beta 走同一 GET，专用 header 鉴权，无 query key',upstream.length===2 && upstream.every(h=>h.route===modelsRoute && h.method==='GET' && h.correctKey && !h.hasBearer));
+    check('Gemini 官方模型结果：test 与 refresh 都还原裸模型 ID 并去除不支持 generateContent 的模型',connection.status===200 && connection.body?.ok===true && hasModels(connection.body?.models?.map(m=>m.id)) && refreshed.status===200 && hasModels(refreshed.body?.models) && refreshed.body?.items?.[0]?.kind==='image');
+    const generated = await runMockJob('Official auth fixture',{providerId:officialId,model:id,endpoint:'gemini_generate',size:'1K',aspect_ratio:'1:1'});
+    const [generation] = upstream.slice(2);
+    check('Gemini 官方生图：一次 POST 至 /v1beta，专用 header 鉴权，不携带 Bearer 或 URL 密钥',upstream.length===3 && generation.route===generateRoute && generation.method==='POST' && generation.correctKey && !generation.hasBearer && generated.job?.status==='succeeded' && !JSON.stringify(generated.job).includes(secret));
+  } finally {
+    try { if (officialId) await call('/providers/delete',{method:'POST',body:{id:officialId}}); }
+    finally { globalThis.fetch = realFetch; }
+  }
+}
+
 await new Promise((resolve) => mockServer.close(resolve));
 
 /* 界面那份协议表与宿主这份必须是同一套 id：两边各写一份 label 可以，

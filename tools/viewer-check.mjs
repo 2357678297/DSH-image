@@ -17,6 +17,7 @@ import { auditGridPixels } from "../test/grid-pixels.test.mjs";
 import { auditChatScroll } from "../test/chat-scroll.test.mjs";
 import { auditChatFlow } from "../test/chat-flow.test.mjs";
 import { auditGallery } from "../test/library-audit.test.mjs";
+import { auditGeminiUI } from "../test/gemini-ui.test.mjs";
 import { auditStorageMove } from "../test/storage-move-ui.test.mjs";
 import { auditWorkbench } from "./workbench-audit.mjs";
 import { execFileSync } from "node:child_process";
@@ -158,6 +159,13 @@ const sc = sample.getContext("2d");
 ["#ff0000", "#00ff00", "#0000ff", "#ffff00"].forEach((color, i) => { sc.fillStyle = color; sc.fillRect(i % 2 * 240, Math.floor(i / 2) * 120, 240, 120); });
 const sampleBlob = await new Promise((resolve) => sample.toBlob(resolve));
 const posts = [];
+let geminiAuditKind = "image";
+const geminiFixture = new URLSearchParams(location.search).get("audit") === "gemini";
+if (geminiFixture) {
+ config.defaultModel="Nano-Banana-2"; config.defaultSize="8192x3456"; config.defaultCount=4;
+ providers[0].models.push("Nano-Banana-2"); providers[1].models.push("Nano-Banana-2", "gemini-2.5-flash-image");
+ convJobs.conv_default.push({...JOB, id:"job_gemini", model:"Nano-Banana-2", providerId:"pv_gpt", protocol:"gemini_generate", endpoint:"/v1beta/models/Nano-Banana-2:generateContent", size:"2K", aspectRatio:"4:3", count:1, prompt:"Gemini retry fixture"});
+}
 let moveReply = null;
 const json = (payload) => new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
 window.fetch = async (url, init) => {
@@ -190,6 +198,7 @@ window.fetch = async (url, init) => {
 			counts: {},
 			// 协议表：界面按 kind 区分「图片 / 视频」，视频协议用独立尺寸（假宿主也要给全）
 			protocols: [
+				...(geminiFixture && geminiAuditKind ? [{id:"gemini_generate", label:"Gemini 原生", kind:geminiAuditKind}] : []),
 				{ id: "auto", label: "自动检测（默认）", route: "", kind: "auto" },
 				{ id: "images_generations", label: "图片生成（/v1/images/generations）", route: "/images/generations", kind: "image" },
 				{ id: "images_edits", label: "图片编辑（/v1/images/edits）", route: "/images/edits", kind: "image" },
@@ -385,6 +394,11 @@ flushSync(() => root.render(React.createElement(ui.Workbench, { onOpenInRightbar
 const shot = await waitFor(() => host.querySelector(".vig-grid.is-duo .vig-shot-img") ?? host.querySelector(".vig-shot-img"), 6000);
 check("结果卡挂起来了（有可点的图）", Boolean(shot), shot ? "" : "没有 .vig-shot-img");
 
+if (geminiFixture) {
+ const remount=async kind=>{geminiAuditKind=kind;flushSync(()=>root.render(null));flushSync(()=>root.render(React.createElement(ui.Workbench,{onOpenInRightbar:()=>{}})));await waitFor(()=>host.querySelector('.vig-shot-img'),2000);};
+ await (${auditGeminiUI.toString()})({host,check,wait,waitFor,flushSync,posts,remount});
+ const pre=document.createElement('pre');pre.id='vig-viewer-out';pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
 if (new URLSearchParams(location.search).get("audit")==="psreads") {
  await (${auditPSReads.toString()})({host,check,wait,flushSync,ui,React,createRoot});
  const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
@@ -972,8 +986,8 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 		const endpointSelect = host.querySelector(".vig-tools-pop .vig-endpoint");
 		const labels = endpointSelect ? Array.from(endpointSelect.options).map((option) => text(option)) : [];
 		check(
-			"协议隔离：协议下拉只有自动/图片/视频（对话、Anthropic、Gemini、重排、向量都不列）",
-			labels.length > 0 && labels.every((label) => /自动|图片|视频/.test(label)) && !labels.some((label) => /对话|Anthropic|Gemini|重排|向量|Responses/.test(label)),
+			"协议隔离：只列自动、图片、视频、Gemini 原生；不列聊天或向量协议",
+			labels.some(label => label.startsWith("Gemini 原生")) && labels.every((label) => /自动|图片|视频|Gemini 原生/.test(label)) && !labels.some((label) => /对话|Anthropic|重排|向量|Responses/.test(label)),
 			JSON.stringify(labels)
 		);
 	}

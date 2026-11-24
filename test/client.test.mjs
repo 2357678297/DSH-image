@@ -3010,6 +3010,14 @@ check(
   const makeRequest = (references = [], settings = {}) => w.buildGenerationRequest({
     prompt: "test", config: { defaultModel: "m", defaultSize: "8192x3456", defaultCount: 1 }, providers: [], conversationId: "A", references, isVideoEndpoint: false, sizeRaw: true, ...settings
   });
+  for (const [model, defaultSize, expected, ratio] of [["Nano-Banana-2", "8192x3456", "4K", "21:9"], ["gemini-2.5-flash-image", "4096x4096", "1K", "1:1"], ["Nano-Banana-2", "8K", "1K", "1:1"]]) {
+    const body = makeRequest([{url:"/api/velapi-image-go/upload/ref.png",dataUrl:"data:image/png;base64,AAAA"}], {config:{defaultEndpoint:"gemini_generate",defaultSize,defaultModel:model,defaultCount:4,defaultQuality:"HIGH"},sizeRaw:false});
+    check(`Gemini ${model} ${defaultSize} → ${expected} ${ratio}，保留参考图`,body.endpoint === "gemini_generate" && body.mode === "edit" && body.size === expected && body.aspect_ratio === ratio && body.n === 1 && body.images.length === 1 && body.referenceUrls.length === 1 && !("seconds" in body) && !("quality" in body));
+  }
+  for (const patch of [{size:"8K"},{aspect_ratio:"20:1"},{n:4},{seconds:"6"},{mask:"mask"}]) {
+    let rejected=false; try { w.normalizeGenerationBody({endpoint:"gemini_generate",model:"Nano-Banana-2",size:"2K",...patch}, true,"1024x1024",false); } catch { rejected=true; }
+    check(`Gemini JSON 拒绝不支持的 ${JSON.stringify(patch)}`,rejected);
+  }
   const refBody = makeRequest([{ url: "/local/1", dataUrl: "/local/1" }, { url: "/local/2", dataUrl: "data:image/png;base64,A" }]);
   check("图生图保留 URL 和真实字节；无参考图走生成", refBody.mode === "edit" && refBody.image === "data:image/png;base64,A" && refBody.referenceUrls.join() === "/local/1,/local/2" && makeRequest().mode === "generate");
   check(
@@ -3094,9 +3102,8 @@ check(
       /hints: catalog\.owners,/.test(SOURCE)
   );
   check(
-    "生成 / 重试都按模型挑供应商（重试不照抄老任务里那条错的 providerId）",
-    /providerId: providerIdForModel\(providers, config\),/.test(SOURCE) &&
-      /providerId: providerIdForModel\(providers, config, retryModel\) \|\| job\.providerId \|\| config\.activeProviderId,/.test(SOURCE) &&
+    "普通重试按模型选供应商，Gemini 原生重试优先使用原任务供应商",
+    /nativeRetry && job\.providerId \? job\.providerId : providerIdForModel\(providers, config, retryModel\)/.test(SOURCE) &&
       // 检查器里那个「当前供应商」下拉也跟模型走，不然选完模型它还显示上一条
       /value: config\.activeProviderId \|\| providerIdForModel\(providers, config\) \|\| "",/.test(SOURCE)
   );
@@ -3381,7 +3388,7 @@ check(
       /state\.notes\.length === 0[\s\S]{0,120}t\("notes\.pickEmpty"\)/.test(SOURCE)
   );
   check(
-    "协议选择就在输入框那一行（模型 / 尺寸 / 张数后面），11 个选项、短名显示",
+    "协议选择只显示生成协议及带重启说明的 Gemini，不列出聊天与向量协议",
     (() => {
       const row = chatView.slice(chatView.indexOf('class="vig-tools"'));
       const start = row.indexOf('class="vig-sel vig-endpoint"');
@@ -3389,8 +3396,7 @@ check(
       const options = [...select.matchAll(/<option[^>]*value="([a-z_]+)"/g)].map((match) => match[1]);
       return (
         start >= 0 &&
-        options.length === 11 &&
-        options.includes("images_edits") &&
+        options.length === 5 && options.includes("gemini_generate") && select.includes("重启 DSH") &&
         options.includes("videos_generations") &&
         select.includes(">图片编辑<") &&
         !select.includes(">/v1/images/edits<")

@@ -74,6 +74,8 @@ const CONV_CONFIG_FIELDS = [
   "defaultQuality",
   "defaultCount",
   "defaultEndpoint",
+  "geminiSize",
+  "geminiRatio",
   "videoSize",
   "videoRatio",
   "videoResolution",
@@ -181,6 +183,15 @@ function writeConvSetting(id, settings) {
 				}));
 			}
 			return PROTOCOL_IDS.map((id) => ({ id, label: t(PROTOCOL_LABEL_KEYS[id] || id) }));
+		}
+
+		const GEMINI_NATIVE = "gemini_generate";
+		const geminiReady = protocols => (protocols || []).some(p => p.id === GEMINI_NATIVE && p.kind === "image");
+		function generationProtocols(protocols) {
+			const allowed = protocols?.length ? protocols.filter(p => ["auto", "image", "video"].includes(p.kind) && p.id !== GEMINI_NATIVE)
+				: ["auto", "images_generations", "images_edits", "videos_generations"].map(id => ({id}));
+			return [...allowed.map(p => ({id:p.id, label:p.label || t(PROTOCOL_LABEL_KEYS[p.id] || p.id)})),
+				{id:GEMINI_NATIVE, label:t("prov.endpointGemini"), disabled:!geminiReady(protocols)}];
 		}
 
 		/** 长名（含路由）：当 title 用，鼠标停一下能看到完整那条。 */
@@ -731,7 +742,10 @@ function writeConvSetting(id, settings) {
 			"prov.shortResponses": "Responses",
 			"prov.shortResponsesCompact": "Responses 压缩",
 			"prov.shortAnthropic": "Anthropic",
-			"prov.shortGemini": "Gemini",
+			"prov.shortGemini": "Gemini 原生",
+			"chat.geminiReload": "当前宿主不支持 Gemini 原生生图。请更新插件并重启 DSH；仅刷新页面不会加载新宿主。",
+			"chat.geminiParams": "Gemini 原生每次仅生成 1 张；请选择当前模型支持的分辨率和比例，不支持蒙版或视频时长。",
+			"chat.geminiRatio": "图片比例", "chat.geminiSize": "图片分辨率",
 			"prov.shortRerank": "重排",
 			"prov.shortImages": "图片生成",
 			"prov.shortEdits": "图片编辑",
@@ -1219,7 +1233,10 @@ function writeConvSetting(id, settings) {
 			"prov.shortResponses": "Responses",
 			"prov.shortResponsesCompact": "Responses compact",
 			"prov.shortAnthropic": "Anthropic",
-			"prov.shortGemini": "Gemini",
+			"prov.shortGemini": "Gemini native",
+			"chat.geminiReload": "This host does not support Gemini native image generation. Update the plugin and restart DSH; refreshing this page is not enough.",
+			"chat.geminiParams": "Gemini native returns one image. Use a resolution and ratio supported by the selected model; masks and video duration are not supported.",
+			"chat.geminiRatio": "Image aspect ratio", "chat.geminiSize": "Image resolution",
 			"prov.shortRerank": "Rerank",
 			"prov.shortImages": "Image gen",
 			"prov.shortEdits": "Image edits",
@@ -2834,23 +2851,43 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			return { size: pixel && !body.aspect_ratio && !body.aspectRatio ? resolveSizeExpression(size) : resolveSizeExpression(`${level} ${ratio}`, fallback) };
 		}
 
+		const GEMINI_RATIOS = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"];
+		const geminiTiers = model => /^gemini-2\.5-flash-image(?:-|$)/i.test(String(model || "").replace(/^models\//i, "")) ? ["1K"] : ["1K", "2K", "4K"];
+		function imageRequestProtocol(endpoint, providerId, providers) {
+			return (!endpoint || endpoint === "auto") && providers?.find(p => p.id === providerId)?.endpoint === GEMINI_NATIVE ? GEMINI_NATIVE : endpoint || "auto";
+		}
+		function geminiSettings(config) {
+			const legacy = sizePartsFor(config.defaultSize), tiers = geminiTiers(config.defaultModel);
+			const size = config.geminiSize || legacy.tier, ratio = config.geminiRatio || legacy.ratio;
+			return { size:tiers.includes(size) ? size : "1K", aspect_ratio:GEMINI_RATIOS.includes(ratio) ? ratio : "1:1" };
+		}
+		function geminiBody(body) {
+			const {quality, seconds, aspectRatio, ...rest} = body;
+			const legacy = sizePartsFor(rest.size), size = legacy.tier || "1K", ratio = rest.aspect_ratio || aspectRatio || legacy.ratio || "1:1";
+			if (!geminiTiers(rest.model).includes(size) || !GEMINI_RATIOS.includes(ratio) || rest.mask || seconds || (rest.n != null && Number(rest.n) !== 1)) throw Error(t("chat.geminiParams"));
+			return {...rest, size, aspect_ratio:ratio, n:1};
+		}
+
 		function normalizeGenerationBody(body, raw, fallback, video) {
+			if (body.endpoint === GEMINI_NATIVE) return geminiBody(body);
 			const { aspect_ratio, aspectRatio, ...rest } = body;
 			return { ...rest, ...generationSize(body, raw, fallback, video) };
 		}
 
 		/** 预览和入队都从这里取字段；补传参考图只会补本站 URL。 */
 		function buildGenerationRequest({ prompt, config, providers, conversationId, references, isVideoEndpoint, sizeRaw }) {
+			const providerId = providerIdForModel(providers, config), endpoint = imageRequestProtocol(config.defaultEndpoint, providerId, providers);
 			const urls = references.map((ref) => ref.url).filter(Boolean);
 			const images = references.map((ref) => ref.dataUrl).filter((url) => typeof url === "string" && url.startsWith("data:")).slice(0, 4);
 			const size = isVideoEndpoint ? config.videoSize || "1280x720" : config.defaultSize;
 			return normalizeGenerationBody({
 				prompt, userText: prompt, planNote: "", conversationId,
-				model: config.defaultModel, providerId: providerIdForModel(providers, config),
+				model: config.defaultModel, providerId,
 				size, quality: config.defaultQuality, n: isVideoEndpoint ? 1 : config.defaultCount,
-				seconds: isVideoEndpoint ? config.videoSeconds || "4" : "", endpoint: config.defaultEndpoint || "auto",
+				seconds: isVideoEndpoint ? config.videoSeconds || "4" : "", endpoint,
 				mode: references.length ? "edit" : "generate", referenceUrl: urls[0] || "", referenceUrls: urls,
-				...(images.length ? { image: images[0] } : {}), images, source: "ui"
+				...(images.length ? { image: images[0] } : {}), images, source: "ui",
+				...(endpoint === GEMINI_NATIVE ? {...geminiSettings(config), n:1, seconds:""} : {})
 			}, sizeRaw, size, isVideoEndpoint);
 		}
 
@@ -4148,7 +4185,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						h(
 							"div",
 							{ className: "vig-who" },
-							`${t("chat.assistant")} · ${job.model} · ${job.size}${job.endpoint ? ` · ${job.endpoint}` : ""}`
+							`${t("chat.assistant")} · ${job.model} · ${job.size}${job.protocol === GEMINI_NATIVE ? ` · ${[job.aspectRatio, protocolShortLabel(GEMINI_NATIVE)].filter(Boolean).join(" · ")}` : ""}${job.endpoint ? ` · ${job.endpoint}` : ""}`
 						),
 						// 对话模型把这句话整理成了什么（原话在上面气泡里，这里只摆改写结果）
 						job.planNote && job.planNote !== displayPrompt
@@ -4353,7 +4390,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			   音频 / 向量 / 对话模型不进这个下拉（用户要求：视频参数与图片配置区分开）。
 			   分类以宿主给的 modelMeta.kind 为准（中转站目录里带的），没有元数据的按图片算。 */
 			const endpointKind = isVideoEndpoint ? "video" : "image";
-			const pickerModels = usableModelsFor(catalog);
+			const nativeGemini = imageRequestProtocol(endpoint, providerIdForModel(providers, config), providers) === GEMINI_NATIVE, gemini = geminiSettings(config);
+			const unavailable = nativeGemini && !geminiReady(state.protocols);
+			const pickerModels = usableModelsFor(catalog).filter(id => !nativeGemini || modelKindOf(id, providers) !== "video");
 			/* 切到视频协议时，当前模型如果还是图片模型，自动换成该协议下的第一个可用模型
 			   （否则下拉里选不到、发出去也多半会报错）。*/
 			useEffect(() => {
@@ -4512,7 +4551,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						h(
 							"label",
 							{ className: "vig-ctx-row", style: { marginBottom: 8 } },
-							h("input", { type: "checkbox", className: "vig-ctx-check", checked: sizeRaw, "data-size-raw": "1", onChange: () => toggleJsonSize(!sizeRaw) }),
+							h("input", { type: "checkbox", className: "vig-ctx-check", checked: nativeGemini || sizeRaw, disabled:nativeGemini, "data-size-raw": "1", onChange: () => toggleJsonSize(!sizeRaw) }),
 							h("span", null, t("chat.sizeRaw"))
 						),
 						h("textarea", {
@@ -4632,6 +4671,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								)
 							)
 						: null,
+					unavailable ? h("div", {className:"vig-muted", role:"status", "data-gemini-unavailable":"1"}, t("chat.geminiReload")) : null,
 					h("textarea", {
 						ref: inputRef,
 						className: "vig-input",
@@ -4654,7 +4694,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								h("div",{className:"vig-ctx-title"}, t("chat.requestInfo")),
 								h("p",{className:"vig-muted"},t("chat.directHint")),
 								h("div",{className:"vig-ctx-row"},config.defaultModel || "—"),
-								h("div",{className:"vig-ctx-row"}, isVideoEndpoint ? config.videoSize : config.defaultSize),
+								h("div",{className:"vig-ctx-row"}, nativeGemini ? `${protocolShortLabel(GEMINI_NATIVE)} · ${gemini.size} · ${gemini.aspect_ratio} · ×1` : isVideoEndpoint ? config.videoSize : config.defaultSize),
 								h("button",{className:"vig-btn",onClick:()=>{setSummaryOpen(false); actions.openJsonBody();}},t("chat.jsonBody"))
 							) : null),
 						// 工具展开器：一块悬浮面板收纳全部次要参数（上传 / 图库 / 信息卡 / 张数 / 协议 / 计数）
@@ -4662,7 +4702,12 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							"div",
 							{ className: `vig-tools-pop${toolsOpen ? " is-open" : ""}`, ref: toolsBoxRef },
 						// 尺寸：视频协议按「比例 / 分辨率」两段分开选（像素 size 由两者组合），图片协议走图片尺寸
-						isVideoEndpoint
+						nativeGemini ? [
+							h("select", {key:"gemini-size", className:"vig-sel", "data-gemini-size":"1", title:t("chat.geminiSize"), "aria-label":t("chat.geminiSize"), value:gemini.size,
+								onChange:e => actions.setGeminiOptions({geminiSize:e.target.value})}, geminiTiers(config.defaultModel).map(v => h("option", {key:v,value:v}, v))),
+							h("select", {key:"gemini-ratio", className:"vig-sel", "data-gemini-ratio":"1", title:t("chat.geminiRatio"), "aria-label":t("chat.geminiRatio"), value:gemini.aspect_ratio,
+								onChange:e => actions.setGeminiOptions({geminiRatio:e.target.value})}, GEMINI_RATIOS.map(v => h("option", {key:v,value:v}, v)))
+						] : isVideoEndpoint
 							? [
 									h(
 										"select",
@@ -4824,7 +4869,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								: null
 						),
 						// 张数只对图片有意义：视频一次一条，视频协议下不显示
-						isVideoEndpoint
+						nativeGemini ? h("span", {className:"vig-muted", "data-gemini-count":"1"}, "×1") : isVideoEndpoint
 							? null
 							: h(
 									"select",
@@ -4847,8 +4892,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								title: `${t("prov.endpoint")}：${protocolLabel(state.protocols, endpoint)}\n${t("prov.endpointHint")}`,
 								onChange: (event) => void actions.saveConfig({ defaultEndpoint: event.target.value })
 							},
-							protocolOptions((state.protocols || []).filter((item) => ["auto", "image", "video"].includes(item.kind))).map((option) =>
-								h("option", { key: option.id, value: option.id, title: option.label }, protocolShortLabel(option.id))
+							generationProtocols(state.protocols).map((option) =>
+								h("option", { key: option.id, value: option.id, disabled:option.disabled, title: option.disabled ? t("chat.geminiReload") : option.label }, protocolShortLabel(option.id) + (option.disabled ? ` · ${t("common.restartNeed")}` : ""))
 							)
 						),
 						h("span", { className: "vig-count" }, overLimit ? t("chat.over") : t("chat.counter", { n: draft.length })),
@@ -4883,7 +4928,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							{
 								type: "button", className: "vig-send", "data-force-generate": "1",
 								"aria-keyshortcuts": "Enter Control+Enter Meta+Enter", title: t("chat.sendKeys"),
-								disabled: !draft.trim(), onClick: submit
+								disabled: unavailable || !draft.trim(), onClick: submit
 							},
 							t("chat.send")
 						)
@@ -11863,7 +11908,11 @@ h(
 			const openJsonPreview = () => {
 				const base = buildRequestPreview(draft);
 				jsonBaseRef.current = base;
-				setJsonDraft(JSON.stringify(normalizeGenerationBody({ ...base, ...jsonOverrideRef.current }, sizeRaw, isVideoEndpoint ? config.videoSize : config.defaultSize, isVideoEndpoint), null, 2));
+				const candidate = { ...base, ...jsonOverrideRef.current };
+				let preview = candidate;
+				try { preview = normalizeGenerationBody(candidate, sizeRaw, isVideoEndpoint ? config.videoSize : config.defaultSize, isVideoEndpoint); }
+				catch (error) { toast(error.message, "err"); }
+				setJsonDraft(JSON.stringify(preview, null, 2));
 				setJsonOpen(true);
 			};
 			const toggleJsonSize = (next) => {
@@ -11872,15 +11921,18 @@ h(
 					jsonBaseRef.current = buildRequestPreview(draft, next);
 					setJsonDraft(JSON.stringify(body, null, 2));
 					setSizeRawPersist(next);
-				} catch { toast(t("chat.jsonInvalid"), "err"); }
+				} catch (error) { toast(error.message === t("chat.geminiReload") || error.message === t("chat.geminiParams") ? error.message : t("chat.jsonInvalid"), "err"); }
 			};
 			const applyJsonDraft = () => {
 				try {
-					const parsed = normalizeGenerationBody(jsonBody(), sizeRaw, isVideoEndpoint ? config.videoSize : config.defaultSize, isVideoEndpoint);
+					const candidate = jsonBody();
+					candidate.endpoint = imageRequestProtocol(candidate.endpoint || config.defaultEndpoint, candidate.providerId || providerIdForModel(providers, config, candidate.model), providers);
+					if (candidate.endpoint === GEMINI_NATIVE && !geminiReady(protocols)) throw Error(t("chat.geminiReload"));
+					const parsed = normalizeGenerationBody(candidate, sizeRaw, isVideoEndpoint ? config.videoSize : config.defaultSize, isVideoEndpoint);
 					jsonOverrideRef.current = requestOverrides(jsonBaseRef.current || {}, parsed);
 					setJsonOpen(false);
 					toast(t("chat.jsonApplied"));
-				} catch { toast(t("chat.jsonInvalid"), "err"); }
+				} catch (error) { toast(error.message === t("chat.geminiReload") || error.message === t("chat.geminiParams") ? error.message : t("chat.jsonInvalid"), "err"); }
 			};
 			// 端点协议整表由宿主 /status 给（宿主给了就用它那份带 label 的）。
 			const [protocols, setProtocols] = useState([]);
@@ -11892,7 +11944,7 @@ h(
 				return hit?.kind === "video" ? "video" : "image";
 			})();
 			const selectedModelKind = modelKindOf(config.defaultModel, providers);
-			const isVideoEndpoint = endpointKind === "video" || selectedModelKind === "video";
+			const isVideoEndpoint = config.defaultEndpoint !== GEMINI_NATIVE && (endpointKind === "video" || selectedModelKind === "video");
 			/* 更新入口：一次点击 = 检查；查到新版本后再点一次 = 只拉取，不重启。
 			   （进度条只在这期间出现，结束就收起。） */
 			const [updateState, setUpdateState] = useState({ phase: "idle", percent: 0 });
@@ -12008,7 +12060,7 @@ h(
 				if (!prev && next === current) persistComposer(id, next.text, next.refs, next.edit);
 				setJsonOpen(false); setPickOpen(false); setGridTarget(null);
 				const saved = readConvSettings()[id] || initialConfigRef.current;
-				if (saved) setConfig((previous) => ({ ...previous, ...saved }));
+				if (saved) setConfig((previous) => ({ ...previous, geminiSize:undefined, geminiRatio:undefined, ...saved }));
 			}, []);
 			const [pending, setPending] = useState(0);
 			const [unsent, setUnsent] = useState([]);
@@ -12123,7 +12175,7 @@ h(
 					if (activeConv !== conversationIdRef.current) activateConversation(activeConv);
 					else {
 						const saved = readConvSettings()[activeConv];
-						if (saved) setConfig((previous) => ({ ...previous, ...saved }));
+						if (saved) setConfig((previous) => ({ ...previous, geminiSize:undefined, geminiRatio:undefined, ...saved }));
 					}
 					const jobList = await call(`/jobs?limit=40${activeConv ? `&conversationId=${encodeURIComponent(activeConv)}` : ""}`).catch(() => ({ items: [], pending: 0 }));
 					if (activeConv !== conversationIdRef.current) return;
@@ -12214,6 +12266,10 @@ h(
 					// 它回的那份 config 里没有这一项 —— 直接 setConfig(payload.config) 会把用户刚选的
 					// 值冲回默认，看起来就是「协议选不动」。
 					const owner = conversationIdRef.current;
+					if (Object.hasOwn(patch, "defaultEndpoint") && jsonOverrideRef.current) {
+						const {endpoint, size, aspect_ratio, aspectRatio, seconds, n, quality, ...remaining} = jsonOverrideRef.current;
+						jsonOverrideRef.current = remaining;
+					}
 					const selected = pickConfigFields(patch);
 					if (owner && Object.keys(selected).length) {
 						writeConvSetting(owner, { ...initialConfigRef.current, ...readConvSettings()[owner], ...selected });
@@ -12302,8 +12358,12 @@ h(
 				}
 				// JSON 修改只属于当前会话的下一次入队，不读取队列等待期间的新设置。
 				const override = jsonOverrideRef.current || {};
+				const effectiveEndpoint = imageRequestProtocol(override.endpoint || config.defaultEndpoint, override.providerId || providerIdForModel(providers, config, override.model || config.defaultModel), providers);
+				if (effectiveEndpoint === GEMINI_NATIVE && !geminiReady(protocols)) { toast(t("chat.geminiReload"), "err"); return null; }
 				const base = buildRequestPreview(rawPrompt);
-				const body = normalizeGenerationBody({ ...base, ...override }, sizeRaw, isVideoEndpoint ? config.videoSize : config.defaultSize, isVideoEndpoint);
+				let body;
+				try { body = normalizeGenerationBody({ ...base, ...override }, sizeRaw, isVideoEndpoint ? config.videoSize : config.defaultSize, isVideoEndpoint); }
+				catch (error) { toast(error.message, "err"); return null; }
 				const known = providers.some((provider) => provider.models?.includes(body.model));
 				if (!known || ["chat", "audio", "embedding", "rerank"].includes(modelKindOf(body.model, providers))) {
 					toast(t("chat.modelInvalid"), "err");
@@ -12356,6 +12416,11 @@ h(
 					if (draftNow.current.trim() && draftNow.current !== entry.text && !window.confirm(t("chat.replaceForRecovery"))) return;
 					setDraft(entry.text); actions.dismissUnsent(entry.seq);
 					rootRef.current?.querySelector(".vig-composer textarea")?.focus();
+				},
+				setGeminiOptions: patch => {
+					const owner = conversationIdRef.current;
+					if (owner) writeConvSetting(owner, {...initialConfigRef.current, ...readConvSettings()[owner], ...patch});
+					setConfig(current => ({...current, ...patch}));
 				},
 				resetJsonBody: () => { jsonOverrideRef.current = null; jsonBaseRef.current = buildRequestPreview(draft); setJsonDraft(JSON.stringify(jsonBaseRef.current, null, 2)); toast(t("chat.jsonReset")); },
 				openJsonBody: () => openJsonPreview(),
@@ -12514,19 +12579,19 @@ h(
 						/* 重试也要过模型隔离：老任务若记的是对话模型（修隔离之前误发的），
 						   用当前生图模型重试，否则会把 grok-4.7 再打到 /images/generations。 */
 						const retryModel = modelKindOf(job.model, providers) === "chat" ? config.defaultModel : job.model || config.defaultModel;
+						const retryEndpoint = imageRequestProtocol(job.protocol || config.defaultEndpoint, job.providerId || providerIdForModel(providers, config, retryModel), providers);
+						const nativeRetry = retryEndpoint === GEMINI_NATIVE;
+						if (nativeRetry && !geminiReady(protocols)) throw Error(t("chat.geminiReload"));
+						const providerId = nativeRetry && job.providerId ? job.providerId : providerIdForModel(providers, config, retryModel) || job.providerId || config.activeProviderId;
 						const payload = await call("/generate", {
 							method: "POST",
 							body: {
-								prompt,
-								model: retryModel,
-								// 重试也要按模型挑供应商：老任务记的 providerId 可能正是当初打错的那条
-								providerId: providerIdForModel(providers, config, retryModel) || job.providerId || config.activeProviderId,
-								size: job.size || config.defaultSize,
-								...(job.aspectRatio ? { aspect_ratio: job.aspectRatio } : {}),
-								...(job.seconds ? { seconds: job.seconds } : {}),
-								quality: job.quality || config.defaultQuality,
-								n: job.count || config.defaultCount,
-								endpoint: job.protocol || config.defaultEndpoint || "auto",
+								prompt, model:retryModel, providerId,
+								...(nativeRetry ? geminiBody({model:retryModel, size:job.size || "1K", aspect_ratio:job.aspectRatio, n:1}) : {
+									size: job.size || config.defaultSize, ...(job.aspectRatio ? {aspect_ratio:job.aspectRatio} : {}),
+									...(job.seconds ? {seconds:job.seconds} : {}), quality: job.quality || config.defaultQuality, n: job.count || config.defaultCount
+								}),
+								endpoint: retryEndpoint,
 								referenceUrl: job.referenceUrl || "",
 								referenceUrls: Array.isArray(job.referenceUrls) && job.referenceUrls.length > 0 ? job.referenceUrls : job.referenceUrl ? [job.referenceUrl] : [],
 								mode: job.mode === "edit" ? "edit" : "generate",
@@ -12921,7 +12986,7 @@ h(
 			   如果配置停在「OpenAI 对话 / Responses / Anthropic / Gemini / 重排 / 向量」这类聊天协议上
 			   （生图请求会被打到 /chat/completions，注定画不出图），自动纠正成图片生成。 */
 			useEffect(() => {
-				if (!protocols.length) return;
+				if (!protocols.length || config.defaultEndpoint === GEMINI_NATIVE) return;
 				const hit = protocols.find((item) => item.id === (config.defaultEndpoint || "auto"));
 				if (!hit) return;
 				if (["auto", "image", "video"].includes(hit.kind)) return;
@@ -12950,7 +13015,7 @@ h(
 			/* 模型和协议自动对齐：选了视频模型就切到「视频生成」协议（参数区跟视频走），
 			   选了图片模型却停在视频协议时切回图片生成。只在两者真正冲突时写一次配置。 */
 			useEffect(() => {
-				if (!providers.length || !protocols.length) return;
+				if (!providers.length || !protocols.length || config.defaultEndpoint === GEMINI_NATIVE) return;
 				const modelKind = modelKindOf(config.defaultModel, providers);
 				const currentKind = protocols.find((item) => item.id === (config.defaultEndpoint || "auto"))?.kind || "auto";
 				if (modelKind === "video" && currentKind !== "video") void actions.saveConfig({ defaultEndpoint: "videos_generations" });

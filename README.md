@@ -738,16 +738,22 @@ curl.exe -s "http://127.0.0.1:$port/api/velapi-image-go/job?id=$($job.job.id)"
 
 ## 端点协议：生成打哪条路由，输入框那一行说了算
 
-「对话生图」输入框那一行（模型 / 尺寸 / 张数后面）多了一个协议选择，选项照中转站那张表，
-再补生图这条链要用的三条：
+「对话生图」的协议菜单同时支持 OpenAI 图片端点、Gemini 原生生图和视频端点。选协议不改变供应商的渠道配置。
 
 | id | 路由 | 说明 |
 | --- | --- | --- |
 | `auto` | — | 自动检测（默认）：带参考图走 `/images/edits`，不带就走 `/images/generations` |
 | `images_generations` | `POST /v1/images/generations` | 文生图 |
 | `images_edits` | `POST /v1/images/edits` | 图生图 / 编辑（带参考图与可选 mask） |
+| `gemini_generate` | `POST /v1beta/models/{model}:generateContent` | **Gemini 原生**：提示词和最多 4 张参考图一起发送，单次 1 张；模型名及大小写使用供应商给出的值 |
 | `videos_generations` | `POST /v1/videos/generations` | 视频：上游返回任务体，原样收下展示，不假装出片 |
-| `openai_chat` / `openai_responses` / `openai_responses_compact` / `anthropic_messages` / `gemini_generate` / `jina_rerank` / `embeddings` | 各自路由 | 中转站那张表里的其余选项，先记录后使用 |
+| `openai_chat` / `openai_responses` / `openai_responses_compact` / `anthropic_messages` / `jina_rerank` / `embeddings` | 各自路由 | 不是生图端点，不在生成菜单里 |
+
+**以 Nano-Banana-2 为例：**在供应商里填入该网关提供的地址、密钥和模型名，在「对话生图」选择「Gemini 原生」和该模型。提示词可直接生成；需要改图时先添加参考图，协议保持不变。建议先用 `1K`；高分辨率取决于模型。蒙版编辑请用 `images_edits`。
+
+Gemini 原生请求使用 `contents[].parts` 与 `generationConfig.imageConfig`。它读取响应中的 `inlineData`，也兼容网关在文本里返回的 Markdown 内嵌图片（`data:image/...;base64,...`）；不会因为只有文本而改走 OpenAI 重发。「原生」指工作台发出的请求格式，不表示网关后面的上游渠道一定直连 Google。
+
+Google 官方地址可填 `https://generativelanguage.googleapis.com/v1beta`，使用 Google API key 并选择支持图片输出的模型；中转站继续使用该站自己的令牌和模型别名。只更新界面、尚未加载新版宿主时无法使用这个协议；需要重新加载插件宿主或重启 DSH。
 
 - 选择落进 `config.defaultEndpoint`（跟着 `config.json` 跨更新活着），每次 `/generate` 都带上。
 - 取舍顺序：**这次请求里写的 > 输入框那一行选的 > 供应商记录 > 自动检测**。

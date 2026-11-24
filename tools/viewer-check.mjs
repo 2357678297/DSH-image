@@ -46,7 +46,7 @@ const NEXT_DIR = "D:\\素材\\velapi";
 /* 驱动脚本：别用反引号 / ${}（整段是模板字符串），要拼就用 + */
 const driver = `
 
-const packageVersion = ${JSON.stringify(PACKAGE_VERSION)};
+const packageVersion = ${JSON.stringify(PACKAGE_VERSION.replace('-rev.', '.'))};
 const React = window.__vigRequire("react");
 const { createRoot } = window.__vigRequire("react-dom/client");
 const { flushSync } = window.__vigRequire("react-dom");
@@ -365,7 +365,7 @@ window.fetch = async (url, init) => {
 				: { ok: true, latest: true, code: "latest", version: "0.1.0", localSha: "1111111", remoteSha: "1111111", short: { local: "1111111", remote: "1111111" }, hint: "已是最新（1111111）" }
 		);
 	}
-	if (pathname.startsWith("/update/apply")) return json({ ok: true, pulled: true, code: "applied", packageVersion:"1.2.3", needsRestart: true, from: "1111111", to: "2222222", short: { from: "1111111", to: "2222222" }, hint: "已更新到 2222222，重启 DSH 生效" });
+	if (pathname.startsWith("/update/apply")) return json({ ok: true, pulled: true, code: "applied", packageVersion:"1.2.3-rev.101", needsRestart: true, from: "1111111", to: "2222222", short: { from: "1111111", to: "2222222" }, hint: "已更新到 2222222，重启 DSH 生效" });
 	if (pathname.startsWith("/update/restart")) return json({ ok: true, restarting: true, delaySeconds: 15, hint: "15 秒后重启" });
 	return json({ ok: true });
 };
@@ -1058,7 +1058,7 @@ if (new URLSearchParams(location.search).get("hold") === "chat") {
 		const restartPost = posts.filter((item) => item.path.startsWith("/update/restart")).pop();
 		check(
 			"更新通道两段式：第一次检查到 behind，第二次拉取（/update/apply）且不重启",
-			Boolean(applyPost) && !restartPost && badge()==="v1.2.3 · 2222222",
+			Boolean(applyPost) && !restartPost && badge()==="v1.2.3.101 · 2222222",
 			JSON.stringify({ apply: Boolean(applyPost), restart: Boolean(restartPost), posts: posts.filter((item) => item.path.startsWith("/update")).map((item) => item.path) })
 		);
 	}

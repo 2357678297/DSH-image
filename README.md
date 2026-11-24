@@ -1077,6 +1077,7 @@ node tools/verify-wiring.mjs --api http://127.0.0.1:54419/api/velapi-image-go   
 ### 更新通道与正式版本
 
 - `0.2.0` 包含宫格拆分、单格重绘和候选对照、桌面读图修复、图库分页及会话交互改进。更新按钮旁显示 `v包版本 · 本地提交号`。打开工作台只读本机；只有主动检查才连接远端。非 Git 安装不虚构提交号。
+- 从 `v0.2.100.100` 开始，每次更新推送都由守卫校验后附上四段版本标签，默认递增最后一段。工作台显示 `v四段版本 · 本地提交号`，npm 清单使用兼容写法 `0.2.100-rev.100`。
 - **维护者发版**：双击根目录 `更新编辑器.cmd` 或运行 `npm run release:editor`，按「保存草稿 → 准备 → 校验 → 输入标签确认发布」执行。[维护者操作与恢复说明](docs/RELEASE-GUARD.md)。普通工作台的「更新」只检查/拉取，不能发布。
 
 - 第一次点「更新」→ `POST /update/check`（`git ls-remote` 对比本地 HEAD），返回 `latest` / `behind` / `not_a_repo` / `remote_unreachable`；

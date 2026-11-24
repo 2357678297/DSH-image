@@ -54,7 +54,7 @@ Add-Row $left Absolute 30; Add-Row $left Percent 50; Add-Row $left Absolute 30; 
 $left.Controls.Add((New-Label '待发布的提交（最近 50 条）' $true),0,0); $commits=New-Text '待发布的提交' $true $true; $left.Controls.Add($commits,0,1)
 $left.Controls.Add((New-Label '工作区改动（请先审查并自行提交功能改动）' $true),0,2); $files=New-Text '工作区改动' $true $true; $left.Controls.Add($files,0,3)
 $right=New-Grid 4; $body.Controls.Add($right,1,0); Add-Row $right Absolute 30; Add-Row $right Absolute 32; Add-Row $right Absolute 30; Add-Row $right Percent 100
-$right.Controls.Add((New-Label '目标版本　例如 0.3.0，不带 v' $true),0,0); $versionBox=New-Text '目标版本' $false; $versionBox.MaxLength=35; $right.Controls.Add($versionBox,0,1)
+$right.Controls.Add((New-Label '目标版本　例如 0.2.100.101，不带 v' $true),0,0); $versionBox=New-Text '目标版本' $false; $versionBox.MaxLength=35; $right.Controls.Add($versionBox,0,1)
 $right.Controls.Add((New-Label '更新说明　／　将随版本记录一起发布' $true),0,2); $notesBox=New-Text '更新说明' $true; $notesBox.MaxLength=16000; $right.Controls.Add($notesBox,0,3)
 $stage=New-Label '尚未加载'; $layout.Controls.Add($stage,0,3); $message=New-Text '操作结果与守卫提示' $true $true; $layout.Controls.Add($message,0,4)
 $bar=[Windows.Forms.FlowLayoutPanel]::new(); $bar.Dock='Fill'; $bar.WrapContents=$false; $bar.Margin=[Windows.Forms.Padding]::new(0,5,0,0); $layout.Controls.Add($bar,0,5)
@@ -97,7 +97,7 @@ function Set-GuardState($new,[bool]$keepInput) {
     if ($null -eq $new -or $new.phase -notin @('editing','prepared','verified','pendingPush')) {throw '守卫返回未知状态，请刷新。'}
     $script:rendering=$true; $script:state=$new; $script:fresh=$true
     try {
-        $h=[string]$new.head; $summary.Text="当前版本 v$($new.version)　·　$($new.branch)　·　HEAD $($h.Substring(0,[Math]::Min(10,$h.Length)))"
+        $h=[string]$new.head; $summary.Text="当前版本 v$($new.version)　·　下一版本 $($new.nextVersion)　·　$($new.branch)　·　HEAD $($h.Substring(0,[Math]::Min(10,$h.Length)))"
         $c=@($new.commits | Where-Object {$_}); $f=@($new.files | Where-Object {$_})
         $commits.Text=if($c.Count){$c -join $newline}else{'自上次发布后暂无新提交。'}
         $files.Text=if($f.Count){$f -join $newline}else{'工作区干净。'}

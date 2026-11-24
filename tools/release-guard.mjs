@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash,randomUUID} from 'node:crypto';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
+import {displayVersion, higherVersion, nextVersion, packageVersion} from './release-version.mjs';
 
 const exec = promisify(execFile), root = fileURLToPath(new URL('../',import.meta.url));
 const verb = process.argv[2] || 'status';
@@ -14,13 +15,6 @@ const actions = ['status','save','prepare','reopen','verify','publish'];
 const ensure = (v,message) => { if(!v) throw Error(message); };
 const sha = data => createHash('sha256').update(data).digest('hex');
 const fixed = ['package.json','client.js'];
-const versionRE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-function higher(next,current) {
-  if(typeof next!=='string' || typeof current!=='string' || next.length>35 || current.length>35 || !versionRE.test(next) || !versionRE.test(current)) return false;
-  const a=next.split('.').map(BigInt), b=current.split('.').map(BigInt);
-  for(let i=0;i<3;i++) if(a[i]!==b[i]) return a[i]>b[i];
-  return false;
-}
 const redact = s => String(s).replace(/(https?:\/\/)[^\s/@]+@/gi,'$1***@').replace(/(https?:\/\/[^\s?#]+)[?#][^\s]*/gi,'$1');
 async function run(binary,args,timeout=15000) {
   try {return (await exec(binary,args,{cwd:root,env:{...process.env,GIT_TERMINAL_PROMPT:'0'},windowsHide:true,timeout,maxBuffer:12*1024*1024,encoding:'utf8'})).stdout;}
@@ -74,22 +68,24 @@ async function status(){
   const head=await currentHead(), current=await branch();let last='';try{last=await git('describe','--tags','--abbrev=0','--match','v[0-9]*',head);}catch{};
   const log=await git('log','-50','--oneline',last?`${last}..${head}`:head);
   let remote='';try{remote=redact(await remoteUrl());}catch{remote='（未配置唯一的 origin）';}
-  return {revision:revision(),version:(await metadata()).version,head,branch:current,files:await porcelain(),commits:log?log.split('\n'):[],remote,
+  const raw=(await metadata()).version, version=displayVersion(raw);
+  ensure(version,'package.json 的版本格式无效；仅接受 A.B.C 或 A.B.C-rev.D');
+  return {revision:revision(),version,nextVersion:nextVersion(raw),head,branch:current,files:await porcelain(),commits:log?log.split('\n'):[],remote,
     draft:d?{version:d.version,notes:d.notes,base:d.base}:null,phase:d?.phase==='committing'?'pendingPush':(d?.phase || 'editing'),target:d?'v'+d.version:'',notesPath:d?notesFile(d.version):'',verifiedSha:d?.verified || ''};
 }
 async function save(input){
   await cleanMain();ensure(!d || d.phase==='editing','先返回编辑，再修改发布草稿');
   const {version,notes}=input, cur=(await metadata()).version;
-  ensure(higher(version,cur),`请输入高于 ${cur} 的正式版本（例如 0.2.1，不带 v）`);
+  ensure(higherVersion(version,cur),`请输入高于 ${displayVersion(cur) ?? cur} 的规范展示版本，不带 v（例如 ${nextVersion(cur) ?? '0.2.100.101'}）；四段版本不能改回三段`);
   ensure(typeof notes==='string' && notes.trim() && notes.length<=16000 && !notes.includes('\0'),'请填写发布说明，最多 16000 字');
   await noLocalTag('v'+version);d={phase:'editing',base:await currentHead(),from:cur,version,notes:notes.trim().replace(/\r\n?/g,'\n'),remoteHash:sha(await remoteUrl())};await persist();
 }
 async function prepare(){
   ensure(d?.phase==='editing','先保存草稿，再准备发布');await unchangedBase();await noLocalTag('v'+d.version);
   ensure(!(await porcelain()).length,'请先审查并手动提交功能改动（包括未跟踪文件），守卫不会 git add -A');
-  ensure(higher(d.version,(await metadata()).version),'目标版本不高于当前包');
-  const outputs={},before={},after={};
-  for(const f of fixed){const old=await fs.readFile(await safeFile(f),'utf8');before[f]=sha(old);outputs[f]=versioned(f,old,d.from,d.version);}
+  ensure(higherVersion(d.version,(await metadata()).version),'目标版本不高于当前包');
+  const outputs={},before={},after={},raw=packageVersion(d.version);
+  for(const f of fixed){const old=await fs.readFile(await safeFile(f),'utf8');before[f]=sha(old);outputs[f]=versioned(f,old,d.from,raw);}
   const nf=notesFile(d.version);ensure(!await exists(await safeFile(nf)),'同名发布说明已存在，不会覆盖');before[nf]=null;outputs[nf]=`# v${d.version}\n\n${d.notes}\n`;
   for(const [f,text] of Object.entries(outputs)) after[f]=sha(text);
   // Write the recovery journal first. reopen accepts either side of a partially completed prepare.
@@ -105,7 +101,7 @@ async function reopen(){
   const restore=[];for(const f of paths(d)){
     const p=await safeFile(f), text=(await exists(p))?await fs.readFile(p,'utf8'):null, digest=text===null?null:sha(text);
     if(digest===d.before[f])continue;ensure(digest===d.after[f],`${f} 被手动修改，拒绝覆盖。请先备份并核对该文件。`);
-    const old=fixed.includes(f)?versioned(f,text,d.version,d.from):null;ensure((old===null?null:sha(old))===d.before[f],'无法无损撤销版本号');restore.push([f,old]);
+    const old=fixed.includes(f)?versioned(f,text,packageVersion(d.version),d.from):null;ensure((old===null?null:sha(old))===d.before[f],'无法无损撤销版本号');restore.push([f,old]);
   }
   for(const [f,old] of restore){if(old===null)await fs.unlink(await safeFile(f));else await writeTracked(f,old);}
   d.phase='editing';delete d.verified;delete d.blobs;await persist();
@@ -139,7 +135,7 @@ async function remoteState(localRelease){
   try{await git('merge-base','--is-ancestor',refs.get(main),localRelease || d.base);}catch{throw Error('远端 main 不在已审核历史中。请先核对远端变更；不会强推。');}return false;
 }
 async function publish(input){
-  ensure(d && input.confirm===tagName(), '发布需要再次输入完整目标标签，例如 v0.2.1');
+  ensure(d && input.confirm===tagName(), `发布需要再次输入完整目标标签：${d ? tagName() : 'v0.2.100.100'}`);
   ensure(d.verified && ['verified','committing','pendingPush'].includes(d.phase),'当前草稿未通过校验，不能发布');await cleanMain();
   let head=await currentHead();
   if(d.phase==='verified' || (d.phase==='committing' && head===d.base)){
@@ -184,7 +180,7 @@ async function main(){
     }
     if(await exists(stateFile)){
       d=JSON.parse(await fs.readFile(stateFile,'utf8'));
-      ensure(d && ['editing','prepared','verified','committing','pendingPush'].includes(d.phase) && higher(d.version,d.from)
+      ensure(d && ['editing','prepared','verified','committing','pendingPush'].includes(d.phase) && higherVersion(d.version,d.from)
         && /^[0-9a-f]{40,64}$/.test(d.base) && /^[0-9a-f]{64}$/.test(d.remoteHash) && typeof d.notes==='string',
         '本地草稿记录不完整；请先备份并人工核对，未修改任何发布文件。');
     }

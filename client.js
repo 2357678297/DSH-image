@@ -11843,7 +11843,7 @@ h(
 			const updateInfoRef = useRef(null), buildEpoch = useRef(0);
 			const [build, setBuild] = useState({ version:PLUGIN_VERSION, sha:"" });
 			const shortSha = value => /^[0-9a-f]{7,64}$/i.test(value || "") ? value.slice(0,7).toLowerCase() : "";
-			const buildLabel = [build.version ? `v${build.version}` : t("update.pulledLabel"), build.sha].filter(Boolean).join(" · ");
+			const buildLabel = [build.version ? `v${build.version.replace(/^(\d+\.\d+\.\d+)-rev\.(\d+)$/, "$1.$2")}` : t("update.pulledLabel"), build.sha].filter(Boolean).join(" · ");
 			useEffect(() => {
 				let active = true; const initial = buildEpoch.current;
 				// 兼容尚未重载的 0.1.0 宿主：其 check 不识别 localOnly，remote="." 也只查本机仓库。

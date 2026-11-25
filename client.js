@@ -37,7 +37,7 @@ window.__ModuleLoader__.load({
 		const TAB_ID = "dsh-plugin-velapi-image-go";
 		const VIEW_KEY = "dsh.velapi-image-go.view";
 		// 与 package.json 的 version 对齐（界面「更新」入口显示它）
-		const PLUGIN_VERSION = "0.2.100-rev.107";
+		const PLUGIN_VERSION = "0.2.100-rev.108";
 		// 视频模型单独一套尺寸候选：和图片尺寸分开（用户要求「视频参数区分图片配置」）
 		const VIDEO_SIZES = ["1280x720", "1920x1080", "720x1280", "1080x1920"];
 		/* 视频参数按「比例 / 分辨率」分开选：像素 size 由两者组合（主流 API 里 OpenAI 用 size 像素、

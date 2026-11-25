@@ -261,6 +261,8 @@ function writeConvSetting(id, settings) {
 			"nav.notes": "信息管理",
 			"nav.providers": "供应商管理",
 			"nav.ps": "图片处理",
+			"ps.tool.transform": "自由变换",
+			"ps.transform.hint": "拖中心移动，拖边点或角点缩放。按住 Shift 等比缩放，松开提交，Esc 取消本次拖动。",
 			"ps.tool.select": "框选",
 			"ps.tool.crop": "裁切",
 			"ps.tool.split": "切割拆分",
@@ -845,6 +847,8 @@ function writeConvSetting(id, settings) {
 			"nav.providers": "Providers",
 			"nav.ps": "Image tools",
 			"ps.tool.select": "Marquee",
+			"ps.tool.transform": "Free transform",
+			"ps.transform.hint": "Drag the center to move, or an edge or corner to resize. Hold Shift for proportional scaling. Release to apply; Esc cancels the drag.",
 			"ps.tool.crop": "Crop",
 			"ps.tool.split": "Slice",
 			"ps.tool.rotate": "Rotate",
@@ -1896,6 +1900,10 @@ body[data-ds-dark-theme] .vig-toast.is-err{background:rgba(48,26,30,.96)}
 .vig-link{border:0;background:transparent;padding:0;color:var(--vig-accent);font:inherit;font-size:12px;cursor:pointer}
 .vig-link:hover{text-decoration:underline}
 .vig-ps-shot{position:relative;display:block;flex:none;margin:auto}
+.vig-ps-transform{position:absolute;pointer-events:none;outline:1px solid #169dff;box-sizing:border-box}
+.vig-root button.vig-ps-grip{position:absolute;width:15px;height:15px;padding:0;margin:0;min-width:0;border:0;background:transparent;display:grid;place-items:center;transform:translate(-50%,-50%);touch-action:none;pointer-events:auto}
+.vig-ps-grip::after{content:'';width:7px;height:7px;border:1px solid #145187;background:white}
+.vig-ps-grip[data-ps-handle="move"]::after{border-radius:50%;background:#169dff;box-shadow:0 0 0 1px white}
 .vig-ps-shot img{display:block;width:100%;height:100%;border-radius:var(--vig-r-tile);box-shadow:var(--vig-shadow-soft)}
 .vig-ps-marquee{position:absolute;border:1px dashed var(--vig-accent);background:rgba(11,11,12,.12);box-sizing:border-box}
 .vig-ps-marquee i{position:absolute;width:8px;height:8px;margin:-4px 0 0 -4px;background:#fff;border:1px solid var(--vig-accent)}
@@ -7090,6 +7098,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 
 		const PS_TOOLS = [
 			{ id: "select", icon: "marquee" },
+			{ id: "transform", icon: "scale" },
 			{ id: "crop", icon: "crop" },
 			{ id: "split", icon: "scissors" },
 			{ id: "rotate", icon: "rotate" },
@@ -7126,6 +7135,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		/** 默认键位：字母切工具（和 PS 肌肉记忆对齐），组合键做动作。 */
 		const PS_DEFAULT_BINDINGS = {
 			"tool.select": "v",
+			"tool.transform": "t",
 			"tool.crop": "c",
 			"tool.split": "s",
 			"tool.rotate": "r",
@@ -9060,6 +9070,40 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				limit > 0 && limit < items.length && h("button", {type:"button", className:"vig-link", onClick:() => setLimit(n => n + 8)}, t("ps.empty.more")));
 		}
 
+		// Committed bitmaps are immutable. Inspect alpha only when a target is explicitly selected.
+		const psInkCache = new WeakMap();
+		function psInkBounds(bitmap, revision) {
+			const cached=psInkCache.get(bitmap);
+			if(cached && cached.revision===revision) return cached.box;
+			const {width:w,height:h}=bitmap, ctx=bitmap.getContext('2d');
+			let left=w,right=-1,top=h,bottom=-1;
+			for(let row=0;row<h;row+=64){
+				const lines=Math.min(64,h-row), bytes=ctx.getImageData(0,row,w,lines).data;
+				for(let y=0;y<lines;y++){
+					let first=0,last=w-1, offset=y*w*4+3;
+					while(first<w && !bytes[offset+first*4]) first++;
+					if(first===w) continue;
+					while(last>first && !bytes[offset+last*4]) last--;
+					left=Math.min(left,first);right=Math.max(right,last);top=Math.min(top,row+y);bottom=row+y;
+				}
+			}
+			const box=right<left ? null : {x:left/w,y:top/h,w:(right-left+1)/w,h:(bottom-top+1)/h};
+			psInkCache.set(bitmap,{revision,box});return box;
+		}
+		function psGripBox(box, grip, dx, dy, keep) {
+			dx=Math.round(dx);dy=Math.round(dy);
+			if(grip==='move') return {...box,x:box.x+dx,y:box.y+dy};
+			const hx=grip.includes('w')?-1:grip.includes('e')?1:0, hy=grip.includes('n')?-1:grip.includes('s')?1:0;
+			let w=Math.max(1,box.w+dx*hx),h=Math.max(1,box.h+dy*hy);
+			if(keep){const factor=hx && (!hy || Math.abs(dx/box.w)>=Math.abs(dy/box.h))?w/box.w:h/box.h;w=Math.max(1,box.w*factor);h=Math.max(1,box.h*factor);}
+			return {x:box.x+(hx<0?1:hx===0?0.5:0)*(box.w-w),y:box.y+(hy<0?1:hy===0?0.5:0)*(box.h-h),w,h};
+		}
+		// Apply one affine map to the bitmap and mask, clipping at the existing document boundary.
+		function psGripBitmap(bitmap,from,to,docW,docH,outW,outH){
+			const result=psCanvas(outW,outH),kx=to.w/from.w,ky=to.h/from.h;
+			result.getContext('2d').drawImage(bitmap,(to.x-from.x*kx)*outW/docW,(to.y-from.y*ky)*outH/docH,kx*outW,ky*outH);
+			return result;
+		}
 		function PsView({ state, actions, initial, initialUrl, onConsumeInitialUrl }) {
 			// 提示统一走宿主注入的 actions.toast：PsView 里没有提示容器，
 			// 壳里那份 .vig-toasts 才是唯一的（以前这里直接调全局 toast，等于每条提示都报 ReferenceError）
@@ -9254,6 +9298,16 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			// 静态预览分支只有宽高没有 canvas，参数栏读尺寸、画布算显示尺寸都统一走这两个值
 			const stageW = stage ? stage.width : source?.width || 0;
 			const stageH = stage ? stage.height : source?.height || 0;
+			const gripRef=useRef(null), [gripDraft,setGripDraft]=useState(null);
+			const gripLayer=!layerSession && activeLayer ? activeLayer : null;
+			const gripBitmap=tool==='transform' && (gripLayer ? gripLayer.visible!==false && gripLayer.canvas : stage);
+			const gripBox=useMemo(()=>{
+				if(!gripBitmap) return null;
+				const b=psInkBounds(gripBitmap,gripLayer?.pixelRevision);
+				return b && {x:b.x*stageW,y:b.y*stageH,w:b.w*stageW,h:b.h*stageH};
+			},[gripBitmap,gripLayer?.pixelRevision,stageW,stageH]);
+			const gripShown=gripDraft?.to || gripBox;
+			useMeasureEffect(()=>{gripRef.current=null;setGripDraft(null);},[tool,stage,layers,layerSession,activeLayerId]);
 			const scale = zoom.mode === "fit" ? view.fit : zoom.mode === "actual" ? 1 : zoom.scale;
 			scaleRef.current = scale;
 
@@ -9287,8 +9341,14 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if (!canvas || !shown) return;
 				if (canvas.width !== renderW) canvas.width = renderW;
 				if (canvas.height !== renderH) canvas.height = renderH;
-				psPaintStack(canvas, shown, psCanvasLayers(layers, Boolean(layerSession)));
-			}, [stage, layers, layerSession, renderW, renderH]);
+				let base=shown,stack=psCanvasLayers(layers,Boolean(layerSession));
+				if(gripDraft && gripRef.current){
+					const preview=b=>psGripBitmap(b,gripDraft.from,gripDraft.to,stageW,stageH,renderW,renderH);
+					if(!gripLayer) base=preview(base);
+					else stack=stack.map(l=>l!==gripLayer?l:{...l,canvas:preview(l.canvas),mask:l.mask?.canvas?{...l.mask,canvas:preview(l.mask.canvas)}:l.mask});
+				}
+				psPaintStack(canvas,base,stack);
+			}, [stage,layers,layerSession,renderW,renderH,gripDraft,gripLayer]);
 
 			/** 选区 / 切割线画在第二层：拖动时只重画这一层。线宽按缩放比折算，视觉粗细恒定。 */
 			const needsOverlay = Boolean(selection || tool === "split" || ruler || (tool === "warp" && !warpLocked && ((warpSide === "dst" ? warp.dst : warp.src)?.length)));
@@ -9686,8 +9746,42 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				return { x, y };
 			};
 
+			const stopGrip = () => {gripRef.current=null;setGripDraft(null);};
+			const startGrip = (event,key) => {
+				if(event.button!==0 || !gripBox || gripRef.current) return;
+				event.preventDefault();event.stopPropagation();event.currentTarget.focus({preventScroll:true});
+				psCapturePointer(event.currentTarget,event.pointerId);
+				gripRef.current={id:event.pointerId,key,start:pointToImage(event),from:gripBox};
+			};
+			const trackGrip = (event,finish) => {
+				const g=gripRef.current;if(!g || g.id!==event.pointerId) return;
+				event.stopPropagation();const at=pointToImage(event),from=g.from,to=psGripBox(from,g.key,at.x-g.start.x,at.y-g.start.y,event.shiftKey);
+				if(!finish){setGripDraft({from,to});return;}
+				stopGrip();if(to.x===from.x && to.y===from.y && to.w===from.w && to.h===from.h) return;
+				const bake=b=>psGripBitmap(b,from,to,stageW,stageH,b.width,b.height);
+				const layer=gripLayer || layers.find(l=>l.id===layerSession?.id);
+				const pixels=bake(gripBitmap);
+				let mask=layer?.mask;
+				if(mask?.canvas){
+					const c=bake(mask.canvas),data=c.getContext('2d').getImageData(0,0,c.width,c.height).data,alpha=new Uint8ClampedArray(c.width*c.height);
+					for(let i=0;i<alpha.length;i++) alpha[i]=data[i*4+3];
+					mask={...mask,canvas:c,alpha};
+				}
+				invalidatePsReads();pushHistory(stage,t('ps.tool.transform'));
+				if(gripLayer || layerSession && layer?.mask) setLayers(list=>list.map(l=>l!==layer?l:{...l,...(gripLayer?{canvas:pixels}:{}),...(mask?{mask}:{})}));
+				if(!gripLayer) setSource({...source,canvas:pixels});
+			};
+			const activateInk = point => {
+				const b=!layerSession && activeLayer ? activeLayer.visible!==false && activeLayer.canvas : stage;
+				if(!b) return false;
+				const x=Math.floor(point.x*b.width/stageW),y=Math.floor(point.y*b.height/stageH);
+				if(x<0 || y<0 || x>=b.width || y>=b.height || !b.getContext('2d').getImageData(x,y,1,1).data[3]) return false;
+				setTool('transform');return true;
+			};
 			const onPointerDown = (event) => {
 				if (!stage || event.button !== 0) return;
+				if(tool==='warp' && warpLocked){activateInk(pointToImage(event));return;}
+				if(tool==='transform') setTool('select');
 				// 矫正 = PS 的标尺：按下去就开始拉线，不经过任何输入框 / 按钮
 				if (tool === "straighten") {
 					event.preventDefault();
@@ -9697,7 +9791,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					setDrag({ mode: "ruler" });
 					return;
 				}
-				if (tool !== "select") {
+				if (tool !== "select" && tool !== "transform") {
 					if (tool !== "warp" || warpLocked) return;
 					const at = pointToImage(event);
 					event.preventDefault();
@@ -9732,7 +9826,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					return;
 				}
 				setSelection(psClampRect({ x: point.x, y: point.y, w: 1, h: 1 }, stage.width, stage.height));
-				setDrag({ mode: "new", start: point, origin: selection });
+				setDrag({ mode: "new", start: point, clientX:event.clientX,clientY:event.clientY,origin: selection });
 			};
 
 			const onPointerMove = (event) => {
@@ -9761,7 +9855,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				} else if (drag.mode === "resize") setSelection(psResizeRect(drag.origin ?? selection, drag.handle, point, stage.width, stage.height));
 			};
 
-			const onPointerUp = () => {
+			const onPointerUp = event => {
+				if(drag?.mode==="new" && !drag.origin && Math.hypot(event.clientX-drag.clientX,event.clientY-drag.clientY)<3) activateInk(pointToImage(event));
 				if (drag?.mode === "ruler") {
 					setDrag(null);
 					const angle = ruler ? psRulerAngle(ruler.from, ruler.to) : null;
@@ -10040,6 +10135,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const psOwnerRef = useRef(null);
 			const keyRunnerRef = useRef(null);
 			keyRunnerRef.current = (event) => {
+				if(gripRef.current && event.key==='Escape'){event.preventDefault();stopGrip();return;}
 				const owner = psOwnerRef.current;
 				const target = event.target?.nodeType === 1 ? event.target : document.activeElement;
 				if (!owner?.getClientRects().length || ((event.target !== window || target !== document.body) && target && !owner.contains(target)) || event.isComposing) return;
@@ -10359,6 +10455,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							)
 						);
 					}
+					case "transform": return h("p", {className:"vig-muted"},t("ps.transform.hint"));
 					case "select":
 						return h(
 							"div",
@@ -10788,6 +10885,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									"button",
 									{
 										key: item.id,
+										"data-ps-tool":item.id,
 										className: `vig-ps-tool${tool === item.id ? " is-on" : ""}`,
 										onClick: () => setTool(item.id),
 										title: `${t(`ps.tool.${item.id}`)}${psComboLabel(bindings[`tool.${item.id}`]) ? ` · ${psComboLabel(bindings[`tool.${item.id}`])}` : ""}`,
@@ -10941,7 +11039,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 														className: "vig-ps-overlay",
 														style: { width: canvasW, height: canvasH },
 														"aria-hidden": "true"
-													})
+													}),
+													gripShown && h("div",{className:"vig-ps-transform",style:{left:gripShown.x/stageW*canvasW,top:gripShown.y/stageH*canvasH,width:gripShown.w/stageW*canvasW,height:gripShown.h/stageH*canvasH}},
+														[...psHandles({x:0,y:0,w:100,h:100}),{id:"move",x:50,y:50}].map(({id,x,y})=>h("button",{key:id,type:"button",className:"vig-ps-grip","data-ps-handle":id,"aria-label":t("ps.tool.transform")+" · "+id,style:{left:x+"%",top:y+"%",cursor:id==="move"?"move":id+"-resize"},onPointerDown:e=>startGrip(e,id),onPointerMove:e=>trackGrip(e,false),onPointerUp:e=>trackGrip(e,true),onLostPointerCapture:stopGrip,onPointerCancel:stopGrip})))
 												)
 									)
 								: h(
@@ -10990,7 +11090,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								{
 									className: `vig-ps-chip is-base${activeLayerId ? "" : " is-on"}`,
 									title: t("ps.layer.baseHint"),
-									onClick: () => setActiveLayerId("")
+									onClick: () => {setActiveLayerId("");if(!selection && (tool==="select" || warpLocked)) setTool("transform");}
 								},
 								layerThumbs.base ? h("img", { className: "vig-ps-chip-thumb", src: layerThumbs.base, alt: "" }) : h("span", { className: "vig-ps-chip-thumb is-empty" }),
 								h("span", { className: "vig-ps-chip-name" }, t("ps.layer.base"))
@@ -11015,7 +11115,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											setDragLayerId("");
 											if (from && from !== layer.id) changeLayers(t("ps.layers"), list => psMoveLayerTo(list, from, layer.id));
 										},
-										onClick: () => setActiveLayerId(layer.id),
+										onClick: () => {setActiveLayerId(layer.id);if(!selection && (tool==="select" || warpLocked)) setTool("transform");},
 										onDoubleClick: event => { if (!layerControlsLocked && psLayerRowActivate(event)) void enterLayer(layer); }
 									},
 									layerThumbs.items[index]

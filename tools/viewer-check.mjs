@@ -11,6 +11,7 @@
 
 import { auditPSReads } from "../test/ps-load-audit.test.mjs";
 import { auditPSLayers } from "../test/ps-layer-audit.test.mjs";
+import { auditPsTransform } from "../test/ps-transform-ui.test.mjs";
 import { auditPsPixels } from "../test/ps-pixels-audit.test.mjs";
 import { auditGridUI, runGridPage } from "../test/grid-ui.test.mjs";
 import { auditGridPixels } from "../test/grid-pixels.test.mjs";
@@ -422,6 +423,10 @@ if (new URLSearchParams(location.search).get("audit")==="psreads") {
 }
 if (new URLSearchParams(location.search).get("audit")==="pslayers") {
  await (${auditPSLayers.toString()})({host,check,wait,flushSync,ui,React,createRoot});
+ const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
+if (new URLSearchParams(location.search).get("audit")==="pstransform") {
+ await (${auditPsTransform.toString()})({host,check,wait,flushSync,ui,React,root});
  const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
 }
 if (new URLSearchParams(location.search).get("audit")==="pspixels") {

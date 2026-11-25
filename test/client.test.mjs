@@ -604,8 +604,8 @@ const PRESETS = [
   const text = (key) => ui.text(key);
   const ids = ui.PS_TOOLS.map((item) => item.id);
   check(
-    "工具箱动作齐全（框选 裁切 切割 旋转 矫正 透视矫正 画布 羽化 缩放 翻转 调整）",
-    ids.length === 11 && ["select", "crop", "split", "rotate", "straighten", "warp", "canvasSize", "feather", "resize", "flip", "adjust"].every((id) => ids.includes(id)),
+    "工具箱动作齐全（框选 自由变换 裁切 切割 旋转 矫正 透视矫正 画布 羽化 缩放 翻转 调整）",
+    ids.length === 12 && ["select", "transform", "crop", "split", "rotate", "straighten", "warp", "canvasSize", "feather", "resize", "flip", "adjust"].every((id) => ids.includes(id)),
     ids.join(" ")
   );
   check("每个动作都有图标和中英文案", ui.PS_TOOLS.every((item) => item.icon && text(`ps.tool.${item.id}`) && text(`ps.tool.${item.id}`) !== `ps.tool.${item.id}`));
@@ -653,8 +653,8 @@ const PRESETS = [
     })
   );
   check(
-    "左工具条十一个动作、右参数栏都在",
-    (shot.match(/class="vig-ps-tool[" ]/g) || []).length === 11 && shot.includes("vig-ps-params") && shot.includes("vig-ps-stage"),
+    "左工具条十二个动作、右参数栏都在",
+    (shot.match(/class="vig-ps-tool[" ]/g) || []).length === 12 && shot.includes("vig-ps-params") && shot.includes("vig-ps-stage"),
     `${(shot.match(/class="vig-ps-tool[" ]/g) || []).length} 个动作 / params:${shot.includes("vig-ps-params")} / stage:${shot.includes("vig-ps-stage")}`
   );
   check("参数栏显示当前动作与选区读数", shot.includes(">框选<") && shot.includes("40, 52 · 150 × 112"));
@@ -2439,7 +2439,7 @@ check(
       warpShot.includes("仅确认后生效") &&
       !warpShot.includes(">应用<") &&
       !/vig-ps-live/.test(warpShot) &&
-      /class="vig-ps-tool[^"]*" title="透视矫正/.test(warpShot),
+      /<button[^>]*data-ps-tool="warp"[^>]*title="透视矫正/.test(warpShot),
     (warpShot.match(/class="vig-ps-readout"[^>]*>[^<]*</) || [])[0]
   );
   check(

@@ -21,6 +21,7 @@ import { auditChatFlow } from "../test/chat-flow.test.mjs";
 import { auditGallery } from "../test/library-audit.test.mjs";
 import { auditGeminiUI } from "../test/gemini-ui.test.mjs";
 import { auditImageSizeUI } from "../test/image-size-ui.test.mjs";
+import { auditAttachmentUI } from "../test/attachment-ui.test.mjs";
 import { auditStorageMove } from "../test/storage-move-ui.test.mjs";
 import { auditImageResults } from "../test/image-results.test.mjs";
 import { auditWorkbench } from "./workbench-audit.mjs";
@@ -178,6 +179,12 @@ const posts = [];
 let geminiAuditKind = "image";
 const geminiFixture = new URLSearchParams(location.search).get("audit") === "gemini";
 const imageSizeFixture = new URLSearchParams(location.search).get("audit") === "imagesize";
+const attachmentFixture = new URLSearchParams(location.search).get("audit") === "attachment";
+if (attachmentFixture) {
+ config.activeProviderId="pv_gpt"; config.defaultEndpoint="images_edits";
+ convJobs.conv_default.push({...JOB,id:"job_attachment_url",count:1,prompt:"Attachment URL fixture",referenceUrls:["/api/velapi-image-go/asset/grid-qa-source.png"]});
+ convJobs.conv_default.push({...JOB,id:"job_attachment_duplicate",count:1,prompt:"Attachment duplicate URL fixture",referenceUrls:["/api/velapi-image-go/asset/grid-qa-source.png","/api/velapi-image-go/asset/grid-qa-source.png"]});
+}
 if (imageSizeFixture) {
  config.activeProviderId="pv_gpt"; config.defaultEndpoint="images_generations";
  providers[0].models.push("gpt-image-2.5-c"); providers[0].modelMeta["gpt-image-2.5-c"]={kind:"image"};
@@ -424,6 +431,10 @@ if (imageResultsFixture) {
 	const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
 }
 
+if (attachmentFixture) {
+ await (${auditAttachmentUI.toString()})({host,check,wait,waitFor,flushSync,posts});
+ const pre=document.createElement('pre');pre.id='vig-viewer-out';pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
 if (imageSizeFixture) {
  await (${auditImageSizeUI.toString()})({host,check,wait,waitFor,flushSync,posts});
  const pre=document.createElement('pre');pre.id='vig-viewer-out';pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
@@ -1767,7 +1778,7 @@ const args = ["--headless=new", "--disable-gpu", "--no-sandbox", "--virtual-time
 if (shotPath) args.push("--hide-scrollbars", "--window-size=1040,900", `--screenshot=${shotPath}`);
 if (!shotPath && /ps=pick|audit=/.test(query)) args.push("--window-size=1440,1000");
 args.push("--dump-dom", url);
-const dom = ["audit=grid","audit=psoverflow","audit=gemini","audit=imagesize"].includes(query) ? await runGridPage(page, CHROME, query) : execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+const dom = ["audit=grid","audit=psoverflow","audit=gemini","audit=imagesize","audit=attachment"].includes(query) ? await runGridPage(page, CHROME, query) : execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 
 const match = dom.match(/<pre id="vig-viewer-out">([\s\S]*?)<\/pre>/);
 if (!match) {

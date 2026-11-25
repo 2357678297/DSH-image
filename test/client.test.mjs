@@ -3005,6 +3005,21 @@ check(
       /setPsImage\(\{\s*name:\s*image\.name/.test(SOURCE) && /current === request \? null : current/.test(SOURCE)
   );
 
+  const duplicateData = {name:"same.png",dataUrl:"data:image/png;base64,AAAA",url:"/api/velapi-image-go/upload/same.png"};
+  const firstRef = w.attachmentNewReference(duplicateData), secondRef = w.attachmentNewReference(duplicateData);
+  check("附件身份：同名同 URL 仍有不同标识且原对象不被修改",!!firstRef.refId && firstRef.refId!==secondRef.refId && firstRef.sourceRevision===0 && secondRef.sourceRevision===0 && !Object.hasOwn(duplicateData,"refId"));
+  const normalizedRefs = w.attachmentNormalizeReferences([firstRef,{...firstRef},{name:"third.png",sourceRevision:-1},null]);
+  check("附件身份归一化：去掉空项、重复ID换新、有效项保留",normalizedRefs.length===3 && normalizedRefs[0]===firstRef && new Set(normalizedRefs.map(ref=>ref.refId)).size===3 && normalizedRefs.every(ref=>ref.sourceRevision===0));
+  check("附件匹配使用身份及像素版本，不依赖对象或URL",w.attachmentMatches({...firstRef,url:"/api/velapi-image-go/upload/new.png"},firstRef) && !w.attachmentMatches({...firstRef,sourceRevision:1},firstRef) && !w.attachmentMatches(secondRef,firstRef) && !w.attachmentMatches(firstRef,{}));
+  const preservedOverride = {prompt:"keep prompt",model:"model",providerId:"provider",size:"auto",n:1,quality:"HIGH"};
+  const clearedOverride = w.attachmentClearOverrides({...preservedOverride,image:"old",images:["old"],referenceUrl:"old",referenceUrls:["old"],mask:"old",maskUrl:"old",maskDataUrl:"old"});
+  check("编辑附件后清旧图与蒙版 JSON 覆盖，保留其它设置",JSON.stringify(clearedOverride)===JSON.stringify(preservedOverride) && w.attachmentClearOverrides({images:["old"],mask:"old"})===null && w.attachmentClearOverrides(null)===null);
+  check("裁切范围按原像素夹紧且至少1像素",JSON.stringify(w.attachmentRect({x:-5,y:70,width:200,height:0},96,80))==='{"x":0,"y":70,"width":96,"height":1}' && JSON.stringify(w.attachmentRect({x:99,y:99,width:99,height:99},96,80))==='{"x":95,"y":79,"width":1,"height":1}');
+  const coordinateCanvas = {width:400,height:300,getBoundingClientRect:()=>({left:100,top:50,width:200,height:150})};
+  check("附件画布由CSS实际尺寸映射到原图坐标",JSON.stringify(w.attachmentPoint({clientX:175,clientY:95},coordinateCanvas))==='{"x":150,"y":90}' && JSON.stringify(w.attachmentPoint({clientX:0,clientY:999},coordinateCanvas))==='{"x":0,"y":300}' && w.attachmentPoint({clientX:0,clientY:0},{getBoundingClientRect:()=>({width:0,height:0})})===null);
+  check("附件编辑只载图片dataURL或本站地址",w.attachmentSource({dataUrl:"data:image/png;base64,AAAA"})==="data:image/png;base64,AAAA" && w.attachmentSource({url:"/api/velapi-image-go/upload/local.png"}).endsWith("/api/velapi-image-go/upload/local.png") && !w.attachmentSource({url:"https://outside.invalid/private.png"}) && !w.attachmentSource({dataUrl:"data:text/html;base64,AAAA"}) && !w.attachmentSource({url:"blob:http://127.0.0.1:19387/a"}));
+  check("附件编辑设有画布和历史资源上限",w.ATTACHMENT_LIMITS.side===8192 && w.ATTACHMENT_LIMITS.pixels===24000000 && w.ATTACHMENT_LIMITS.operations===80 && w.ATTACHMENT_LIMITS.points===32000 && w.ATTACHMENT_LIMITS.strokePoints===8192);
+
   const makeRequest = (references = [], settings = {}) => w.buildGenerationRequest({
     prompt: "test", config: { defaultModel: "m", defaultSize: "8192x3456", defaultCount: 1 }, providers: [], conversationId: "A", references, isVideoEndpoint: false, sizeRaw: true, ...settings
   });
@@ -3041,7 +3056,7 @@ check(
   check(
     "发送前把没有本站 URL 的参考图补传留档（两张变一张的根因）",
     /发送前把「还没有本站 URL」的参考图补一份留档/.test(SOURCE) &&
-      /if \(!item\.url && typeof item\.dataUrl === "string" && item\.dataUrl\.startsWith\("data:"\)\) \{[\s\S]{0,220}await uploadRefData\(item\.name, item\.dataUrl\)/.test(SOURCE) &&
+      /if \(!item\.url && typeof item\.dataUrl === "string" && item\.dataUrl\.startsWith\("data:"\)\) \{[\s\S]{0,220}await uploadReference\(item,requestBody\.conversationId,referenceEpoch\)/.test(SOURCE) &&
       /const urls = readyRefs.map\(\(ref\) => ref.url\).filter\(Boolean\)/.test(SOURCE)
   );
   check(
@@ -3108,7 +3123,8 @@ check(
   check(
     "参考图上传拿回本站 URL，并随生成请求带出去（任务里只存 URL，不存 base64）",
     /const uploadRefData = async \(name, dataUrl\) => \{[\s\S]{0,300}call\("\/upload", \{ method: "POST", body: \{ name: name \|\| "reference\.png", data: dataUrl \} \}\)/.test(SOURCE) &&
-      /refs\.map\(\(item\) => item === entry \? \{ \.\.\.item, url \} : item\)/.test(SOURCE) &&
+      /current\.map\(item=>attachmentMatches\(item,target\) \? \{\.\.\.item,url\}:item\)/.test(SOURCE) &&
+      /if \(!referenceOwned\(target\)\) return url;/.test(SOURCE) &&
       refBody.referenceUrl === refBody.referenceUrls[0] &&
       /referenceUrl: job\.referenceUrl \|\| ""/.test(SOURCE)
   );
@@ -3385,7 +3401,8 @@ check(
   check(
     "发送串行化：对话端口与生图端口不并发（sendChain 队列 + clientSeq 排序）",
     /const sendChainRef = useRef\(Promise\.resolve\(\)\)/.test(SOURCE) &&
-      /const runGenerateFlow = async \(requestBody, override, seq, inputText\) => \{/.test(SOURCE) &&
+      /const runGenerateFlow = async \(requestBody, override, seq, inputText, referenceSnapshot, referenceEpoch\) => \{/.test(SOURCE) &&
+      /const referenceSnapshot = refsNow\.current\.slice\(\), referenceEpoch = inputEpoch\.current;/.test(SOURCE) &&
       /pendingSendsRef\.current >= 6/.test(SOURCE) &&
       /clientSeq: seq/.test(SOURCE) &&
       /Number\.isFinite\(job\.clientSeq\)/.test(SOURCE)
@@ -3567,7 +3584,7 @@ check(
         card.includes('src="data:image/png;base64,AAAA"') &&
         // 卡上没有任何可见文字：名字只在 title 里
         visibleText === "" &&
-        card.includes('title="粘贴的图片-2026-10-18T16-47-17.png')
+        card.includes('title="查看 / 编辑参考图 1：粘贴的图片-2026-10-18T16-47-17.png')
       );
     })(),
     (() => {
@@ -3575,6 +3592,18 @@ check(
       const card = refChat.slice(refChat.indexOf(">", start) + 1, refChat.indexOf("</div>", start));
       return `可见文字=${JSON.stringify(card.replace(/<[^>]*>/g, "").trim())} 片段=${card.slice(0, 120)}`;
     })()
+  );
+
+  check(
+    "附件预览与删除是独立按钮，可按附件序号打开并具备可访问名称",
+    (() => {
+      const start = refChat.indexOf('class="vig-ref"');
+      const card = refChat.slice(start, refChat.indexOf("</div>", start));
+      const open = card.match(/<button\b[^>]*data-ref-open="0"[^>]*>/)?.[0] || "";
+      const buttons = card.match(/<button\b/g) || [];
+      return start >= 0 && buttons.length === 2 && open.includes('aria-label="') && open.includes('type="button"') && /<\/button>\s*<button\b[^>]*class="vig-ref-x"/.test(card);
+    })(),
+    refChat.slice(refChat.indexOf('class="vig-ref"'), refChat.indexOf('class="vig-ref"') + 900)
   );
 
   const toasts = renderToStaticMarkup(React.createElement(w.ToastHost, { items: [{ id: "a", message: "已粘贴为参考图" }, { id: "b", message: "上游请求失败", tone: "err" }] }));

@@ -29,6 +29,7 @@
     "audit:results": "node tools/viewer-check.mjs --query audit=results",
     "audit:gemini": "node tools/viewer-check.mjs --query audit=gemini",
     "audit:imagesize": "node tools/viewer-check.mjs --query audit=imagesize",
+    "audit:attachment": "node tools/viewer-check.mjs --query audit=attachment",
     "audit:storage": "node tools/viewer-check.mjs --hold providers --query \"hold=providers&move=1\"",
     "audit:chat": "node tools/viewer-check.mjs --query audit=chatflow && node tools/viewer-check.mjs --query audit=chatscroll && node tools/viewer-check.mjs --query audit=convnav",
     "test:grid-desktop": "node test/grid-desktop.test.mjs",

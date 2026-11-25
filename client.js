@@ -551,6 +551,38 @@ function writeConvSetting(id, settings) {
 			"panel.image.hint": "支持图片上传，或从图库选择",
 			"panel.upload": "上传图片（也可以直接 Ctrl+V 粘贴）",
 			"chat.pasted": "已粘贴为参考图",
+			"attachment.open": "查看 / 编辑参考图 {index}：{name}",
+			"attachment.title": "参考图预览与编辑",
+			"attachment.view": "查看",
+			"attachment.draw": "涂鸦",
+			"attachment.crop": "裁切",
+			"attachment.color": "画笔颜色",
+			"attachment.width": "画笔粗细（原图像素）",
+			"attachment.applyCrop": "确认裁切",
+			"attachment.reset": "还原原图",
+			"attachment.cancel": "取消",
+			"attachment.close": "关闭附件编辑",
+			"attachment.save": "保存为参考图",
+			"attachment.saving": "正在保存…",
+			"attachment.retry": "重新加载",
+			"attachment.hint": "仅修改当前参考附件；原图文件和图库不变，不会自动生成。",
+			"attachment.viewHint": "当前为查看模式；选择涂鸦或裁切后再拖动。",
+			"attachment.drawHint": "拖动画笔涂鸦；Esc 或中断触摸取消当前一笔。",
+			"attachment.cropHint": "拖出矩形，或填写原像素坐标；确认裁切后才生效。",
+			"attachment.canvas": "参考图画布",
+			"attachment.x": "左侧 X",
+			"attachment.y": "顶部 Y",
+			"attachment.w": "宽度",
+			"attachment.h": "高度",
+			"attachment.loadError": "图片加载失败，请重新加载或取消后重试。",
+			"attachment.localOnly": "仅支持图片 dataURL 或本站图片地址。",
+			"attachment.tooLarge": "当前仅查看：图片超过编辑上限（8192 边长 / 2400 万像素），请先缩小后再编辑。",
+			"attachment.historyLimit": "已达编辑上限；请保存后重新打开，或还原原图。",
+			"attachment.cropFirst": "请先确认裁切，或切回查看放弃裁切框。",
+			"attachment.exportError": "无法导出 PNG，请重新加载后再试；附件尚未修改。",
+			"attachment.stale": "附件或会话已改变，本次编辑未写入。",
+			"attachment.saved": "新图已替换当前参考附件。",
+			"attachment.uploadFailed": "新图仍留当前草稿，发送时会重传；刷新会丢失这张未留档图。",
 			"chat.refClear": "移除参考图",
 			"chat.refLimit": "参考图最多挂 4 张，先移掉一张",
 			"chat.modelInvalid": "当前模型不能生图（是对话/音频模型，或不在任何供应商目录里），先选一个图片模型",
@@ -1067,6 +1099,38 @@ function writeConvSetting(id, settings) {
 			"panel.image.hint": "Upload an image, or pick one from the library",
 			"panel.upload": "Upload image (or press Ctrl+V)",
 			"chat.pasted": "Pasted as the reference image",
+			"attachment.open": "View / edit reference {index}: {name}",
+			"attachment.title": "Reference preview and editor",
+			"attachment.view": "View",
+			"attachment.draw": "Draw",
+			"attachment.crop": "Crop",
+			"attachment.color": "Brush color",
+			"attachment.width": "Brush width (source pixels)",
+			"attachment.applyCrop": "Apply crop",
+			"attachment.reset": "Restore original",
+			"attachment.cancel": "Cancel",
+			"attachment.close": "Close attachment editor",
+			"attachment.save": "Save reference",
+			"attachment.saving": "Saving…",
+			"attachment.retry": "Reload image",
+			"attachment.hint": "Only this reference changes; original files and library stay untouched. Never generates automatically.",
+			"attachment.viewHint": "Preview mode. Choose Draw or Crop before dragging.",
+			"attachment.drawHint": "Drag to draw. Escape or interrupted touch cancels the current stroke.",
+			"attachment.cropHint": "Drag a rectangle or enter source-pixel coordinates, then apply the crop.",
+			"attachment.canvas": "Reference image canvas",
+			"attachment.x": "Left X",
+			"attachment.y": "Top Y",
+			"attachment.w": "Width",
+			"attachment.h": "Height",
+			"attachment.loadError": "Image failed to load. Reload or cancel and retry.",
+			"attachment.localOnly": "Only image data URLs or same-site image URLs are supported.",
+			"attachment.tooLarge": "View only: image exceeds the editing limit (8192 per side / 24 megapixels). Resize before editing.",
+			"attachment.historyLimit": "Editing limit reached. Save and reopen, or restore the original.",
+			"attachment.cropFirst": "Apply the crop first, or switch to View to discard the selection.",
+			"attachment.exportError": "PNG export failed. Reload and retry; the reference is unchanged.",
+			"attachment.stale": "Reference or conversation changed. This edit was not applied.",
+			"attachment.saved": "New image replaced this reference.",
+			"attachment.uploadFailed": "The new image remains in this draft and will upload on send. Refreshing loses this unarchived image.",
 			"chat.refClear": "Remove reference",
 			"chat.refLimit": "Up to 4 reference images — remove one first",
 			"chat.modelInvalid": "Current model cannot generate images (chat/audio model or not in any provider catalog) — pick an image model first",
@@ -1557,6 +1621,34 @@ body[data-ds-dark-theme] .vig-mark{background:var(--vig-accent);color:var(--vig-
 	display:inline-flex;align-items:center;justify-content:center;
 	background:rgba(20,26,38,.62);color:#fff;opacity:.85}
 .vig-ref-x:hover{opacity:1;background:var(--vig-danger)}
+.vig-ref-open{display:block;width:100%;height:100%;padding:0;border:0;border-radius:inherit;background:transparent;cursor:zoom-in;touch-action:manipulation}
+.vig-ref-open:focus-visible{outline:2px solid var(--vig-accent);outline-offset:-3px}
+.vig-ref:has(.vig-ref-open){overflow:visible}
+.vig-ref-open img{border-radius:inherit}
+.vig-ref:has(.vig-ref-open) .vig-ref-x{width:24px;height:24px;top:-4px;right:-4px;z-index:1}
+/* 附件编辑只保留原像素画布与有界矢量日志；棋盘背景是 CSS，不烘进透明 PNG。 */
+.vig-modal.vig-attachment-editor{width:min(960px,100%);height:min(780px,100%);padding:12px;gap:8px;overflow:hidden}
+.vig-attachment-head,.vig-attachment-tools,.vig-attachment-footer{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;flex:none}
+.vig-attachment-head .vig-modal-title{flex:1;min-width:0}
+.vig-attachment-head .vig-icon-btn{width:32px;height:32px;flex:none}
+.vig-attachment-tools .vig-btn,.vig-attachment-footer .vig-btn{min-height:32px;height:auto;white-space:normal;line-height:1.3;padding:7px 10px}
+.vig-attachment-tools .is-active{border-color:var(--vig-accent);color:var(--vig-accent);background:var(--vig-accent-soft,var(--vig-surface-soft))}
+.vig-attachment-content{display:flex;flex-direction:column;gap:8px;min-height:0;min-width:0;flex:1 1 0!important;overflow:auto;overscroll-behavior:contain}
+.vig-attachment-options{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.vig-attachment-options label{display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap}
+.vig-attachment-options input[type=color]{width:40px;height:32px;padding:2px;border:1px solid var(--vig-line);border-radius:6px;background:var(--vig-surface)}
+.vig-attachment-options input[type=range]{width:120px;max-width:100%}
+.vig-attachment-crop-inputs{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;min-width:0}
+.vig-attachment-crop-inputs label{display:flex;flex-direction:column;gap:4px;font-size:12px;flex:1 1 60px;min-width:0}
+.vig-attachment-crop-inputs input{width:100%;box-sizing:border-box;height:32px;padding:4px 6px;border:1px solid var(--vig-line);border-radius:6px;background:var(--vig-surface);color:var(--vig-text);font:inherit}
+.vig-attachment-stage{position:relative;display:flex;align-items:center;justify-content:center;min-width:0;min-height:100px;flex:1 0 160px;overflow:hidden;border:1px solid var(--vig-line);border-radius:8px;background:var(--vig-surface-soft)}
+.vig-attachment-stage canvas{display:block;max-width:100%;max-height:100%;position:absolute;user-select:none;touch-action:none;background-color:#fff;background-image:linear-gradient(45deg,#ddd 25%,transparent 25%),linear-gradient(-45deg,#ddd 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#ddd 75%),linear-gradient(-45deg,transparent 75%,#ddd 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0}
+.vig-attachment-crop-rect{position:absolute;pointer-events:none;box-sizing:border-box;border:2px solid var(--vig-accent);box-shadow:0 0 0 9999px rgba(0,0,0,.35)}
+.vig-attachment-footer{justify-content:flex-end}
+.vig-attachment-footer .vig-muted{flex:1 1 140px;font-size:11px;line-height:1.4}
+.vig-attachment-editor .vig-error{margin:0;overflow-wrap:anywhere;font-size:12px}
+.vig-attachment-editor :is(button,input):focus-visible{outline:2px solid var(--vig-accent);outline-offset:2px}
+.vig-dialog-frame:has(.vig-attachment-editor) .vig-toast{pointer-events:none}
 
 /* 右栏检查器 */
 .vig-side{width:268px;flex:none;display:flex;flex-direction:column;gap:var(--vig-gap);min-height:0;overflow:auto}
@@ -3193,6 +3285,213 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			}, children, feedback);
 		}
 
+		// 矢量操作日志而非多张全尺寸 ImageData：仅原图、当前 canvas 和裁切时的临时画布。
+		const ATTACHMENT_LIMITS = { side:8192, pixels:24000000, operations:80, points:32000, strokePoints:8192 };
+		function attachmentSource(entry) {
+			const source = String(entry?.dataUrl || entry?.url || "");
+			if (/^data:image\/[a-z0-9.+-]+[;,]/i.test(source)) return source;
+			try {
+				const base = new URL(window.location.href || window.location.origin);
+				const url = new URL(source, base);
+				if (source && url.protocol === base.protocol && url.host === base.host && !url.username && !url.password) return url.href;
+			} catch { /* 不接受远端、blob 或不可解析地址。 */ }
+			return "";
+		}
+		function attachmentRect(rect, width, height) {
+			const bounded = (value, lo, hi) => Math.max(lo, Math.min(hi, Math.round(Number(value) || 0)));
+			const x = bounded(rect?.x, 0, Math.max(0, width - 1)), y = bounded(rect?.y, 0, Math.max(0, height - 1));
+			return {x, y, width:bounded(rect?.width, 1, width - x), height:bounded(rect?.height, 1, height - y)};
+		}
+		function attachmentPoint(event, canvas) {
+			const box = canvas?.getBoundingClientRect();
+			if (!box?.width || !box.height) return null;
+			return { x:Math.max(0, Math.min(canvas.width, (event.clientX - box.left) * canvas.width / box.width)),
+				y:Math.max(0, Math.min(canvas.height, (event.clientY - box.top) * canvas.height / box.height)) };
+		}
+		function attachmentStroke(ctx, stroke) {
+			const points = stroke.points;
+			if (!points.length) return;
+			ctx.save(); ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+			ctx.strokeStyle = ctx.fillStyle = stroke.color; ctx.lineWidth = stroke.width; ctx.lineCap = ctx.lineJoin = "round";
+			ctx.beginPath();
+			if (points.length === 1) { ctx.arc(points[0].x, points[0].y, stroke.width / 2, 0, Math.PI * 2); ctx.fill(); }
+			else { ctx.moveTo(points[0].x, points[0].y); for (const p of points.slice(1)) ctx.lineTo(p.x, p.y); ctx.stroke(); }
+			ctx.restore();
+		}
+		function AttachmentEditor({ target, onClose, onSave }) {
+			const canvasRef = useRef(null), stageRef = useRef(null), previewRef = useRef(null), imageRef = useRef(null), gesture = useRef(null);
+			const history = useRef({ops:[], cursor:0}), alive = useRef(true), saveLock = useRef(false);
+			const [, setRevision] = useState(0), [tool, setTool] = useState("view");
+			const [color, setColor] = useState("#ef4444"), [width, setWidth] = useState(12);
+			const [crop, setCrop] = useState(null), cropNow = useRef(null);
+			const [size, setSize] = useState({width:0,height:0}), [fit, setFit] = useState({left:0,top:0,width:0,height:0});
+			const [loading, setLoading] = useState(true), [previewOnly, setPreviewOnly] = useState(false), [error, setError] = useState(""), [loadAttempt, setLoadAttempt] = useState(0), [busy, setBusy] = useState(false);
+			const updateCrop = value => { cropNow.current = value; setCrop(value); };
+			const changed = () => setRevision(value => value + 1);
+			const replay = (ops = history.current.ops, cursor = history.current.cursor) => {
+				const canvas = canvasRef.current, original = imageRef.current;
+				if (!canvas || !original) return;
+				const reset = () => { canvas.width = original.naturalWidth; canvas.height = original.naturalHeight; canvas.getContext("2d").drawImage(original,0,0); };
+				reset();
+				for (const op of ops.slice(0,cursor)) {
+					if (op.kind === "draw") attachmentStroke(canvas.getContext("2d"),op);
+					else if (op.kind === "reset") reset();
+					else if (op.kind === "crop") {
+						const temp = document.createElement("canvas"), rect = attachmentRect(op.rect,canvas.width,canvas.height);
+						temp.width = rect.width; temp.height = rect.height;
+						temp.getContext("2d").drawImage(canvas,rect.x,rect.y,rect.width,rect.height,0,0,rect.width,rect.height);
+						canvas.width = rect.width; canvas.height = rect.height; canvas.getContext("2d").drawImage(temp,0,0);
+						temp.width = temp.height = 1;
+					}
+				}
+				setSize({width:canvas.width,height:canvas.height});
+			};
+			const cancelGesture = () => {
+				const current = gesture.current;
+				if (!current) return false;
+				gesture.current = null;
+				if (current.kind === "draw") replay(); else updateCrop(current.previous);
+				try { canvasRef.current?.releasePointerCapture(current.pointerId); } catch { /* capture 已释放 */ }
+				changed(); return true;
+			};
+			const close = () => { cancelGesture(); onClose(); };
+			useEffect(() => {
+				alive.current = true;
+				return () => { alive.current = false; gesture.current = null; history.current = {ops:[],cursor:0}; imageRef.current = null; };
+			}, []);
+			useEffect(() => {
+				let active = true;
+				const source = attachmentSource(target), image = document.createElement("img"), canvas = canvasRef.current;
+				setLoading(true); setPreviewOnly(false); setError(""); setSize({width:0,height:0}); imageRef.current = null; history.current = {ops:[],cursor:0}; updateCrop(null);
+				const fail = message => { if (active) { setLoading(false); setError(message); } };
+				const timer = window.setTimeout(() => fail(t("attachment.loadError")),20000);
+				image.onload = () => {
+					if (!active) return;
+					window.clearTimeout(timer);
+					const w = image.naturalWidth, h = image.naturalHeight;
+					if (!w || !h) { fail(t("attachment.loadError")); return; }
+					if (w > ATTACHMENT_LIMITS.side || h > ATTACHMENT_LIMITS.side || w * h > ATTACHMENT_LIMITS.pixels) {
+						// 支持正常4K宽图查看，但不为超限源分配全尺寸编辑canvas。
+						image.alt = target.name || t("attachment.canvas");
+						Object.assign(image.style,{display:"block",width:"100%",height:"100%",objectFit:"contain"});
+						previewRef.current?.replaceChildren(image);
+						setSize({width:w,height:h}); setPreviewOnly(true); setTool("view"); fail(t("attachment.tooLarge")); return;
+					}
+					try { imageRef.current = image; replay(); setLoading(false); setError(""); changed(); }
+					catch { imageRef.current = null; fail(t("attachment.loadError")); }
+				};
+				image.onerror = () => { window.clearTimeout(timer); fail(t("attachment.loadError")); };
+				if (source) image.src = source; else { window.clearTimeout(timer); fail(t("attachment.localOnly")); }
+				return () => { active = false; window.clearTimeout(timer); image.onload = image.onerror = null; image.removeAttribute("src"); image.remove(); imageRef.current = null;
+					if (canvas) canvas.width = canvas.height = 1; };
+			}, [target, loadAttempt]);
+			useMeasureEffect(() => {
+				const stage = stageRef.current;
+				if (!stage || !size.width) return;
+				const measure = () => {
+					const w = Math.max(1,stage.clientWidth), h = Math.max(1,stage.clientHeight);
+					const scale = Math.min(w / size.width,h / size.height,1), width = size.width * scale, height = size.height * scale;
+					setFit({width,height,left:(w-width)/2,top:(h-height)/2});
+				};
+				measure(); const observer = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
+				observer?.observe(stage); window.addEventListener("resize",measure);
+				return () => { observer?.disconnect(); window.removeEventListener("resize",measure); };
+			}, [size.width,size.height]);
+			const commit = op => {
+				const old = history.current, ops = old.ops.slice(0,old.cursor);
+				const points = ops.reduce((n,item) => n + (item.points?.length || 0),0) + (op.points?.length || 0);
+				if (ops.length >= ATTACHMENT_LIMITS.operations || points > ATTACHMENT_LIMITS.points) {
+					if (op.kind !== "reset") { setError(t("attachment.historyLimit")); replay(); return false; }
+					history.current = {ops:[],cursor:0};
+				} else history.current = {ops:[...ops,op],cursor:ops.length+1};
+				replay(); updateCrop(null); setError(""); changed(); return true;
+			};
+			const down = event => {
+				if (loading || busy || !imageRef.current || tool === "view" || gesture.current || event.isPrimary === false || (event.button != null && event.button !== 0)) return;
+				const point = attachmentPoint(event,canvasRef.current);
+				if (!point) return;
+				event.preventDefault(); setError("");
+				if (history.current.cursor >= ATTACHMENT_LIMITS.operations) { setError(t("attachment.historyLimit")); return; }
+				if (tool === "draw") {
+					gesture.current = {kind:"draw",pointerId:event.pointerId,color,width,points:[point]};
+					attachmentStroke(canvasRef.current.getContext("2d"),gesture.current);
+				} else { gesture.current = {kind:"crop",pointerId:event.pointerId,start:point,previous:cropNow.current}; updateCrop(null); }
+				try { canvasRef.current.setPointerCapture?.(event.pointerId); } catch { /* 合成 pointer 或离屏元素未激活捕获。 */ }
+				changed();
+			};
+			const move = event => {
+				const current = gesture.current;
+				if (!current || event.pointerId !== current.pointerId) return;
+				event.preventDefault(); const point = attachmentPoint(event,canvasRef.current);
+				if (!point) return;
+				if (current.kind === "crop") {
+					const x = Math.min(current.start.x,point.x), y = Math.min(current.start.y,point.y);
+					updateCrop(attachmentRect({x,y,width:Math.abs(point.x-current.start.x),height:Math.abs(point.y-current.start.y)},size.width,size.height));
+				} else {
+					const last = current.points[current.points.length-1];
+					if (Math.hypot(point.x-last.x,point.y-last.y) < .25) return;
+					if (current.points.length >= ATTACHMENT_LIMITS.strokePoints) { setError(t("attachment.historyLimit")); return; }
+					current.points.push(point); attachmentStroke(canvasRef.current.getContext("2d"),{...current,points:[last,point]});
+				}
+			};
+			const up = event => {
+				const current = gesture.current;
+				if (!current || event.pointerId !== current.pointerId) return;
+				move(event); gesture.current = null;
+				if (current.kind === "draw") commit({kind:"draw",color:current.color,width:current.width,points:current.points});
+				else if (!cropNow.current) updateCrop(current.previous);
+				try { canvasRef.current.releasePointerCapture(event.pointerId); } catch { /* capture 已释放 */ }
+				changed();
+			};
+			const selectTool = next => { cancelGesture(); updateCrop(null); setTool(next); };
+			const step = delta => { cancelGesture(); history.current.cursor = Math.max(0,Math.min(history.current.ops.length,history.current.cursor+delta)); updateCrop(null); replay(); setError(""); changed(); };
+			const save = async () => {
+				if (saveLock.current || loading || !imageRef.current || gesture.current || !history.current.cursor) return;
+				if (cropNow.current) { setError(t("attachment.cropFirst")); return; }
+				saveLock.current = true; setBusy(true); setError("");
+				try {
+					const dataUrl = canvasRef.current.toDataURL("image/png");
+					if (!dataUrl.startsWith("data:image/png;base64,")) throw new Error(t("attachment.exportError"));
+					if (!alive.current) return;
+					const result = await onSave(target,dataUrl);
+					if (alive.current && result !== false) onClose();
+					else if (alive.current) setError(t("attachment.stale"));
+				} catch (failure) { if (alive.current) setError(`${t("attachment.exportError")} ${String(failure?.message || "")}`.trim()); }
+				finally { saveLock.current = false; if (alive.current) setBusy(false); }
+			};
+			const setCoordinate = (key,value) => updateCrop(attachmentRect({...cropNow.current || {x:0,y:0,width:size.width,height:size.height},[key]:value},size.width,size.height));
+			return h(WorkbenchDialog,{label:t("attachment.title"),onDismiss:close},
+				h("section",{className:"vig-modal vig-attachment-editor","data-attachment-editor":"1","data-attachment-busy":busy ? "1":"0","data-attachment-readonly":previewOnly ? "1":"0",
+					onPaste:e=>e.stopPropagation(),onDrop:e=>{e.preventDefault();e.stopPropagation();},
+					onKeyDown:e=>{ if (e.key === "Escape" && gesture.current) { e.preventDefault(); e.stopPropagation(); cancelGesture(); } }},
+					h("header",{className:"vig-attachment-head"},h("div",{className:"vig-modal-title"},t("attachment.title")),
+						h("button",{type:"button",className:"vig-icon-btn","data-attachment-close":"1","aria-label":t("attachment.close"),onClick:close},h(Icon,{name:"close"}))),
+					h("div",{className:"vig-attachment-tools",role:"toolbar","aria-label":t("attachment.title")},
+						["view","draw","crop"].map(value=>h("button",{key:value,type:"button",className:`vig-btn${tool===value ? " is-active":""}`,"data-attachment-tool":value,"aria-pressed":tool===value,disabled:busy || (previewOnly && value !== "view"),onClick:()=>selectTool(value)},t(`attachment.${value}`))),
+						h("button",{type:"button",className:"vig-btn","data-attachment-undo":"1",disabled:busy||!history.current.cursor,onClick:()=>step(-1)},t("ps.undo")),
+						h("button",{type:"button",className:"vig-btn","data-attachment-redo":"1",disabled:busy||history.current.cursor>=history.current.ops.length,onClick:()=>step(1)},t("ps.redo")),
+						h("button",{type:"button",className:"vig-btn","data-attachment-reset":"1",disabled:loading||busy||!history.current.cursor,onClick:()=>{cancelGesture();commit({kind:"reset"});}},t("attachment.reset"))),
+					h("div",{className:"vig-attachment-content"},
+						tool === "draw" ? h("div",{className:"vig-attachment-options"},
+							h("label",null,t("attachment.color"),h("input",{type:"color",value:color,"data-attachment-color":"1",disabled:busy,onChange:e=>setColor(e.target.value)})),
+							h("label",null,t("attachment.width"),h("input",{type:"range",min:1,max:160,step:1,value:width,"data-attachment-width":"1",disabled:busy,onChange:e=>setWidth(Number(e.target.value))}),h("output",null,`${width}px`))) : null,
+						tool === "crop" && size.width ? h("div",{className:"vig-attachment-crop-inputs"},
+							[["x","x"],["y","y"],["width","w"],["height","h"]].map(([key,label])=>h("label",{key},t(`attachment.${label}`),h("input",{type:"number",min:key === "x" || key === "y" ? 0:1,max:key === "x" || key === "width" ? size.width:size.height,step:1,value:crop?.[key] ?? (key === "width" ? size.width:key === "height" ? size.height:0),[`data-attachment-crop-${key}`]:"1",disabled:busy,onChange:e=>setCoordinate(key,e.target.value)}))),
+							h("button",{type:"button",className:"vig-btn","data-attachment-crop-apply":"1",disabled:busy||!crop||!!gesture.current,onClick:()=>commit({kind:"crop",rect:cropNow.current})},t("attachment.applyCrop"))) : null,
+						h("div",{className:"vig-attachment-stage",ref:stageRef},
+							h("div",{ref:previewRef,"data-attachment-preview":"1",style:{position:"absolute",inset:0,display:previewOnly ? "block":"none"}}),
+							h("canvas",{ref:canvasRef,"data-attachment-canvas":"1",role:"img","aria-label":t("attachment.canvas"),hidden:loading||previewOnly||!size.width,style:{...fit,display:loading||previewOnly||!size.width ? "none":"block",cursor:tool === "view" ? "default":"crosshair"},onPointerDown:down,onPointerMove:move,onPointerUp:up,
+								onPointerCancel:e=>{if(e.pointerId===gesture.current?.pointerId)cancelGesture();},onLostPointerCapture:e=>{if(e.pointerId===gesture.current?.pointerId)cancelGesture();}}),
+							crop && size.width ? h("div",{className:"vig-attachment-crop-rect","data-attachment-crop-rect":"1",style:{left:fit.left+crop.x*fit.width/size.width,top:fit.top+crop.y*fit.height/size.height,width:crop.width*fit.width/size.width,height:crop.height*fit.height/size.height}}):null,
+							loading ? h("span",{role:"status"},t("common.loading")):null),
+						h("div",{className:"vig-muted","data-attachment-status":"1",role:"status"},`${size.width ? `${size.width} × ${size.height} · `:""}${t(`attachment.${tool}Hint`)}`),
+						error ? h("div",{className:"vig-error","data-attachment-error":"1",role:"alert"},error,
+							!imageRef.current && !previewOnly ? h("button",{type:"button",className:"vig-btn","data-attachment-retry":"1",onClick:()=>setLoadAttempt(v=>v+1)},t("attachment.retry")):null):null),
+					h("footer",{className:"vig-attachment-footer"},h("span",{className:"vig-muted"},t("attachment.hint")),
+						h("button",{type:"button",className:"vig-btn","data-attachment-cancel":"1",onClick:close},t("attachment.cancel")),
+						h("button",{type:"button",className:"vig-btn is-primary","data-attachment-save":"1",disabled:loading||busy||!!gesture.current||!!crop||!history.current.cursor,onClick:save},t(busy ? "attachment.saving":"attachment.save")))))
+		}
+
 		function Pill({ tone, children }) {
 			return h("span", { className: `vig-pill${tone ? ` is-${tone}` : ""}` }, h("i", { className: "vig-dot" }), children);
 		}
@@ -4690,11 +4989,15 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								references.map((item, index) =>
 									h(
 										"div",
-										{ className: "vig-ref", key: `${item.url || item.name}_${index}` },
-										h("img", { src: item.dataUrl, alt: item.name, title: `${item.name}（第 ${index + 1} 张${state.editMode ? " · 图生图" : ""}）` }),
+										{ className: "vig-ref", key: item.refId || `${item.url || item.name}_${index}` },
+										h("button", {type:"button",className:"vig-ref-open","data-ref-open":index,
+											"aria-label":t("attachment.open",{index:index+1,name:item.name || "reference"}),
+											title:t("attachment.open",{index:index+1,name:item.name || "reference"}),onClick:e=>actions.openAttachment(item,e.currentTarget)},
+											h("img", { src: item.dataUrl || item.url, alt: item.name || "reference" })),
 										h(
 											"button",
 											{
+												type:"button",
 												className: "vig-ref-x",
 												onClick: () => actions.removeReference(index),
 												title: t("chat.refClear"),
@@ -12060,6 +12363,28 @@ h(
 			}
 		}
 
+		// 身份绑定单个 chip，不绑定 URL、数组下标或易被异步水合替换的 object。
+		let attachmentSequence = 0;
+		function attachmentNewReference(entry) {
+			return {...entry,refId:`ref_${Date.now().toString(36)}_${++attachmentSequence}`,sourceRevision:0};
+		}
+		function attachmentNormalizeReferences(refs) {
+			const ids = new Set();
+			return (Array.isArray(refs) ? refs:[]).filter(item=>item && typeof item === "object").map(item=>{
+				const valid = typeof item.refId === "string" && item.refId && !ids.has(item.refId);
+				const entry = valid ? item:attachmentNewReference(item); ids.add(entry.refId);
+				return Number.isSafeInteger(entry.sourceRevision) && entry.sourceRevision >= 0 ? entry:{...entry,sourceRevision:0};
+			});
+		}
+		function attachmentMatches(entry, target) {
+			return !!entry && !!target?.refId && entry.refId === target.refId && entry.sourceRevision === target.sourceRevision;
+		}
+		function attachmentClearOverrides(override) {
+			if (!override) return override;
+			const {image,images,referenceUrl,referenceUrls,mask,maskUrl,maskDataUrl,...rest} = override;
+			return Object.keys(rest).length ? rest:null;
+		}
+
 		// 刷新只恢复文本和本站已留档图片的路径，不向浏览器存储写 base64 或 JSON 请求覆盖。
 		const draftKey = (id) => `dsh.velapi-image-go.draft.${id}`;
 		function readComposer(id) {
@@ -12247,7 +12572,10 @@ h(
 			const initialConfigRef = useRef(null);
 			// 切换时只恢复本地设置，绝不把上一个会话的 render 快照写给新会话。
 			const inputEpoch = useRef(0);
-			const [initialDraft] = useState(() => readComposer(conversationId));
+			const [initialDraft] = useState(() => { const saved = readComposer(conversationId); return {...saved,refs:attachmentNormalizeReferences(saved.refs)}; });
+			const [attachmentTarget, setAttachmentTarget] = useState(null);
+			const attachmentTargetRef = useRef(null), refUploads = useRef(new Map());
+			const closeAttachment = () => { attachmentTargetRef.current = null; setAttachmentTarget(null); };
 			const savedComposers = useRef(new Map());
 			const [draft, renderDraft] = useState(initialDraft.text);
 			const [references, renderReferences] = useState(initialDraft.refs);
@@ -12259,7 +12587,9 @@ h(
 				renderDraft(draftNow.current); persistCurrent();
 			};
 			const setReferences = (next) => {
-				refsNow.current = typeof next === "function" ? next(refsNow.current) : next;
+				refsNow.current = attachmentNormalizeReferences(typeof next === "function" ? next(refsNow.current) : next);
+				const target = attachmentTargetRef.current;
+				if (target && !refsNow.current.some(item=>attachmentMatches(item,target))) closeAttachment();
 				renderReferences(refsNow.current); persistCurrent();
 			};
 			const setEditMode = (value) => { editNow.current = value; renderEditMode(value); persistCurrent(); };
@@ -12274,10 +12604,11 @@ h(
 				const next = drafts.get(id) || (!prev && (current.text || current.refs.length) ? current : readComposer(id));
 				drafts.delete(id);
 				++inputEpoch.current;
+				closeAttachment();
 				conversationIdRef.current = id;
 				setConversationId(id);
 				renderDraft(draftNow.current = next.text);
-				renderReferences(refsNow.current = next.refs);
+				renderReferences(refsNow.current = attachmentNormalizeReferences(next.refs));
 				renderEditMode(editNow.current = next.edit);
 				jsonOverrideRef.current = next.override;
 				if (!prev && next === current) persistComposer(id, next.text, next.refs, next.edit);
@@ -12306,6 +12637,29 @@ h(
 				} catch {
 					return "";
 				}
+			};
+			const referenceOwned = (target) => target?.owner === conversationIdRef.current && target.epoch === inputEpoch.current && refsNow.current.some(item=>attachmentMatches(item,target));
+			// 同一像素版本共用一次留档；回包只补同一 owner/epoch/id/revision，绝不复活已删的 chip。
+			const uploadReference = (entry, owner = conversationIdRef.current, epoch = inputEpoch.current, warn = false) => {
+				const target = {...entry,owner,epoch};
+				const key = `${owner}:${epoch}:${entry.refId}:${entry.sourceRevision}`;
+				if (refUploads.current.has(key)) return refUploads.current.get(key);
+				const pending = uploadRefData(entry.name,entry.dataUrl).then(url=>{
+					if (!referenceOwned(target)) return url;
+					if (url) setReferences(current=>current.map(item=>attachmentMatches(item,target) ? {...item,url}:item));
+					else if (warn) toast(t("attachment.uploadFailed"),"err");
+					return url;
+				}).finally(()=>refUploads.current.delete(key));
+				refUploads.current.set(key,pending); return pending;
+			};
+			const saveAttachment = (target,dataUrl) => {
+				if (target !== attachmentTargetRef.current || !referenceOwned(target) || !/^data:image\/png;base64,/.test(dataUrl)) return false;
+				const entry = refsNow.current.find(item=>attachmentMatches(item,target));
+				const edited = {...entry,name:`${String(entry.name || "reference").replace(/\.[^.]+$/,"")}-edited.png`,dataUrl,url:"",sourceRevision:entry.sourceRevision+1};
+				jsonOverrideRef.current = attachmentClearOverrides(jsonOverrideRef.current);
+				setReferences(current=>current.map(item=>attachmentMatches(item,target) ? edited:item));
+				void uploadReference(edited,target.owner,target.epoch,true);
+				return true;
 			};
 			const [generating, setGenerating] = useState(false);
 			const [pickOpen, setPickOpen] = useState(false);
@@ -12525,7 +12879,7 @@ h(
 			const sendChainRef = useRef(Promise.resolve());
 			const pendingSendsRef = useRef(0);
 			const sendSeqRef = useRef(0);
-			const runGenerateFlow = async (requestBody, override, seq, inputText) => {
+			const runGenerateFlow = async (requestBody, override, seq, inputText, referenceSnapshot, referenceEpoch) => {
 				const isCurrent = () => requestBody.conversationId === conversationIdRef.current;
 				const pendingId = `pending_${seq}`;
 				if (discardedConvs.current.has(requestBody.conversationId)) return;
@@ -12534,12 +12888,11 @@ h(
 					   chip 不走 /upload，没有 URL 的话 referenceUrls 会少一张 —— 发出去变成单图，
 					   缩略图 / 重试 / 编辑也会丢图。补传失败就退回纯字节（images[]）继续发。 */
 					const readyRefs = [];
-					for (const item of references) {
+					for (const item of referenceSnapshot) {
 						let entry = item;
 						if (!item.url && typeof item.dataUrl === "string" && item.dataUrl.startsWith("data:")) {
-							const url = await uploadRefData(item.name, item.dataUrl);
+							const url = await uploadReference(item,requestBody.conversationId,referenceEpoch);
 							entry = { ...item, url };
-							if (url && isCurrent()) setReferences((current) => current.map((ref) => (ref.dataUrl === item.dataUrl && !ref.url ? { ...ref, url } : ref)));
 						}
 						readyRefs.push(entry);
 					}
@@ -12609,7 +12962,8 @@ h(
 				setJobs((list) => [placeholder, ...list]);
 				pendingSendsRef.current += 1;
 				setGenerating(true);
-				const runSend = () => runGenerateFlow(body, override, seq, rawPrompt);
+				const referenceSnapshot = refsNow.current.slice(), referenceEpoch = inputEpoch.current;
+				const runSend = () => runGenerateFlow(body, override, seq, rawPrompt, referenceSnapshot, referenceEpoch);
 				const run = sendChainRef.current.then(runSend, runSend);
 				sendChainRef.current = run.catch(() => {});
 				return run.finally(() => {
@@ -12873,13 +13227,16 @@ h(
 					if (urls.length > 0) {
 						// 参考图只存了本站 URL：dataUrl 先放 URL 让缩略图能显示；
 						// 真正发送时宿主会按 referenceUrls 把字节读回来。
-						setReferences(urls.map((url) => ({ name: "reference", dataUrl: url, url })));
+						const restored = urls.map(url=>attachmentNewReference({name:"reference",dataUrl:url,url}));
+						setReferences(restored);
 						setEditMode(job.mode === "edit");
-						// 顺手把真字节补回来：缩略图不再挂 ✗，直接重发时也能带得动图
-						urls.forEach((url) => {
-							urlToDataUrl(url)
+						const owner = conversationIdRef.current;
+						// 补原字节不改变像素 revision；保存或删除后旧 URL 的回包不再命中。
+						restored.forEach((entry) => {
+							const target = {...entry,owner,epoch};
+							urlToDataUrl(entry.url)
 								.then((dataUrl) => {
-									if (dataUrl && epoch === inputEpoch.current) setReferences((current) => current.map((item) => (item.url === url ? { ...item, dataUrl } : item)));
+									if (dataUrl && referenceOwned(target)) setReferences(current=>current.map(item=>attachmentMatches(item,target) ? {...item,dataUrl}:item));
 								})
 								.catch(() => {});
 						});
@@ -12888,25 +13245,21 @@ h(
 					toast(t("chat.edited"));
 					return true;
 				},
+				openAttachment: (entry, opener) => {
+					const item = refsNow.current.find(ref=>attachmentMatches(ref,entry));
+					if (!item) return;
+					// 原按钮保留在原位，WorkbenchDialog 关闭后按原生焦点栈恢复。
+					opener?.focus?.({preventScroll:true});
+					const target = {...item,owner:conversationIdRef.current,epoch:inputEpoch.current};
+					attachmentTargetRef.current = target; setAttachmentTarget(target);
+				},
 				attachReference: async ({ name, dataUrl }) => {
-					const entry = { name, dataUrl, url: "" };
+					const entry = attachmentNewReference({name,dataUrl,url:""});
 					if (!dataUrl || !appendReference(entry)) return false;
 					const owner = conversationIdRef.current, epoch = inputEpoch.current;
 					setEditMode(false);
-					const url = await uploadRefData(name, dataUrl);
-					// 路径只补给最初的 chip。切到 B 之后 A 的上传也能留档；被删除的 chip 不复活。
-					if (url) {
-						const link = (refs) => refs.map((item) => item === entry ? { ...item, url } : item);
-						if (conversationIdRef.current === owner && refsNow.current.includes(entry)) setReferences(link);
-						else {
-							const parked = savedComposers.current.get(owner);
-							if (parked?.refs.includes(entry)) {
-								parked.refs = link(parked.refs);
-								persistComposer(owner, parked.text, parked.refs, parked.edit);
-							}
-						}
-					}
-					return epoch === inputEpoch.current;
+					await uploadReference(entry,owner,epoch);
+					return owner === conversationIdRef.current && epoch === inputEpoch.current;
 				},
 				clearReference: () => {
 					++inputEpoch.current;
@@ -13444,6 +13797,9 @@ h(
 						await actions.attachReference({ name: file.name, dataUrl });
 					}
 				}),
+				attachmentTarget && view === "chat" && attachmentTarget.owner === conversationId && referenceOwned(attachmentTarget) ? h(AttachmentEditor, {
+					key:`${attachmentTarget.owner}:${attachmentTarget.epoch}:${attachmentTarget.refId}:${attachmentTarget.sourceRevision}`,target:attachmentTarget,onClose:closeAttachment,onSave:saveAttachment
+				}) : null,
 				pickOpen && view === "chat" ? h(ReferencePicker, { library, onDismiss: () => setPickOpen(false), onPick: actions.useAsReference }) : null,
 				gridTarget && view === "chat" && gridTarget.conversationId === conversationId ? h(GridEditor, {
 					key:`${gridTarget.conversationId}:${gridTarget.image.assetId || gridTarget.image.url}`, target:gridTarget, onClose:()=>setGridTarget(null), onHandoff:watchJob, onJob:(job)=>{
@@ -14083,6 +14439,8 @@ h(
 			// 模型 → 供应商选路：模型属于谁就把请求发到谁那儿（纯函数，Node 里可测）
 			modelCatalogFor,
 			providerIdForModel,
+			AttachmentEditor, ATTACHMENT_LIMITS, attachmentSource, attachmentRect, attachmentPoint,
+			attachmentNewReference, attachmentNormalizeReferences, attachmentMatches, attachmentClearOverrides,
 			ModelPicker,
 			Inspector,
 			PresetBoard,

@@ -516,6 +516,9 @@ function writeConvSetting(id, settings) {
 			"chat.planFailed": "上下文整理失败，已按原话生成",
 			"chat.planRewrite": "改写",
 			"chat.sizeCustom": "自定义",
+			"chat.imageSize": "图片比例与分辨率",
+			"chat.sizeAuto": "自动",
+			"chat.sizeAutoHint": "自动：不指定固定像素尺寸或比例，有参考图时由模型参考原图画幅；最终尺寸由上游决定。",
 			"chat.videoSize": "视频尺寸",
 			"chat.videoRatio": "比例",
 			"chat.videoResolution": "分辨率",
@@ -1030,6 +1033,9 @@ function writeConvSetting(id, settings) {
 			"chat.planFailed": "Context rewrite failed — generating from your text as-is",
 			"chat.planRewrite": "Rewritten",
 			"chat.sizeCustom": "Custom",
+			"chat.imageSize": "Image aspect ratio and resolution",
+			"chat.sizeAuto": "Auto",
+			"chat.sizeAutoHint": "Auto: no fixed pixel size or ratio. References can guide the framing; the upstream model chooses the final size.",
 			"chat.videoSize": "Video size",
 			"chat.videoRatio": "Ratio",
 			"chat.videoResolution": "Resolution",
@@ -2799,11 +2805,12 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 
 		// 上游要的是像素，用户要的是比例：下拉里把比例写在前面（1:1 / 3:2 / 16:9 …），
 		// 选哪条就把 config.defaultSize 写成对应像素。老配置里的冷门尺寸也兜底显示。
-		/* 尺寸 = 比例 × 分辨率档：1K 基准表 ×1 / ×2 / ×4，6 个常用比例都有 1K / 2K / 4K */
+		/* 尺寸 = 比例 × 分辨率档：1K 基准表 ×1 / ×2 / ×4，7 个常用比例都有 1K / 2K / 4K */
 		const SIZE_BASE = [
 			{ ratio: "1:1", w: 1024, h: 1024 },
 			{ ratio: "3:2", w: 1536, h: 1024 },
 			{ ratio: "2:3", w: 1024, h: 1536 },
+			{ ratio: "3:4", w: 1152, h: 1536 },
 			{ ratio: "16:9", w: 1536, h: 864 },
 			{ ratio: "9:16", w: 864, h: 1536 },
 			{ ratio: "21:9", w: 2048, h: 864 }
@@ -2837,6 +2844,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		function resolveSizeExpression(value, fallback = "1024x1024") {
 			const raw = String(value ?? "").trim();
 			if (!raw) return fallback;
+			if (/^auto$/i.test(raw)) return "auto";
 			if (/^\d{2,5}\s*[x×*]\s*\d{2,5}$/i.test(raw)) return raw.replace(/\s*[x×*]\s*/i, "x");
 			const fallbackPixels = String(fallback).match(/^(\d+)x(\d+)$/);
 			const fallbackLong = fallbackPixels ? Math.max(Number(fallbackPixels[1]), Number(fallbackPixels[2])) : 1024;
@@ -2859,6 +2867,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		/** 从同一份尺寸描述生成宿主字段；视频/自定义像素不套图片档位表。 */
 		function generationSize(body, raw, fallback, video = false) {
 			const size = String(body.size || fallback).trim();
+			if (!video && (/^auto$/i.test(size) || /^auto$/i.test(String(body.aspect_ratio || body.aspectRatio || "").trim()))) return { size: "auto" };
 			const pixel = /^\d+\s*[x×*]\s*\d+$/i.test(size);
 			const parts = sizePartsFor(pixel ? resolveSizeExpression(size) : fallback);
 			const inlineRatio = size.match(/\d{1,2}\s*[:：]\s*\d{1,2}/)?.[0];
@@ -2877,7 +2886,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			return (!endpoint || endpoint === "auto") && providers?.find(p => p.id === providerId)?.endpoint === GEMINI_NATIVE ? GEMINI_NATIVE : endpoint || "auto";
 		}
 		function geminiSettings(config) {
-			const legacy = sizePartsFor(config.defaultSize), tiers = geminiTiers(config.defaultModel);
+			const legacy = /^auto$/i.test(String(config.defaultSize || "").trim()) ? {tier:"1K", ratio:"auto"} : sizePartsFor(config.defaultSize), tiers = geminiTiers(config.defaultModel);
 			const size = config.geminiSize || legacy.tier, ratio = String(config.geminiRatio || legacy.ratio).toLowerCase();
 			return { size:tiers.includes(size) ? size : "1K", aspect_ratio:GEMINI_RATIOS.includes(ratio) ? ratio : "1:1" };
 		}
@@ -2918,13 +2927,14 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function sizeOptionsFor(current) {
-			const list = SIZE_OPTIONS.slice();
+			const list = [{ value: "auto", ratio: t("chat.sizeAuto") }, ...SIZE_OPTIONS];
 			if (current && !list.some((item) => item.value === current)) list.unshift({ value: current, ratio: t("chat.sizeCustom") });
 			return list;
 		}
 
 		/** 下拉正面：比例 + 分辨率（`16:9 · 1536×864`）；认不出的老尺寸只显示像素。 */
 		function sizeOptionLabel(option) {
+			if (option?.value === "auto") return t("chat.sizeAuto");
 			const ratio = option?.ratio && option.ratio !== option.value ? option.ratio : "";
 			const pixels = String(option?.value || "").replace("x", "×");
 			return ratio ? `${ratio} · ${pixels}` : pixels;
@@ -2932,7 +2942,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 
 		/** 悬停 / 选项里给全称：`16:9 · 1536×864`。 */
 		function sizeOptionTitle(option) {
-			return sizeOptionLabel(option);
+			return option?.value === "auto" ? t("chat.sizeAutoHint") : sizeOptionLabel(option);
 		}
 
 		/* ---------------- 快捷拖拽：一张图能被拖到哪儿去 ---------------- */
@@ -4782,6 +4792,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									"select",
 									{
 										className: "vig-sel",
+										"data-image-size": "1",
+										"aria-label": t("chat.imageSize"),
+										title: config.defaultSize === "auto" ? t("chat.sizeAutoHint") : t("chat.imageSize"),
 										style: { width: "auto", height: 28, padding: "0 8px" },
 										value: config.defaultSize,
 										onChange: (event) => void actions.saveConfig({ defaultSize: event.target.value })
@@ -12480,6 +12493,10 @@ h(
 						const {endpoint, size, aspect_ratio, aspectRatio, seconds, n, quality, ...remaining} = jsonOverrideRef.current;
 						jsonOverrideRef.current = remaining;
 					}
+					if (Object.hasOwn(patch, "defaultSize") && jsonOverrideRef.current) {
+						const {size, aspect_ratio, aspectRatio, ...remaining} = jsonOverrideRef.current;
+						jsonOverrideRef.current = remaining;
+					}
 					const selected = pickConfigFields(patch);
 					if (owner && Object.keys(selected).length) {
 						writeConvSetting(owner, { ...initialConfigRef.current, ...readConvSettings()[owner], ...selected });
@@ -12798,7 +12815,7 @@ h(
 						const retryEndpoint = imageRequestProtocol(job.protocol || config.defaultEndpoint, job.providerId || providerIdForModel(providers, config, retryModel), providers);
 						const nativeRetry = retryEndpoint === GEMINI_NATIVE;
 						if (nativeRetry && !geminiReady(protocols)) throw Error(t("chat.geminiReload"));
-						const providerId = nativeRetry && job.providerId ? job.providerId : providerIdForModel(providers, config, retryModel) || job.providerId || config.activeProviderId;
+						const providerId = job.providerId && retryModel === job.model ? job.providerId : providerIdForModel(providers, config, retryModel) || job.providerId || config.activeProviderId;
 						const payload = await call("/generate", {
 							method: "POST",
 							body: {

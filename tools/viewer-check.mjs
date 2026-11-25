@@ -20,6 +20,7 @@ import { auditChatScroll } from "../test/chat-scroll.test.mjs";
 import { auditChatFlow } from "../test/chat-flow.test.mjs";
 import { auditGallery } from "../test/library-audit.test.mjs";
 import { auditGeminiUI } from "../test/gemini-ui.test.mjs";
+import { auditImageSizeUI } from "../test/image-size-ui.test.mjs";
 import { auditStorageMove } from "../test/storage-move-ui.test.mjs";
 import { auditImageResults } from "../test/image-results.test.mjs";
 import { auditWorkbench } from "./workbench-audit.mjs";
@@ -176,6 +177,15 @@ const sampleBlob = await new Promise((resolve) => sample.toBlob(resolve));
 const posts = [];
 let geminiAuditKind = "image";
 const geminiFixture = new URLSearchParams(location.search).get("audit") === "gemini";
+const imageSizeFixture = new URLSearchParams(location.search).get("audit") === "imagesize";
+if (imageSizeFixture) {
+ config.activeProviderId="pv_gpt"; config.defaultEndpoint="images_generations";
+ providers[0].models.push("gpt-image-2.5-c"); providers[0].modelMeta["gpt-image-2.5-c"]={kind:"image"};
+ providers[1].models.push("Nano-Banana-2"); providers[1].modelMeta["Nano-Banana-2"]={kind:"image"};
+ const referenceUrls=["/api/velapi-image-go/upload/up_1.png","/api/velapi-image-go/upload/up_2.png"];
+ convJobs.conv_default.push({...JOB,id:"job_imagesize_auto",providerId:"pv_grok",size:"auto",count:1,referenceUrls,prompt:"Images auto retry fixture"});
+ convJobs.conv_default.push({...JOB,id:"job_imagesize_fixed",providerId:"pv_grok",size:"2304x3072",aspectRatio:"3:4",count:1,referenceUrls,prompt:"Images fixed retry fixture"});
+}
 if (geminiFixture) {
  config.defaultModel="Nano-Banana-2"; config.defaultSize="8192x3456"; config.defaultCount=4;
  providers[0].models.push("Nano-Banana-2"); providers[1].models.push("Nano-Banana-2", "gemini-2.5-flash-image");
@@ -214,7 +224,7 @@ window.fetch = async (url, init) => {
 			counts: {},
 			// 协议表：界面按 kind 区分「图片 / 视频」，视频协议用独立尺寸（假宿主也要给全）
 			protocols: [
-				...(geminiFixture && geminiAuditKind ? [{id:"gemini_generate", label:"Gemini 原生", kind:geminiAuditKind}] : []),
+				...(geminiFixture && geminiAuditKind || imageSizeFixture ? [{id:"gemini_generate", label:"Gemini 原生", kind:imageSizeFixture ? "image" : geminiAuditKind}] : []),
 				{ id: "auto", label: "自动检测（默认）", route: "", kind: "auto" },
 				{ id: "images_generations", label: "图片生成（/v1/images/generations）", route: "/images/generations", kind: "image" },
 				{ id: "images_edits", label: "图片编辑（/v1/images/edits）", route: "/images/edits", kind: "image" },
@@ -414,6 +424,10 @@ if (imageResultsFixture) {
 	const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
 }
 
+if (imageSizeFixture) {
+ await (${auditImageSizeUI.toString()})({host,check,wait,waitFor,flushSync,posts});
+ const pre=document.createElement('pre');pre.id='vig-viewer-out';pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
 if (geminiFixture) {
  const remount=async kind=>{geminiAuditKind=kind;flushSync(()=>root.render(null));flushSync(()=>root.render(React.createElement(ui.Workbench,{onOpenInRightbar:()=>{}})));await waitFor(()=>host.querySelector('.vig-shot-img'),2000);};
  await (${auditGeminiUI.toString()})({host,check,wait,waitFor,flushSync,posts,remount});
@@ -1753,7 +1767,7 @@ const args = ["--headless=new", "--disable-gpu", "--no-sandbox", "--virtual-time
 if (shotPath) args.push("--hide-scrollbars", "--window-size=1040,900", `--screenshot=${shotPath}`);
 if (!shotPath && /ps=pick|audit=/.test(query)) args.push("--window-size=1440,1000");
 args.push("--dump-dom", url);
-const dom = ["audit=grid","audit=psoverflow","audit=gemini"].includes(query) ? await runGridPage(page, CHROME, query) : execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+const dom = ["audit=grid","audit=psoverflow","audit=gemini","audit=imagesize"].includes(query) ? await runGridPage(page, CHROME, query) : execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 
 const match = dom.match(/<pre id="vig-viewer-out">([\s\S]*?)<\/pre>/);
 if (!match) {

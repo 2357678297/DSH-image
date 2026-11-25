@@ -27,8 +27,9 @@ const KEY = process.env.VIG_KEY || process.env.VELAPI_API_KEY || "";
 const BASE = process.env.VIG_BASE || "https://gank.velapi.cc/v1";
 const MODEL = process.env.VIG_MODEL || "gpt-image-2.5-c";
 
-let failures = 0;
+let failures = 0, checks = 0;
 function check(name, ok, extra = "") {
+  checks += 1;
   console.log(`${ok ? "  PASS" : "  FAIL"}  ${name}${extra ? ` — ${extra}` : ""}`);
   if (!ok) failures += 1;
 }
@@ -307,7 +308,7 @@ const mockServer = http.createServer((request, response) => {
   const chunks = [];
   request.on("data", (chunk) => chunks.push(chunk));
   request.on("end", () => {
-    const raw = Buffer.concat(chunks).toString("utf8");
+    const bytes = Buffer.concat(chunks), raw = bytes.toString("utf8");
     let payload = null;
     try {
       payload = JSON.parse(raw || "null");
@@ -320,6 +321,7 @@ const mockServer = http.createServer((request, response) => {
       url: path,
       auth: request.headers.authorization ?? "",
       body: payload,
+      bytes,
       raw,
       contentType: String(request.headers["content-type"] ?? "")
     });
@@ -367,9 +369,9 @@ const mockServer = http.createServer((request, response) => {
       ]
     };
     const video = path.includes("/videos/generations");
-    /* 过程留痕用例：提示词里带「留痕」才回一张真 PNG（1x1），别的照旧 502。
-       只在需要成功回包的一条路上开口子，其余断言不受影响。 */
-    const provenanceOk = !video && path.includes("/images/generations") && String(payload?.prompt ?? "").includes("留痕");
+    /* 过程留痕用例回真 PNG（1x1），新增尺寸矩阵也使用这条既有本机夹具。
+       编辑仅为专用提示词开口子，原有编辑失败用例仍保持 502。 */
+    const provenanceOk = !video && (path.includes("/images/generations") && String(payload?.prompt ?? "").includes("留痕") || path.includes("/images/edits") && raw.includes("普通尺寸留痕"));
     const body = isModels
       ? JSON.stringify({ data: [{ id: "mock-image" }, { id: "mock-model-b" }, { id: "mock-bad" }] })
       : isChat
@@ -669,6 +671,49 @@ check(
     JSON.stringify({ status: mixed.status, code: mixed.body?.code })
   );
   await pollJob(mixed.body?.job?.id);
+}
+
+/* 普通图片尺寸契约：生成必须是 JSON，编辑必须按真实 multipart 字节解析。
+   3:4 是像素预设而非只给 Gemini 的 ratio；auto 不得偷偷补固定画幅。
+   响应仍是既有 1×1 PNG，验证请求意图与素材实测尺寸分开留痕。 */
+{
+  const sizes = ['auto', '1152x1536', '2304x3072', '4608x6144', '1024x1024'];
+  const alternatePng = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR4nGP8z8DwnwEJMDEgAQBFaBFroU0UuAAAAABJRU5ErkJggg==';
+  const inline = Buffer.from(PNG_FOR_EDIT, 'base64'), reference = Buffer.from(alternatePng, 'base64'), mask = Buffer.from(tinyPng, 'base64');
+  const referenceUrl = (await call('/upload', {method:'POST',body:{name:'size-ref.png',data:`data:image/png;base64,${alternatePng}`}})).body?.item?.url;
+  for (const endpoint of ['images_generations', 'images_edits']) {
+    const editing = endpoint === 'images_edits', route = editing ? '/images/edits' : '/images/generations';
+    for (const size of sizes) {
+      const prompt = `普通尺寸留痕 ${endpoint} ${size}`, since = mockHits.length;
+      const {created, job} = await runMockJob(prompt, {
+        endpoint, size, n:2, source:'ui', sessionId:'size-menu-fixture',
+        ...(editing ? {mode:'edit', images:[`data:image/png;base64,${PNG_FOR_EDIT}`], referenceUrls:[referenceUrl], mask:`data:image/png;base64,${tinyPng}`} : {})
+      });
+      const requests = mockHits.slice(since), hit = requests[0];
+      check(`普通 ${endpoint} ${size}：仅一次 POST，供应商及成功任务协议准确`, created.status===200 && job?.status==='succeeded' && job.protocol===endpoint && job.endpoint===route && job.providerId===mockProvider.id && requests.length===1 && hit?.method==='POST' && hit.url===`/v1${route}` && hit.auth==='Bearer sk-mock', `status=${job?.status}, calls=${requests.length}`);
+      if (editing) {
+        let form, decodeError = '';
+        try { form = await new Response(hit?.bytes, {headers:{'content-type':hit?.contentType || ''}}).formData(); }
+        catch (error) { decodeError = String(error.message); }
+        check(`普通编辑 ${size}：multipart 原值尺寸/模型/文本/张数，不附固定 aspect_ratio`, /^multipart\/form-data;/i.test(hit?.contentType || '') && form?.get('size')===size && form.get('model')==='mock-image' && form.get('prompt')===prompt && form.get('n')==='2' && !form.has('aspect_ratio') && !form.has('aspectRatio'), decodeError || `size=${form?.get('size')}, n=${form?.get('n')}`);
+        const images = form?.getAll('image') || [], masks = form?.getAll('mask') || [];
+        const contents = await Promise.all([...images, ...masks].map(async file => typeof file==='string' ? Buffer.alloc(0) : Buffer.from(await file.arrayBuffer())));
+        check(`普通编辑 ${size}：内嵌图/URL参考/蒙版真实文件名、MIME及逐字节不变`, images.length===2 && masks.length===1 && images[0]?.name==='reference_1.png' && images[1]?.name==='reference_2.png' && masks[0]?.name==='mask.png' && [...images,...masks].every(file=>file.type==='image/png') && contents[0]?.equals(inline) && contents[1]?.equals(reference) && contents[2]?.equals(mask), `image=${images.length}, mask=${masks.length}, bytes=${contents.map(b=>b.length).join(',')}`);
+      } else {
+        const body = hit?.body;
+        check(`普通生成 ${size}：JSON 原值尺寸/模型/文本/张数，不附固定 aspect_ratio`, /^application\/json/i.test(hit?.contentType || '') && hit.bytes.equals(Buffer.from(JSON.stringify(body))) && body?.size===size && body.model==='mock-image' && body.prompt===prompt && body.n===2 && body.response_format==='url' && !['aspect_ratio','aspectRatio','image','images','mask'].some(key=>Object.hasOwn(body || {}, key)), `size=${body?.size}, n=${body?.n}, bytes=${hit?.bytes?.length}`);
+      }
+      const persisted = JSON.parse(fs.readFileSync(path.join(stateDir, 'jobs.json'), 'utf8')).find(item=>item.id===job?.id);
+      const listed = (await call('/jobs?limit=200')).body?.items?.find(item=>item.id===job?.id);
+      const expectedRefs = editing ? [referenceUrl] : [];
+      check(`普通 ${endpoint} ${size}：任务详情/列表/jobs.json 保留尺寸、供应商、参考与会话`, [job,listed,persisted].every(item=>item?.status==='succeeded' && item.size===size && item.providerId===mockProvider.id && item.protocol===endpoint && item.mode===(editing?'edit':'generate') && item.source==='ui' && item.sessionId==='size-menu-fixture' && item.prompt===prompt && item.count===2 && item.aspectRatio==='' && item.referenceUrl===(expectedRefs[0] || '') && JSON.stringify(item.referenceUrls)===JSON.stringify(expectedRefs)), `storedSize=${persisted?.size}, refs=${persisted?.referenceUrls?.length}`);
+      check(`普通 ${endpoint} ${size}：终态不留参考图或蒙版 base64、凭据及临时请求字段`, [job,listed,persisted].every(item=>item && ![PNG_FOR_EDIT,tinyPng,alternatePng,'sk-mock'].some(secret=>JSON.stringify(item).includes(secret)) && !['requestImage','requestImages','requestMask'].some(key=>Object.hasOwn(item,key))));
+      const out = job?.images?.[0], asset = (await call('/library?limit=200')).body?.items?.find(item=>item.id===out?.assetId);
+      const indexed = JSON.parse(fs.readFileSync(path.join(stateDir, 'library', 'index.json'), 'utf8')).find(item=>item.id===out?.assetId);
+      const download = asset?.url ? await fetch(origin + asset.url) : null;
+      check(`普通 ${endpoint} ${size}：图库关联任务及请求尺寸，输出图片逐字节一致`, job?.images?.length===1 && asset?.jobId===job.id && indexed?.providerId===mockProvider.id && asset.model==='mock-image' && asset.prompt===prompt && asset.size===size && asset.source==='ui' && asset.sessionId==='size-menu-fixture' && asset.width===1 && asset.height===1 && download?.status===200 && Buffer.from(await download.arrayBuffer()).equals(inline));
+    }
+  }
 }
 
 mockProvider = await saveMockProvider({ id: mockProvider.id, endpoint: "videos_generations" });
@@ -1631,6 +1676,15 @@ await new Promise((resolve) => badKeyServer.close(resolve));
       const identical = download?.status===200 && download.headers.get('content-type')===mime && Buffer.from(await download.arrayBuffer()).equals(expected);
       check(`${prompt}：生成成功、图库关联当前任务，GET 图片逐字节一致`,submitted.status===200 && job?.status==='succeeded' && job?.protocol===protocol && job?.images?.length===1 && asset?.url===out?.url && asset?.model===requestedModel && asset?.format===format && asset?.bytes===expected.length && asset?.width===(format==='jpg'?2:1) && asset?.height===1 && identical,`status=${job?.status}, format=${asset?.format}, bytes=${asset?.bytes??0}, verified=${!!identical}`);
     }
+    for (const [size,tier] of [['1152x1536','1K'],['2304x3072','2K'],['4608x6144','4K']]) {
+      for (const automatic of [false,true]) {
+        const requested = automatic ? 'auto' : undefined;
+        const {job,requests} = await submit('Gemini auto',{size,aspect_ratio:requested});
+        const cfg = requests[0]?.body?.generationConfig?.imageConfig;
+        const persisted = JSON.parse(fs.readFileSync(path.join(stateDir,'jobs.json'),'utf8')).find(j=>j.id===job?.id);
+        check(`Gemini 普通3:4预设 ${size}：${automatic?'显式auto仅取档位':'保持3:4及档位语义'}`, job?.status==='succeeded' && requests.length===1 && cfg?.imageSize===tier && (automatic ? !Object.hasOwn(cfg,'aspectRatio') : cfg.aspectRatio==='3:4') && [job,persisted].every(j=>j?.size===size && j.aspectRatio===(automatic?'auto':'3:4')), JSON.stringify({httpJob:job?.status,config:cfg,size}));
+      }
+    }
     const refA = upload.body.item.url;
     for (const [label, opts, expected, refs] of [
       ['像素预设仅取 2K',{size:'2048x3072',aspect_ratio:'auto'},{imageSize:'2K'},[]],
@@ -1782,7 +1836,7 @@ if (LIVE) {
 }
 
 await new Promise((resolve) => server.close(resolve));
-console.log(failures === 0 ? "\n全部通过" : `\n${failures} 项失败`);
+console.log(failures === 0 ? `\n全部通过（${checks}/${checks}）` : `\n${failures} 项失败（${checks-failures}/${checks} 通过）`);
 // 不用 process.exit()：Windows 上 fetch 的 keep-alive handle 还在关闭中时强退
 // 会触发 libuv 断言，退出码会被污染。设 exitCode 让事件循环自己收干净。
 process.exitCode = failures === 0 ? 0 : 1;

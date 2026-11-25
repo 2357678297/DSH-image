@@ -3019,6 +3019,23 @@ check(
     let rejected=false; try { w.normalizeGenerationBody({endpoint:"gemini_generate",model:"Nano-Banana-2",size:"2K",...patch}, true,"1024x1024",false); } catch { rejected=true; }
     check(`Gemini JSON 拒绝不支持的 ${JSON.stringify(patch)}`,rejected);
   }
+  for (const raw of [false, true]) {
+    for (const mode of ["generate", "edit"]) {
+      const references = mode === "edit" ? [{url:"/api/velapi-image-go/upload/auto-ref.png",dataUrl:"data:image/png;base64,AAAA"}] : [];
+      const body = makeRequest(references, {config:{defaultEndpoint:mode === "edit" ? "images_edits" : "images_generations",defaultModel:"gpt-image-2.5-c",defaultSize:"auto",defaultCount:1},sizeRaw:raw});
+      check(`普通图片自动尺寸 ${mode} raw=${raw} 不回落固定比例`,body.size==="auto" && body.mode===mode && !Object.hasOwn(body,"aspect_ratio") && !Object.hasOwn(body,"aspectRatio") && (mode!=="edit" || body.images.length===1 && body.referenceUrls.length===1));
+    }
+    const normalized = w.normalizeGenerationBody({endpoint:"images_edits",size:"AUTO",aspect_ratio:"16:9",aspectRatio:"3:4",referenceUrl:"/api/velapi-image-go/upload/ref.png"},raw,"4096x1728",false);
+    check(`自动 JSON raw=${raw} 统一为 auto 并清除固定比例`,normalized.size==="auto" && !Object.hasOwn(normalized,"aspect_ratio") && !Object.hasOwn(normalized,"aspectRatio") && normalized.referenceUrl.endsWith("ref.png"));
+  }
+  for (const [size,tier] of [["1152x1536","1K"],["2304x3072","2K"],["4608x6144","4K"]]) {
+    const raw = w.normalizeGenerationBody({size},true,"1024x1024",false);
+    const pixels = w.normalizeGenerationBody(raw,false,"1024x1024",false);
+    check(`3:4 ${tier} 可按像素或原生比例字段发送`,raw.size===tier && raw.aspect_ratio==="3:4" && pixels.size===size && !Object.hasOwn(pixels,"aspect_ratio"));
+  }
+  check("自动表达式不回落像素尺寸",w.resolveSizeExpression("auto","2304x3072")==="auto" && w.resolveSizeExpression("AUTO","1024x1024")==="auto");
+  const inheritedAuto = makeRequest([], {config:{defaultEndpoint:"gemini_generate",defaultSize:"auto",defaultModel:"Nano-Banana-2",defaultCount:1},sizeRaw:false});
+  check("普通自动切换 Gemini 时保持自动画幅",inheritedAuto.size==="1K" && inheritedAuto.aspect_ratio==="auto");
   const refBody = makeRequest([{ url: "/local/1", dataUrl: "/local/1" }, { url: "/local/2", dataUrl: "data:image/png;base64,A" }]);
   check("图生图保留 URL 和真实字节；无参考图走生成", refBody.mode === "edit" && refBody.image === "data:image/png;base64,A" && refBody.referenceUrls.join() === "/local/1,/local/2" && makeRequest().mode === "generate");
   check(
@@ -3103,8 +3120,8 @@ check(
       /hints: catalog\.owners,/.test(SOURCE)
   );
   check(
-    "普通重试按模型选供应商，Gemini 原生重试优先使用原任务供应商",
-    /nativeRetry && job\.providerId \? job\.providerId : providerIdForModel\(providers, config, retryModel\)/.test(SOURCE) &&
+    "图片重试保留原供应商；只有隔离旧对话模型时重新选择模型归属",
+    /job\.providerId && retryModel === job\.model \? job\.providerId : providerIdForModel\(providers, config, retryModel\)/.test(SOURCE) &&
       // 检查器里那个「当前供应商」下拉也跟模型走，不然选完模型它还显示上一条
       /value: config\.activeProviderId \|\| providerIdForModel\(providers, config\) \|\| "",/.test(SOURCE)
   );
@@ -3304,7 +3321,7 @@ check(
       /psWarpCanvas\(pixels, plan\.inverse/.test(SOURCE)
   );
   check("JSON 只覆盖编辑过的字段，不允许把请求串到其它会话", JSON.stringify(w.requestOverrides({prompt:"A", quality:"LOW", conversationId:"a"}, {prompt:"A", quality:"HIGH", conversationId:"b"})) === '{"quality":"HIGH"}' && SOURCE.includes("data-json-apply"));
-  check("所有 18 种尺寸的字段与像素可双向无损切换", w.SIZE_OPTIONS.every(o => {
+  check("所有 21 种固定尺寸的字段与像素可双向无损切换", w.SIZE_OPTIONS.length === 21 && w.SIZE_OPTIONS.every(o => {
     const raw = w.normalizeGenerationBody({ size: o.value }, true, "1024x1024", false);
     const converted = w.normalizeGenerationBody(raw, false, "1024x1024", false);
     return raw.aspect_ratio && converted.size === o.value && !("aspect_ratio" in converted) && !("aspectRatio" in converted);
@@ -3412,7 +3429,12 @@ check(
       const labels = options.map((option) => ui.sizeOptionLabel(option));
       const custom = ui.sizeOptionsFor("512x512");
       return (
-        options.length >= 18 &&
+        options.length === 21 &&
+        labels.includes("3:4 · 1K · 1152×1536") &&
+        labels.includes("3:4 · 2K · 2304×3072") &&
+        labels.includes("3:4 · 4K · 4608×6144") &&
+        ui.sizeOptionsFor("auto").filter(option => option.value === "auto").length === 1 &&
+        ui.sizeOptionLabel(ui.sizeOptionsFor("auto")[0]) === "自动" &&
         labels.includes("1:1 · 1K · 1024×1024") &&
         labels.includes("16:9 · 1K · 1536×864") &&
         labels.includes("9:16 · 1K · 864×1536") &&

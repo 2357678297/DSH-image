@@ -752,6 +752,7 @@ function writeConvSetting(id, settings) {
 			"chat.geminiReload": "当前宿主不支持 Gemini 原生生图。请更新插件并重启 DSH；仅刷新页面不会加载新宿主。",
 			"chat.geminiParams": "Gemini 原生每次仅生成 1 张；请选择当前模型支持的分辨率和比例，不支持蒙版或视频时长。",
 			"chat.geminiRatio": "图片比例", "chat.geminiSize": "图片分辨率",
+			"chat.geminiRatioAuto": "自动", "chat.geminiRatioAutoHint": "自动：不强制指定比例；有参考图时由模型沿用原图画幅，无参考图时由模型决定。",
 			"prov.shortRerank": "重排",
 			"prov.shortImages": "图片生成",
 			"prov.shortEdits": "图片编辑",
@@ -1249,6 +1250,7 @@ function writeConvSetting(id, settings) {
 			"chat.geminiReload": "This host does not support Gemini native image generation. Update the plugin and restart DSH; refreshing this page is not enough.",
 			"chat.geminiParams": "Gemini native returns one image. Use a resolution and ratio supported by the selected model; masks and video duration are not supported.",
 			"chat.geminiRatio": "Image aspect ratio", "chat.geminiSize": "Image resolution",
+			"chat.geminiRatioAuto": "Auto", "chat.geminiRatioAutoHint": "Auto: omit the fixed ratio. With references, let the model follow the original framing; otherwise let it choose.",
 			"prov.shortRerank": "Rerank",
 			"prov.shortImages": "Image gen",
 			"prov.shortEdits": "Image edits",
@@ -2868,19 +2870,21 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			return { size: pixel && !body.aspect_ratio && !body.aspectRatio ? resolveSizeExpression(size) : resolveSizeExpression(`${level} ${ratio}`, fallback) };
 		}
 
-		const GEMINI_RATIOS = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"];
+		const GEMINI_RATIOS = ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"];
+		const geminiRatioLabel = ratio => ratio === "auto" ? t("chat.geminiRatioAuto") : ratio;
 		const geminiTiers = model => /^gemini-2\.5-flash-image(?:-|$)/i.test(String(model || "").replace(/^models\//i, "")) ? ["1K"] : ["1K", "2K", "4K"];
 		function imageRequestProtocol(endpoint, providerId, providers) {
 			return (!endpoint || endpoint === "auto") && providers?.find(p => p.id === providerId)?.endpoint === GEMINI_NATIVE ? GEMINI_NATIVE : endpoint || "auto";
 		}
 		function geminiSettings(config) {
 			const legacy = sizePartsFor(config.defaultSize), tiers = geminiTiers(config.defaultModel);
-			const size = config.geminiSize || legacy.tier, ratio = config.geminiRatio || legacy.ratio;
+			const size = config.geminiSize || legacy.tier, ratio = String(config.geminiRatio || legacy.ratio).toLowerCase();
 			return { size:tiers.includes(size) ? size : "1K", aspect_ratio:GEMINI_RATIOS.includes(ratio) ? ratio : "1:1" };
 		}
 		function geminiBody(body) {
 			const {quality, seconds, aspectRatio, ...rest} = body;
-			const legacy = sizePartsFor(rest.size), size = legacy.tier || "1K", ratio = rest.aspect_ratio || aspectRatio || legacy.ratio || "1:1";
+			if (rest.aspect_ratio && aspectRatio && String(rest.aspect_ratio).toLowerCase() !== String(aspectRatio).toLowerCase()) throw Error(t("chat.geminiParams"));
+			const legacy = sizePartsFor(rest.size), size = legacy.tier || "1K", ratio = String(rest.aspect_ratio || aspectRatio || legacy.ratio || "1:1").toLowerCase();
 			if (!geminiTiers(rest.model).includes(size) || !GEMINI_RATIOS.includes(ratio) || rest.mask || seconds || (rest.n != null && Number(rest.n) !== 1)) throw Error(t("chat.geminiParams"));
 			return {...rest, size, aspect_ratio:ratio, n:1};
 		}
@@ -4206,7 +4210,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						h(
 							"div",
 							{ className: "vig-who" },
-							`${t("chat.assistant")} · ${job.model} · ${job.size}${job.protocol === GEMINI_NATIVE ? ` · ${[job.aspectRatio, protocolShortLabel(GEMINI_NATIVE)].filter(Boolean).join(" · ")}` : ""}${job.endpoint ? ` · ${job.endpoint}` : ""}`
+							`${t("chat.assistant")} · ${job.model} · ${job.size}${job.protocol === GEMINI_NATIVE ? ` · ${[geminiRatioLabel(job.aspectRatio), protocolShortLabel(GEMINI_NATIVE)].filter(Boolean).join(" · ")}` : ""}${job.endpoint ? ` · ${job.endpoint}` : ""}`
 						),
 						// 对话模型把这句话整理成了什么（原话在上面气泡里，这里只摆改写结果）
 						job.planNote && job.planNote !== displayPrompt
@@ -4715,7 +4719,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								h("div",{className:"vig-ctx-title"}, t("chat.requestInfo")),
 								h("p",{className:"vig-muted"},t("chat.directHint")),
 								h("div",{className:"vig-ctx-row"},config.defaultModel || "—"),
-								h("div",{className:"vig-ctx-row"}, nativeGemini ? `${protocolShortLabel(GEMINI_NATIVE)} · ${gemini.size} · ${gemini.aspect_ratio} · ×1` : isVideoEndpoint ? config.videoSize : config.defaultSize),
+								h("div",{className:"vig-ctx-row"}, nativeGemini ? `${protocolShortLabel(GEMINI_NATIVE)} · ${gemini.size} · ${geminiRatioLabel(gemini.aspect_ratio)} · ×1` : isVideoEndpoint ? config.videoSize : config.defaultSize),
 								h("button",{className:"vig-btn",onClick:()=>{setSummaryOpen(false); actions.openJsonBody();}},t("chat.jsonBody"))
 							) : null),
 						// 工具展开器：一块悬浮面板收纳全部次要参数（上传 / 图库 / 信息卡 / 张数 / 协议 / 计数）
@@ -4726,8 +4730,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						nativeGemini ? [
 							h("select", {key:"gemini-size", className:"vig-sel", "data-gemini-size":"1", title:t("chat.geminiSize"), "aria-label":t("chat.geminiSize"), value:gemini.size,
 								onChange:e => actions.setGeminiOptions({geminiSize:e.target.value})}, geminiTiers(config.defaultModel).map(v => h("option", {key:v,value:v}, v))),
-							h("select", {key:"gemini-ratio", className:"vig-sel", "data-gemini-ratio":"1", title:t("chat.geminiRatio"), "aria-label":t("chat.geminiRatio"), value:gemini.aspect_ratio,
-								onChange:e => actions.setGeminiOptions({geminiRatio:e.target.value})}, GEMINI_RATIOS.map(v => h("option", {key:v,value:v}, v)))
+							h("select", {key:"gemini-ratio", className:"vig-sel", "data-gemini-ratio":"1", title:gemini.aspect_ratio === "auto" ? t("chat.geminiRatioAutoHint") : t("chat.geminiRatio"), "aria-label":t("chat.geminiRatio"), value:gemini.aspect_ratio,
+								onChange:e => actions.setGeminiOptions({geminiRatio:e.target.value})}, GEMINI_RATIOS.map(v => h("option", {key:v,value:v,title:v === "auto" ? t("chat.geminiRatioAutoHint") : v}, geminiRatioLabel(v))))
 						] : isVideoEndpoint
 							? [
 									h(
@@ -12624,6 +12628,12 @@ h(
 					rootRef.current?.querySelector(".vig-composer textarea")?.focus();
 				},
 				setGeminiOptions: patch => {
+					if (jsonOverrideRef.current) {
+						const next = {...jsonOverrideRef.current};
+						if (Object.hasOwn(patch, "geminiRatio")) { delete next.aspect_ratio; delete next.aspectRatio; }
+						if (Object.hasOwn(patch, "geminiSize")) delete next.size;
+						jsonOverrideRef.current = next;
+					}
 					const owner = conversationIdRef.current;
 					if (owner) writeConvSetting(owner, {...initialConfigRef.current, ...readConvSettings()[owner], ...patch});
 					setConfig(current => ({...current, ...patch}));

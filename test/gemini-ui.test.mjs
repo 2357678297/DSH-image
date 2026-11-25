@@ -9,7 +9,7 @@ export async function auditGeminiUI({host,check,wait,waitFor,flushSync,posts,rem
     check('Gemini 原生选项可见，现代宿主可选', [...ep().options].some(o=>o.value==='gemini_generate'&&o.text==='Gemini 原生'&&!o.disabled));
     set(ep(),'gemini_generate'); await wait(60);
     const size=get('[data-gemini-size]'), ratio=get('[data-gemini-ratio]');
-    check('8K 宽像素预设转 4K · 21:9，10 个比例，张数固定',size?.value==='4K' && ratio?.value==='21:9' && ratio.options.length===10 && size.options.length===3 && !!get('[data-gemini-count]'));
+    check('8K 宽像素预设转 4K · 21:9，自动加 10 个固定比例，张数固定',size?.value==='4K' && ratio?.value==='21:9' && ratio.options.length===11 && [...ratio.options].some(o=>o.value==='auto'&&o.text==='自动') && size.options.length===3 && !!get('[data-gemini-count]'));
     set(size,'2K'); set(ratio,'3:4'); set(text(),'gemini text fixture'); click(get('[data-json-body]'));
     const editor=get('[data-json-editor]'), expected=JSON.parse(editor.value);
     check('JSON 反映实际参数且无质量或时长',expected.endpoint==='gemini_generate' && expected.size==='2K' && expected.aspect_ratio==='3:4' && expected.model==='Nano-Banana-2' && expected.n===1 && !('quality' in expected) && !('seconds' in expected) && get('[data-size-raw]').disabled);
@@ -17,12 +17,20 @@ export async function auditGeminiUI({host,check,wait,waitFor,flushSync,posts,rem
     check('JSON 8K 无法应用，具体错误可见',!!get('[data-json-editor]') && host.textContent.includes('每次仅生成 1 张'));
     set(editor,JSON.stringify(expected));click(get('[data-json-apply]'));click(get('[data-force-generate]'));await waitFor(()=>sends().length===1,1500);
     check('Nano-Banana-2 的文本请求不走 images_generations', last()?.endpoint==='gemini_generate' && last().mode==='generate' && Object.keys(expected).every(k=>JSON.stringify(expected[k])===JSON.stringify(last()[k])));
+    set(ratio,'auto'); set(text(),'gemini auto text fixture'); click(get('[data-json-body]'));
+    const autoEditor=get('[data-json-editor]'), autoExpected=JSON.parse(autoEditor.value);
+    check('自动比例在 JSON 中显式显示且解释跟随参考画幅',autoExpected.aspect_ratio==='auto'&&ratio.title.includes('沿用原图画幅'));
+    click(get('[data-json-apply]')); click(get('[data-force-generate]')); await waitFor(()=>sends().length===2,1500);
+    check('自动比例文生图请求保留 auto 且不带额外固定比例',last()?.aspect_ratio==='auto'&&last()?.size==='2K'&&last()?.mode==='generate');
     const historyAuthor=all('article.is-user').find(n=>n.textContent.includes('Gemini retry fixture'));
-    const historyAction=(name)=>historyAuthor?.nextElementSibling?.querySelector('button[aria-label="'+name+'"]');
-    click(historyAction('编辑提示词（填回输入框）')); await waitFor(()=>get('.vig-ref img'),1000);click(get('[data-force-generate]'));await waitFor(()=>sends().length===2,1500);
-    check('带参考图仍使用原生协议，保留本地参考 URL',last()?.endpoint==='gemini_generate' && last().mode==='edit' && last().referenceUrls?.[0]?.endsWith('up_1.png'));
-    click(historyAction('重试'));await waitFor(()=>sends().length===3,1500);
-    check('重试沿用原供应商、协议、参考图和比例，不带旧质量或时长', last()?.providerId==='pv_gpt' && last().endpoint==='gemini_generate' && last().size==='2K' && last().aspect_ratio==='4:3' && last().n===1 && !!last().referenceUrls.length && !('quality' in last()) && !('seconds' in last()));
+    const historyAction=(name,author=historyAuthor)=>author?.nextElementSibling?.querySelector('button[aria-label="'+name+'"]');
+    click(historyAction('编辑提示词（填回输入框）')); await waitFor(()=>get('.vig-ref img'),1000);click(get('[data-force-generate]'));await waitFor(()=>sends().length===3,1500);
+    check('自动比例编辑请求仍带原生协议及本站参考图',last()?.endpoint==='gemini_generate' && last().mode==='edit' && last().aspect_ratio==='auto' && last().referenceUrls?.[0]?.endsWith('up_1.png'));
+    const autoAuthor=all('article.is-user').find(n=>n.textContent.includes('Gemini auto retry fixture'));
+    click(historyAction('重试',autoAuthor));await waitFor(()=>sends().length===4,1500);
+    check('自动比例重试沿用原供应商、参考图和 auto，不带旧质量或时长', last()?.providerId==='pv_gpt' && last().endpoint==='gemini_generate' && last().size==='2K' && last().aspect_ratio==='auto' && last().n===1 && !!last().referenceUrls.length && !('quality' in last()) && !('seconds' in last()));
+    click(historyAction('重试'));await waitFor(()=>sends().length===5,1500);
+    check('固定比例旧任务重试仍保留原 4:3，不受当前自动比例影响',last()?.aspect_ratio==='4:3'&&last()?.providerId==='pv_gpt');
     for (const kind of ['chat','']) {
       await remount(kind); const n=sends().length;
       const msg=get('[data-gemini-unavailable]'); const oldHistory=all('article.is-user').find(e=>e.textContent.includes('Gemini retry fixture'));

@@ -180,6 +180,7 @@ if (geminiFixture) {
  config.defaultModel="Nano-Banana-2"; config.defaultSize="8192x3456"; config.defaultCount=4;
  providers[0].models.push("Nano-Banana-2"); providers[1].models.push("Nano-Banana-2", "gemini-2.5-flash-image");
  convJobs.conv_default.push({...JOB, id:"job_gemini", model:"Nano-Banana-2", providerId:"pv_gpt", protocol:"gemini_generate", endpoint:"/v1beta/models/Nano-Banana-2:generateContent", size:"2K", aspectRatio:"4:3", count:1, prompt:"Gemini retry fixture"});
+ convJobs.conv_default.push({...JOB, id:"job_gemini_auto", model:"Nano-Banana-2", providerId:"pv_gpt", protocol:"gemini_generate", endpoint:"/v1beta/models/Nano-Banana-2:generateContent", size:"2K", aspectRatio:"auto", count:1, prompt:"Gemini auto retry fixture"});
 }
 let moveReply = null;
 const json = (payload) => new Response(JSON.stringify(payload), { status: 200, headers: { "content-type": "application/json" } });
@@ -1752,7 +1753,7 @@ const args = ["--headless=new", "--disable-gpu", "--no-sandbox", "--virtual-time
 if (shotPath) args.push("--hide-scrollbars", "--window-size=1040,900", `--screenshot=${shotPath}`);
 if (!shotPath && /ps=pick|audit=/.test(query)) args.push("--window-size=1440,1000");
 args.push("--dump-dom", url);
-const dom = ["audit=grid","audit=psoverflow"].includes(query) ? await runGridPage(page, CHROME, query) : execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+const dom = ["audit=grid","audit=psoverflow","audit=gemini"].includes(query) ? await runGridPage(page, CHROME, query) : execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 
 const match = dom.match(/<pre id="vig-viewer-out">([\s\S]*?)<\/pre>/);
 if (!match) {

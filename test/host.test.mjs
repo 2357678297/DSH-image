@@ -379,6 +379,7 @@ const mockServer = http.createServer((request, response) => {
               const hasToolResult = chatMessages.some((item) => item?.role === "tool");
               if (Array.isArray(payload?.tools) && payload.tools.length > 0 && !hasToolResult) {
                 // 第一轮：模型决定调 generate_image 工具
+                const geminiAuto = chatMessages.some(item => item?.role === 'user' && String(item.content || '').includes('Gemini auto tool'));
                 return {
                   choices: [
                     {
@@ -393,7 +394,9 @@ const mockServer = http.createServer((request, response) => {
                             type: "function",
                             function: {
                               name: "generate_image",
-                              arguments: JSON.stringify({ prompt: "一只戴眼镜的橘猫，柔和顶光", count: 1 })
+                              arguments: JSON.stringify(geminiAuto
+                                ? {prompt:"Gemini auto tool",model:"Nano-Banana-2",protocol:"gemini_generate",size:"2K",aspect_ratio:"auto"}
+                                : { prompt: "一只戴眼镜的橘猫，柔和顶光", count: 1 })
                             }
                           }
                         ]
@@ -1569,7 +1572,7 @@ await new Promise((resolve) => badKeyServer.close(resolve));
     const image = { inlineData: { mimeType:"image/png", data:tinyPng } };
     let status = 200, result;
     switch (prompt) {
-      case "Gemini inline": case "Gemini Flash 2.5": case "Gemini ordered refs": result = candidate([image]); break;
+      case "Gemini inline": case "Gemini Flash 2.5": case "Gemini ordered refs": case "Gemini auto": case "Gemini auto tool": result = candidate([image]); break;
       case "Gemini Markdown parts": result = candidate([{text:markdown}]); break;
       case "Gemini Markdown choices":
         signalReading(); await inspected;
@@ -1629,6 +1632,17 @@ await new Promise((resolve) => badKeyServer.close(resolve));
       check(`${prompt}：生成成功、图库关联当前任务，GET 图片逐字节一致`,submitted.status===200 && job?.status==='succeeded' && job?.protocol===protocol && job?.images?.length===1 && asset?.url===out?.url && asset?.model===requestedModel && asset?.format===format && asset?.bytes===expected.length && asset?.width===(format==='jpg'?2:1) && asset?.height===1 && identical,`status=${job?.status}, format=${asset?.format}, bytes=${asset?.bytes??0}, verified=${!!identical}`);
     }
     const refA = upload.body.item.url;
+    for (const [label, opts, expected, refs] of [
+      ['像素预设仅取 2K',{size:'2048x3072',aspect_ratio:'auto'},{imageSize:'2K'},[]],
+      ['参考图保留，复合尺寸仅取 4K',{size:'4K · 16:9',aspect_ratio:'AUTO',aspectRatio:'auto',mode:'edit',referenceUrls:[refA]},{imageSize:'4K'},[tinyPng]],
+      ['Flash 2.5 固定 1K',{model:legacy,size:'1K',aspect_ratio:'auto'},{},[]],
+      ['旧请求保持 1:1',{size:'2K',aspect_ratio:undefined},{aspectRatio:'1:1',imageSize:'2K'},[]]
+    ]) {
+      const {job,requests} = await submit('Gemini auto',opts);
+      const wire=requests[0]?.body, persisted=JSON.parse(fs.readFileSync(path.join(stateDir,'jobs.json'),'utf8')).find(j=>j.id===job?.id);
+      const aspect=expected.aspectRatio ?? 'auto';
+      check(`Gemini 自动比例：${label}`,requests.length===1 && job?.status==='succeeded' && job.aspectRatio===aspect && persisted?.aspectRatio===aspect && JSON.stringify(wire?.generationConfig?.imageConfig)===JSON.stringify(expected) && JSON.stringify(wire?.contents?.[0]?.parts?.filter(p=>p.inlineData).map(p=>p.inlineData.data))===JSON.stringify(refs),JSON.stringify({config:wire?.generationConfig?.imageConfig,job:job?.aspectRatio,stored:persisted?.aspectRatio}));
+    }
     const refB = (await call('/upload',{method:'POST',body:{name:'gemini-B.png',data:`data:image/png;base64,${PNG_FOR_EDIT}`}})).body.item.url;
     for (const [referenceUrls,expectedOrder,label] of [
       [[refA,refB],[tinyPng,PNG_FOR_EDIT],'完整预览次序 A,B 优先，B 不重复'],
@@ -1644,11 +1658,24 @@ await new Promise((resolve) => badKeyServer.close(resolve));
       check(`${prompt}：如实失败、不改打旧接口或跟随链接、不产生图片`,job?.status==='failed' && !job?.images?.length && !!job?.error && requests.length===1 && requests[0].url===`/v1beta/models/${model}:generateContent` && !JSON.stringify(job).includes(secret),`status=${job?.status}, calls=${requests.length}`);
       if (prompt==='Gemini unauthorized') check('Gemini 401：保留上游状态和失败原因',job?.errorDetail?.status===401 && job?.error?.includes('Fixture key rejected'));
     }
-    for (const [label,opts] of [['多张',{n:2}],['蒙版',{mode:'edit',images:[tinyPng],mask:`data:image/png;base64,${tinyPng}`}],['尺寸',{size:'1234x567'}],['旧模型高档位',{model:legacy,size:'2K'}]]) {
+    for (const [label,opts] of [['非法比例',{aspect_ratio:'7:11'}],['别名冲突',{aspect_ratio:'auto',aspectRatio:'4:3'}],['明确尺寸冲突',{size:'2048x3072',aspect_ratio:'16:9'}],['auto 非法预设比例',{size:'2K · 7:11',aspect_ratio:'auto'}],['多张',{n:2}],['蒙版',{mode:'edit',images:[tinyPng],mask:`data:image/png;base64,${tinyPng}`}],['尺寸',{size:'1234x567'}],['旧模型高档位',{model:legacy,size:'2K',aspect_ratio:'auto'}]]) {
       const {submitted,job,requests} = await submit('Gemini invalid options',opts);
       check(`Gemini ${label}：不支持的请求在用户输入端或本地任务报错，不产生上游流量`,requests.length===0 && (submitted.status===400 || job?.status==='failed'),`http=${submitted.status}, calls=${requests.length}`);
     }
     check('Gemini 负向回归不新增素材、也不向另一个供应商发请求',(await call('/library?limit=200')).body.items.length===count && mockHits.length===beforeHits);
+    const chatProvider = await saveMockProvider({name:'fixture-auto-tool-chat', models:['fixture-auto-tool-chat']});
+    try {
+      await call('/config',{method:'POST',body:{activeProviderId:gemProvider.id}});
+      const start = hits.length;
+      const response = await call('/chat/agent',{method:'POST',body:{message:'生成 Gemini auto tool',chatModel:'fixture-auto-tool-chat'}});
+      const result = response.body?.toolCalls?.[0]?.result;
+      const record = JSON.parse(fs.readFileSync(path.join(stateDir,'jobs.json'),'utf8')).find(j=>j.id===result?.jobId);
+      const received = hits.slice(start), cfg=received[0]?.body?.generationConfig?.imageConfig;
+      check('Gemini 内部工具：自动比例任务落盘且仅发分辨率', result?.ok && record?.aspectRatio==='auto' && received.length===1 && cfg?.imageSize==='2K' && !Object.hasOwn(cfg,'aspectRatio'), JSON.stringify({result,record:record?.aspectRatio,cfg}));
+    } finally {
+      await call('/config',{method:'POST',body:{activeProviderId:''}});
+      await call('/providers/delete',{method:'POST',body:{id:chatProvider.id}});
+    }
   } finally {
     if (gemProvider?.id) await call('/providers/delete',{method:'POST',body:{id:gemProvider.id}});
     await new Promise(resolve=>relay.close(resolve));

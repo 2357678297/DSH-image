@@ -3012,6 +3012,9 @@ check(
     const body = makeRequest([{url:"/api/velapi-image-go/upload/ref.png",dataUrl:"data:image/png;base64,AAAA"}], {config:{defaultEndpoint:"gemini_generate",defaultSize,defaultModel:model,defaultCount:4,defaultQuality:"HIGH"},sizeRaw:false});
     check(`Gemini ${model} ${defaultSize} → ${expected} ${ratio}，保留参考图`,body.endpoint === "gemini_generate" && body.mode === "edit" && body.size === expected && body.aspect_ratio === ratio && body.n === 1 && body.images.length === 1 && body.referenceUrls.length === 1 && !("seconds" in body) && !("quality" in body));
   }
+  const autoBody = makeRequest([{url:"/api/velapi-image-go/upload/ref.png",dataUrl:"data:image/png;base64,AAAA"}], {config:{defaultEndpoint:"gemini_generate",defaultSize:"8192x3456",defaultModel:"Nano-Banana-2",defaultCount:2,defaultQuality:"HIGH",geminiSize:"2K",geminiRatio:"auto"},sizeRaw:false});
+  check("Gemini 自动比例保留参考图并发送自动哨兵",autoBody.size==="2K"&&autoBody.aspect_ratio==="auto"&&autoBody.mode==="edit"&&autoBody.n===1&&autoBody.images.length===1);
+  check("Gemini JSON 允许自动而仍拒绝无效比例",w.normalizeGenerationBody({endpoint:"gemini_generate",model:"Nano-Banana-2",size:"2K",aspect_ratio:"auto"},true,"1024x1024",false).aspect_ratio==="auto");
   for (const patch of [{size:"8K"},{aspect_ratio:"20:1"},{n:4},{seconds:"6"},{mask:"mask"}]) {
     let rejected=false; try { w.normalizeGenerationBody({endpoint:"gemini_generate",model:"Nano-Banana-2",size:"2K",...patch}, true,"1024x1024",false); } catch { rejected=true; }
     check(`Gemini JSON 拒绝不支持的 ${JSON.stringify(patch)}`,rejected);

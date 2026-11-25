@@ -751,6 +751,8 @@ curl.exe -s "http://127.0.0.1:$port/api/velapi-image-go/job?id=$($job.job.id)"
 
 **以 Nano-Banana-2 为例：**在供应商里填入该网关提供的地址、密钥和模型名，在「对话生图」选择「Gemini 原生」和该模型。提示词可直接生成；需要改图时先添加参考图，协议保持不变。建议先用 `1K`；高分辨率取决于模型。蒙版编辑请用 `images_edits`。
 
+Gemini 的比例菜单提供「自动」：有参考图时不强制改变原图画幅，没有参考图时由模型决定比例。此选项在工作台 JSON 和任务历史中记为 `aspect_ratio: "auto"`，发送给上游时省略 `generationConfig.imageConfig.aspectRatio`，仍可选择当前模型支持的分辨率；不会裁切或拉伸返回图片。多张参考图比例不同、或提示词另行要求构图时，最终画幅由模型决定。旧任务重试保留原来的自动或固定比例。
+
 Gemini 原生请求使用 `contents[].parts` 与 `generationConfig.imageConfig`。它读取响应中的 `inlineData`，也兼容网关在文本里返回的 Markdown 内嵌图片（`data:image/...;base64,...`）；不会因为只有文本而改走 OpenAI 重发。「原生」指工作台发出的请求格式，不表示网关后面的上游渠道一定直连 Google。
 
 Google 官方地址可填 `https://generativelanguage.googleapis.com/v1beta`，使用 Google API key 并选择支持图片输出的模型；中转站继续使用该站自己的令牌和模型别名。只更新界面、尚未加载新版宿主时无法使用这个协议；需要重新加载插件宿主或重启 DSH。

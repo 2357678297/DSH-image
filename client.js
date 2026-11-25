@@ -262,6 +262,7 @@ function writeConvSetting(id, settings) {
 			"nav.providers": "供应商管理",
 			"nav.ps": "图片处理",
 			"ps.tool.transform": "自由变换",
+			"ps.transform.pixels":"变换像素", "ps.transform.mask":"矩形蒙版", "ps.transform.resetMask":"移除矩形蒙版", "ps.transform.maskHint":"拖动锚点调整可见区域，不移动或拉伸图片像素。移除蒙版可恢复原图。", "ps.transform.limit":"变换后的画布超出像素或图层内存预算，请减小拖动距离。",
 			"ps.transform.hint": "拖中心移动，拖边点或角点缩放。按住 Shift 等比缩放，松开提交，Esc 取消本次拖动。",
 			"ps.tool.select": "框选",
 			"ps.tool.crop": "裁切",
@@ -848,6 +849,7 @@ function writeConvSetting(id, settings) {
 			"nav.ps": "Image tools",
 			"ps.tool.select": "Marquee",
 			"ps.tool.transform": "Free transform",
+			"ps.transform.pixels":"Transform pixels", "ps.transform.mask":"Rectangle mask", "ps.transform.resetMask":"Remove rectangle mask", "ps.transform.maskHint":"Drag handles to change visibility without moving or resampling pixels. Remove the mask to restore the image.", "ps.transform.limit":"The transformed canvas exceeds the pixel or layer memory limit. Try a smaller drag.",
 			"ps.transform.hint": "Drag the center to move, or an edge or corner to resize. Hold Shift for proportional scaling. Release to apply; Esc cancels the drag.",
 			"ps.tool.crop": "Crop",
 			"ps.tool.split": "Slice",
@@ -9098,11 +9100,29 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			if(keep){const factor=hx && (!hy || Math.abs(dx/box.w)>=Math.abs(dy/box.h))?w/box.w:h/box.h;w=Math.max(1,box.w*factor);h=Math.max(1,box.h*factor);}
 			return {x:box.x+(hx<0?1:hx===0?0.5:0)*(box.w-w),y:box.y+(hy<0?1:hy===0?0.5:0)*(box.h-h),w,h};
 		}
-		// Apply one affine map to the bitmap and mask, clipping at the existing document boundary.
-		function psGripBitmap(bitmap,from,to,docW,docH,outW,outH){
+		// All boxes use coordinates in the document at pointerdown; a negative extent origin
+		// adds padding on the left/top without rescaling any of the stationary content.
+		function psGripExtent(to,w,h){
+			const x=Math.floor(Math.min(0,to.x)),y=Math.floor(Math.min(0,to.y));
+			return {x,y,w:Math.ceil(Math.max(w,to.x+to.w))-x,h:Math.ceil(Math.max(h,to.y+to.h))-y};
+		}
+		function psGripWithinBudget(ext,planes=1){
+			return [ext.x,ext.y,ext.w,ext.h].every(Number.isFinite) && ext.w>0 && ext.h>0 && ext.w<=16384 && ext.h<=16384 && ext.w*ext.h<=67108864 && ext.w*ext.h*planes<=134217728;
+		}
+		function psGripBitmap(bitmap,from,to,docW,docH,ext,outW=ext.w,outH=ext.h){
 			const result=psCanvas(outW,outH),kx=to.w/from.w,ky=to.h/from.h;
-			result.getContext('2d').drawImage(bitmap,(to.x-from.x*kx)*outW/docW,(to.y-from.y*ky)*outH/docH,kx*outW,ky*outH);
+			result.getContext('2d').drawImage(bitmap,(to.x-from.x*kx-ext.x)*outW/ext.w,(to.y-from.y*ky-ext.y)*outH/ext.h,kx*docW*outW/ext.w,ky*docH*outH/ext.h);
 			return result;
+		}
+		const psGripClipCache=new WeakMap(); // Raw pixels / prior masks survive undo and expanding a previously restricted window.
+		function psGripClip(bitmap,rect,w,h,outW,outH){
+			const out=psCanvas(outW,outH),ctx=out.getContext('2d');ctx.scale(outW/w,outH/h);
+			ctx.beginPath();ctx.rect(rect.x,rect.y,rect.w,rect.h);ctx.clip();
+			if(bitmap) ctx.drawImage(bitmap,0,0,w,h);else {ctx.fillStyle='white';ctx.fillRect(0,0,w,h);}return out;
+		}
+		function psGripMask(canvas){
+			const data=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data,alpha=new Uint8ClampedArray(canvas.width*canvas.height);
+			for(let i=0;i<alpha.length;i++) alpha[i]=data[4*i+3];return {canvas,alpha};
 		}
 		function PsView({ state, actions, initial, initialUrl, onConsumeInitialUrl }) {
 			// 提示统一走宿主注入的 actions.toast：PsView 里没有提示容器，
@@ -9298,16 +9318,21 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			// 静态预览分支只有宽高没有 canvas，参数栏读尺寸、画布算显示尺寸都统一走这两个值
 			const stageW = stage ? stage.width : source?.width || 0;
 			const stageH = stage ? stage.height : source?.height || 0;
-			const gripRef=useRef(null), [gripDraft,setGripDraft]=useState(null);
+			const gripRef=useRef(null), [gripDraft,setGripDraft]=useState(null), [gripMode,setGripMode]=useState('pixels');
 			const gripLayer=!layerSession && activeLayer ? activeLayer : null;
 			const gripBitmap=tool==='transform' && (gripLayer ? gripLayer.visible!==false && gripLayer.canvas : stage);
+			const gripClipKey=gripLayer?gripLayer.mask?.canvas:gripBitmap;
+			const gripClip=gripClipKey && psGripClipCache.get(gripClipKey);
 			const gripBox=useMemo(()=>{
 				if(!gripBitmap) return null;
-				const b=psInkBounds(gripBitmap,gripLayer?.pixelRevision);
+				const b=gripMode==='mask' && gripClip ? gripClip.rect : psInkBounds(gripBitmap,gripLayer?.pixelRevision);
 				return b && {x:b.x*stageW,y:b.y*stageH,w:b.w*stageW,h:b.h*stageH};
-			},[gripBitmap,gripLayer?.pixelRevision,stageW,stageH]);
+			},[gripBitmap,gripClip,gripMode,gripLayer?.pixelRevision,stageW,stageH]);
 			const gripShown=gripDraft?.to || gripBox;
-			useMeasureEffect(()=>{gripRef.current=null;setGripDraft(null);},[tool,stage,layers,layerSession,activeLayerId]);
+			const gripExtent=gripDraft?.ext || {x:0,y:0,w:stageW,h:stageH};
+			useMeasureEffect(()=>{if(tool!=='transform')setGripMode('pixels');},[tool]);
+			useMeasureEffect(()=>{setGripMode('pixels');},[activeLayerId,layerSession?.id]);
+			useMeasureEffect(()=>{gripRef.current=null;setGripDraft(null);},[tool,stage,layers,layerSession,activeLayerId,gripMode]);
 			const scale = zoom.mode === "fit" ? view.fit : zoom.mode === "actual" ? 1 : zoom.scale;
 			scaleRef.current = scale;
 
@@ -9325,8 +9350,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const canvasH = Math.max(1, Math.round(stageH * scale));
 			// 预览缓冲跟随实际屏幕像素，不按源文件分辨率复制；原件仍保存在 source 用于编辑/导出。
 			const renderScale = stage ? Math.min(1, scale * Math.min(2, typeof window === "undefined" ? 1 : Math.max(1, Number(window.devicePixelRatio) || 1))) : 1;
-			const renderW = Math.max(1, Math.ceil(stageW * renderScale));
-			const renderH = Math.max(1, Math.ceil(stageH * renderScale));
+			const renderW = Math.max(1, Math.ceil(gripExtent.w * renderScale));
+			const renderH = Math.max(1, Math.ceil(gripExtent.h * renderScale));
 			useEffect(() => {
 				if (!stage || tool !== "warp") return;
 				setWarp(warpInitial(warp.mode, stage.width, stage.height));
@@ -9343,9 +9368,17 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if (canvas.height !== renderH) canvas.height = renderH;
 				let base=shown,stack=psCanvasLayers(layers,Boolean(layerSession));
 				if(gripDraft && gripRef.current){
-					const preview=b=>psGripBitmap(b,gripDraft.from,gripDraft.to,stageW,stageH,renderW,renderH);
-					if(!gripLayer) base=preview(base);
-					else stack=stack.map(l=>l!==gripLayer?l:{...l,canvas:preview(l.canvas),mask:l.mask?.canvas?{...l.mask,canvas:preview(l.mask.canvas)}:l.mask});
+					const {from,to,ext}=gripDraft,doc={x:0,y:0,w:stageW,h:stageH};
+					if(gripMode==='mask'){
+						const clip=b=>psGripClip(b,to,stageW,stageH,renderW,renderH);
+						if(!gripLayer) base=clip(gripClip?.raw || shown);
+						else stack=stack.map(l=>l===gripLayer?{...l,mask:{canvas:clip((gripClip ? gripClip.previous : l.mask)?.canvas)}}:l);
+					}else{
+						const expanded=ext.w!==stageW || ext.h!==stageH;
+						const draw=(b,target)=>target||expanded?psGripBitmap(b,target?from:doc,target?to:doc,stageW,stageH,ext,renderW,renderH):b;
+						base=draw(shown,!gripLayer);
+						stack=stack.map(l=>!l.canvas||l.visible===false||(!expanded&&l!==gripLayer)?l:{...l,canvas:draw(l.canvas,l===gripLayer),mask:l.mask?.canvas?{canvas:draw(l.mask.canvas,l===gripLayer)}:l.mask});
+					}
 				}
 				psPaintStack(canvas,base,stack);
 			}, [stage,layers,layerSession,renderW,renderH,gripDraft,gripLayer]);
@@ -9661,7 +9694,18 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				const parent = session.parent;
 				const changed = commitChanges && stage && (!parent || stage !== parent.initialCanvas || layers.length !== parent.before.layers.length || layers.some((item,i) => item !== parent.before.layers[i]));
 				const result = psLayerSessionExit(session, layers, changed ? stage : null);
-				const {base} = result;
+				const clip=changed && psGripClipCache.get(stage);
+				if(clip?.raw){
+					const {width:w,height:h}=stage,r=clip.rect;
+					const rect={x:r.x*w,y:r.y*h,w:r.w*w,h:r.h*h};
+					result.layers=result.layers.map(l=>{
+						if(l.id!==session.id)return l;
+						const mask=psGripMask(psGripClip(l.mask?.canvas,rect,w,h,w,h));
+						psGripClipCache.set(mask.canvas,{rect:r,previous:l.mask});
+						return {...l,canvas:clip.raw,mask};
+					});
+				}
+				const base=parent && !changed ? {...result.base,canvas:parent.before.canvas,width:parent.before.canvas.width,height:parent.before.canvas.height} : result.base;
 				if (parent) {
 					setHistory(changed ? psHistoryPush(parent.history, parent.before, t("ps.layer.committed",{name:session.name})) : parent.history);
 					setLayers(changed ? result.layers : parent.before.layers);
@@ -9751,25 +9795,72 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				if(event.button!==0 || !gripBox || gripRef.current) return;
 				event.preventDefault();event.stopPropagation();event.currentTarget.focus({preventScroll:true});
 				psCapturePointer(event.currentTarget,event.pointerId);
-				gripRef.current={id:event.pointerId,key,start:pointToImage(event),from:gripBox};
+				const r=viewRef.current.getBoundingClientRect();
+				gripRef.current={id:event.pointerId,key,cx:event.clientX,cy:event.clientY,sx:stageW/r.width,sy:stageH/r.height,from:gripBox};
+			};
+			const updateGripMask=(to)=>{
+				const doc={x:0,y:0,w:stageW,h:stageH};
+				if(!psGripWithinBudget(doc,2)){notify(t('ps.transform.limit'),'err');return;}
+				const rect=to && {x:to.x/stageW,y:to.y/stageH,w:to.w/stageW,h:to.h/stageH};
+				if(gripLayer){
+					const previous=gripClip ? gripClip.previous : gripLayer.mask;
+					const mask=to?psGripMask(psGripClip(previous?.canvas,to,stageW,stageH,stageW,stageH)):previous;
+					if(to) psGripClipCache.set(mask.canvas,{rect,previous});
+					changeLayers(t('ps.transform.mask'),list=>list.map(l=>l===gripLayer?{...l,mask}:l));
+				}else{
+					const raw=gripClip?.raw || stage;
+					const canvas=to?psGripClip(raw,to,stageW,stageH,stageW,stageH):raw;
+					if(to) psGripClipCache.set(canvas,{rect,raw});
+					pushHistory(stage,t('ps.transform.mask'));setSource({...source,canvas});
+				}
 			};
 			const trackGrip = (event,finish) => {
 				const g=gripRef.current;if(!g || g.id!==event.pointerId) return;
-				event.stopPropagation();const at=pointToImage(event),from=g.from,to=psGripBox(from,g.key,at.x-g.start.x,at.y-g.start.y,event.shiftKey);
-				if(!finish){setGripDraft({from,to});return;}
-				stopGrip();if(to.x===from.x && to.y===from.y && to.w===from.w && to.h===from.h) return;
-				const bake=b=>psGripBitmap(b,from,to,stageW,stageH,b.width,b.height);
-				const layer=gripLayer || layers.find(l=>l.id===layerSession?.id);
-				const pixels=bake(gripBitmap);
-				let mask=layer?.mask;
-				if(mask?.canvas){
-					const c=bake(mask.canvas),data=c.getContext('2d').getImageData(0,0,c.width,c.height).data,alpha=new Uint8ClampedArray(c.width*c.height);
-					for(let i=0;i<alpha.length;i++) alpha[i]=data[i*4+3];
-					mask={...mask,canvas:c,alpha};
+				event.stopPropagation();const from=g.from,doc={x:0,y:0,w:stageW,h:stageH};
+				let to=psGripBox(from,g.key,(event.clientX-g.cx)*g.sx,(event.clientY-g.cy)*g.sy,event.shiftKey);
+				if(gripMode==='mask'){
+					if(g.key==='move') to={...to,x:Math.max(0,Math.min(stageW-to.w,to.x)),y:Math.max(0,Math.min(stageH-to.h,to.y))};
+					else {const x=Math.max(0,Math.min(stageW-1,to.x)),y=Math.max(0,Math.min(stageH-1,to.y));to={x,y,w:Math.max(1,Math.min(stageW,to.x+to.w)-x),h:Math.max(1,Math.min(stageH,to.y+to.h)-y)};}
 				}
-				invalidatePsReads();pushHistory(stage,t('ps.tool.transform'));
-				if(gripLayer || layerSession && layer?.mask) setLayers(list=>list.map(l=>l!==layer?l:{...l,...(gripLayer?{canvas:pixels}:{}),...(mask?{mask}:{})}));
-				if(!gripLayer) setSource({...source,canvas:pixels});
+				const ext=gripMode==='mask'?doc:psGripExtent(to,stageW,stageH),expanded=ext.w!==stageW || ext.h!==stageH;
+				const planes=expanded?layers.reduce((n,l)=>n+(l.mask?4:1)+(psGripClipCache.has(l.canvas)?1:0)+(l.mask?.canvas && psGripClipCache.has(l.mask.canvas)?3:0),3):gripLayer?.mask || layerSession?6:2;
+				if(!psGripWithinBudget(ext,planes)){if(finish){stopGrip();notify(t('ps.transform.limit'),'err');}return;}
+				if(!finish){setGripDraft({from,to,ext});return;}
+				stopGrip();if(to.x===from.x && to.y===from.y && to.w===from.w && to.h===from.h) return;
+				invalidatePsReads();if(gripMode==='mask'){updateGripMask(to);return;}
+				// In a local editing session, the parent document may use a different pixel scale.
+				// Pad it in its own coordinate system so returning to the stack never squashes the new layer.
+				const parent=layerSession?.base?.canvas,parentDoc=parent?{x:0,y:0,w:parent.width,h:parent.height}:doc;
+				const parentExt=layerSession && expanded?psGripExtent({x:ext.x*parentDoc.w/stageW,y:ext.y*parentDoc.h/stageH,w:ext.w*parentDoc.w/stageW,h:ext.h*parentDoc.h/stageH},parentDoc.w,parentDoc.h):ext;
+				if(expanded && layerSession && !psGripWithinBudget(parentExt,planes)){notify(t('ps.transform.limit'),'err');return;}
+				const bake=(b,target,d,e)=>{
+					const a=target?from:d,z=target?to:d;
+					const render=bitmap=>psGripBitmap(bitmap,a,z,d.w,d.h,e);
+					const canvas=render(b),clip=psGripClipCache.get(b);
+					if(clip){
+						const kx=z.w/a.w,ky=z.h/a.h,r=clip.rect;
+						const rect={x:(z.x+(r.x*d.w-a.x)*kx-e.x)/e.w,y:(z.y+(r.y*d.h-a.y)*ky-e.y)/e.h,w:r.w*d.w*kx/e.w,h:r.h*d.h*ky/e.h};
+						psGripClipCache.set(canvas,clip.raw?{rect,raw:render(clip.raw)}:{rect,previous:clip.previous?.canvas?psGripMask(render(clip.previous.canvas)):null});
+					}
+					return canvas;
+				};
+				const paint=(b,target)=>bake(b,target,doc,ext);
+				const pad=b=>bake(b,false,parentDoc,parentExt);
+				const pixels=paint(gripBitmap,true);
+				const nextStage=gripLayer?(expanded?pad(stage):stage):pixels;
+				const nextLayers=layers.map(l=>{
+					const target=l===gripLayer || layerSession?.id===l.id;
+					if(!l.canvas || (!target&&!expanded)) return l;
+					const c=target?pixels:pad(l.canvas);
+					const mask=l.mask?.canvas?psGripMask(target?paint(l.mask.canvas,true):pad(l.mask.canvas)):l.mask;
+					return {...l,canvas:c,width:c.width,height:c.height,mask,pixelRevision:(l.pixelRevision||0)+1};
+				});
+				let session=layerSession;
+				if(layerSession && expanded){const canvas=pad(parent);session={...session,base:{...session.base,canvas,width:canvas.width,height:canvas.height}};}
+				pushHistory(stage,t('ps.tool.transform'));setLayers(nextLayers);
+				if(session!==layerSession){layerSessionRef.current=session;setLayerSession(session);}
+				if(nextStage!==stage){setSource({...source,canvas:nextStage,width:nextStage.width,height:nextStage.height});syncCanvasDimensions(nextStage.width,nextStage.height);}
+				setSelection(null);
 			};
 			const activateInk = point => {
 				const b=!layerSession && activeLayer ? activeLayer.visible!==false && activeLayer.canvas : stage;
@@ -10455,7 +10546,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							)
 						);
 					}
-					case "transform": return h("p", {className:"vig-muted"},t("ps.transform.hint"));
+					case "transform": return h('div',{className:'vig-ps-form-grid'},
+						h('div',{className:'vig-ps-seg'},['pixels','mask'].map(mode=>h('button',{key:mode,type:'button','data-ps-grip-mode':mode,className:`vig-ps-seg-btn${gripMode===mode?' is-on':''}`,'aria-pressed':gripMode===mode,onClick:()=>{stopGrip();setGripMode(mode);}},t('ps.transform.'+mode)))),
+						h('p',{className:'vig-muted'},t(gripMode==='mask'?'ps.transform.maskHint':'ps.transform.hint')),
+						gripMode==='mask' && h('button',{type:'button',className:'vig-btn is-sm','data-ps-mask-reset':'1',disabled:!gripClip,onClick:()=>updateGripMask(null)},t('ps.transform.resetMask')));
 					case "select":
 						return h(
 							"div",
@@ -11025,6 +11119,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 															width: canvasW,
 															height: canvasH,
 															imageRendering: scale >= 2 ? "pixelated" : "auto",
+															...(gripDraft ? {position:'absolute',left:gripExtent.x*canvasW/stageW,top:gripExtent.y*canvasH/stageH,width:gripExtent.w*canvasW/stageW,height:gripExtent.h*canvasH/stageH} : {}),
 															// 拖标尺时整层跟着转（一个 transform，不重画像素）—— 这就是「实时」的那一下
 															transform: ruler ? `rotate(${ruler.angle}deg)` : undefined
 														},

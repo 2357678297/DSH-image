@@ -12,6 +12,7 @@
 import { auditPSReads } from "../test/ps-load-audit.test.mjs";
 import { auditPSLayers } from "../test/ps-layer-audit.test.mjs";
 import { auditPsTransform } from "../test/ps-transform-ui.test.mjs";
+import { auditGripOverflow } from "../test/ps-transform-overflow.test.mjs";
 import { auditPsPixels } from "../test/ps-pixels-audit.test.mjs";
 import { auditGridUI, runGridPage } from "../test/grid-ui.test.mjs";
 import { auditGridPixels } from "../test/grid-pixels.test.mjs";
@@ -423,6 +424,10 @@ if (new URLSearchParams(location.search).get("audit")==="psreads") {
 }
 if (new URLSearchParams(location.search).get("audit")==="pslayers") {
  await (${auditPSLayers.toString()})({host,check,wait,flushSync,ui,React,createRoot});
+ const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
+if (new URLSearchParams(location.search).get("audit")==="psoverflow") {
+ await (${auditGripOverflow.toString()})({host,check,wait,flushSync,ui,React,root});
  const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
 }
 if (new URLSearchParams(location.search).get("audit")==="pstransform") {
@@ -1747,7 +1752,7 @@ const args = ["--headless=new", "--disable-gpu", "--no-sandbox", "--virtual-time
 if (shotPath) args.push("--hide-scrollbars", "--window-size=1040,900", `--screenshot=${shotPath}`);
 if (!shotPath && /ps=pick|audit=/.test(query)) args.push("--window-size=1440,1000");
 args.push("--dump-dom", url);
-const dom = query === "audit=grid" ? await runGridPage(page, CHROME, query) : execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+const dom = ["audit=grid","audit=psoverflow"].includes(query) ? await runGridPage(page, CHROME, query) : execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 
 const match = dom.match(/<pre id="vig-viewer-out">([\s\S]*?)<\/pre>/);
 if (!match) {

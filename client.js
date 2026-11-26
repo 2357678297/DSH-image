@@ -523,7 +523,10 @@ function writeConvSetting(id, settings) {
 			"chat.thinkingRetryReferences": "原任务有未留档的参考图或蒙版，不能原样重试。请编辑这条消息，重新添加原图后生成。",
 			"chat.thinkingReady": "先由 {model} 整理提示词，再由所选生图模型出图。参考图也会发给思考模型。",
 			"chat.thinkingRewrite": "思考辅助提示词",
-			"chat.imageThinking": "多模态模型正在整理提示词…",
+			"chat.imageThinking": "思考中",
+			"chat.imageThinkingDetail": "正在理解提示词和参考图",
+			"chat.thinkingModelLabel": "辅助模型",
+			"chat.cancelThinkingTitle": "取消这次思考和生成",
 			"chat.sizeCustom": "自定义",
 			"chat.imageSize": "图片比例与分辨率",
 			"chat.sizeAuto": "自动",
@@ -1085,7 +1088,10 @@ function writeConvSetting(id, settings) {
 			"chat.thinkingRetryReferences": "The original references or mask were not archived. Edit the message and reattach them before generating again.",
 			"chat.thinkingReady": "{model} refines the prompt first. The selected image model then generates. References are also sent to the thinking model.",
 			"chat.thinkingRewrite": "Thinking-assisted prompt",
-			"chat.imageThinking": "Multimodal model is refining the prompt…",
+			"chat.imageThinking": "Thinking",
+			"chat.imageThinkingDetail": "Reading the prompt and references",
+			"chat.thinkingModelLabel": "Assistant model",
+			"chat.cancelThinkingTitle": "Cancel this thinking and generation",
 			"chat.sizeCustom": "Custom",
 			"chat.imageSize": "Image aspect ratio and resolution",
 			"chat.sizeAuto": "Auto",
@@ -2574,6 +2580,27 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
 .vig-typing span:nth-child(3){animation-delay:.3s}
 @keyframes vig-typing{0%,60%,100%{opacity:.35;transform:translateY(0)}30%{opacity:1;transform:translateY(-2px)}}
 @media (prefers-reduced-motion:reduce){.vig-typing span{animation:none;opacity:.6}}
+/* 多模态思考：单一旋转环 + 轻微点动，状态、模型和取消保持为一个可扫读的信息卡。 */
+.vig-thinking-card{display:flex;align-items:center;gap:9px;width:min(100%,390px);min-width:0;padding:8px 9px;border:1px solid var(--vig-line);border-radius:8px;background:var(--vig-surface-soft);color:var(--vig-text)}
+.vig-thinking-mark{position:relative;display:grid;place-items:center;flex:none;width:30px;height:30px;border-radius:8px;background:var(--vig-accent-soft);color:var(--vig-accent)}
+.vig-thinking-mark .vig-ic{position:relative;z-index:1}
+.vig-thinking-orbit{position:absolute;inset:4px;border:1.5px solid var(--vig-accent-line);border-top-color:var(--vig-accent);border-radius:50%;animation:vig-thinking-spin 1.5s linear infinite}
+@keyframes vig-thinking-spin{to{transform:rotate(360deg)}}
+.vig-thinking-copy{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.vig-thinking-title-row{display:flex;align-items:center;gap:6px;min-width:0}
+.vig-thinking-title{font-size:12px;font-weight:650;line-height:1.35;color:var(--vig-text)}
+.vig-thinking-detail{font-size:11px;line-height:1.35;color:var(--vig-text-muted);overflow-wrap:anywhere}
+.vig-thinking-dots{display:inline-flex;align-items:center;gap:3px;flex:none;color:var(--vig-accent)}
+.vig-thinking-dots i{display:block;width:3px;height:3px;border-radius:50%;background:currentColor;animation:vig-thinking-pulse 1.05s ease-in-out infinite}
+.vig-thinking-dots i:nth-child(2){animation-delay:140ms}.vig-thinking-dots i:nth-child(3){animation-delay:280ms}
+@keyframes vig-thinking-pulse{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-2px)}}
+.vig-thinking-meta{display:flex;align-items:center;gap:5px;min-width:0;flex-wrap:wrap;margin-top:2px}
+.vig-thinking-role{font-size:10.5px;line-height:1.4;color:var(--vig-text-faint)}
+.vig-thinking-model{display:inline-flex;align-items:center;max-width:100%;min-width:0;padding:1px 7px;border:1px solid var(--vig-line);border-radius:999px;color:var(--vig-text-muted);font-size:10.5px;line-height:1.45;overflow-wrap:anywhere}
+.vig-thinking-cancel{flex:none;min-width:48px;min-height:34px;height:auto;padding:5px 10px;line-height:1.25;white-space:nowrap}
+.vig-thinking-cancel:focus-visible{outline:2px solid var(--vig-text);outline-offset:2px}
+@container vig-workbench (width < 390px){.vig-thinking-card{align-items:center;gap:7px;padding:7px}.vig-thinking-mark{width:27px;height:27px}.vig-thinking-cancel{min-width:46px;padding-inline:8px}}
+@media (prefers-reduced-motion:reduce){.vig-thinking-orbit,.vig-thinking-dots i{animation:none!important}}
 /* ============================================================
    设计系统 v2.25 · 「回到底部」浮标（上翻历史时出现）
    ============================================================ */
@@ -4558,9 +4585,22 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						),
 						// Only show the final image prompt and the short visual summary, not model reasoning.
 						planning
-							? h("div", { className: "vig-think-note", "data-thinking-running": "1" },
-								h("span", {role:"status"}, `${t("chat.imageThinking")} · ${job.thinkingModel}`),
-								onCancelThinking ? h("button", {type:"button", className:"vig-btn is-ghost is-sm", "data-thinking-cancel":"1", onClick:()=>void onCancelThinking(job)}, t("chat.cancel")) : null)
+							? h("div", { className: "vig-thinking-card", role: "status", "aria-live": "polite", "aria-atomic": "true", "data-thinking-running": "1" },
+								h("span", { className: "vig-thinking-mark", "aria-hidden": "true" },
+									h("span", { className: "vig-thinking-orbit" }), h(Icon, { name: "spark", size: 14 })
+								),
+								h("div", { className: "vig-thinking-copy" },
+									h("div", { className: "vig-thinking-title-row" },
+										h("strong", { className: "vig-thinking-title" }, t("chat.imageThinking")),
+										h("span", { className: "vig-thinking-dots", "aria-hidden": "true" }, h("i"), h("i"), h("i"))
+									),
+									h("div", { className: "vig-thinking-detail" }, t("chat.imageThinkingDetail")),
+									h("div", { className: "vig-thinking-meta" },
+										h("span", { className: "vig-thinking-role" }, t("chat.thinkingModelLabel")),
+										h("span", { className: "vig-thinking-model", title: job.thinkingModel }, job.thinkingModel)
+									)
+								),
+								onCancelThinking ? h("button", { type: "button", className: "vig-btn is-ghost vig-thinking-cancel", "data-thinking-cancel": "1", title: t("chat.cancelThinkingTitle"), "aria-label": `${t("chat.cancelThinkingTitle")} · ${job.thinkingModel}`, onClick: () => onCancelThinking(job) }, t("chat.cancel")) : null)
 							: job.thinkingModel && job.thinkingStatus === "succeeded"
 								? h("details", { className: "vig-think-plan", "data-thinking-plan": "1" },
 									h("summary", null, `${t("chat.thinkingRewrite")} · ${job.thinkingModel}`),

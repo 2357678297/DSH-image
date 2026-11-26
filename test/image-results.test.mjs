@@ -1,5 +1,5 @@
 // Browser acceptance for chat result image sizing and responsive multi-image layout.
-export async function auditImageResults({host, check, waitFor, wait, flushSync}) {
+export async function auditImageResults({host, check, waitFor, wait, flushSync, posts}) {
   const grids = () => [...host.querySelectorAll('.vig-grid')];
   const byCount = count => grids().find(grid => grid.dataset.count === String(count));
   const columns = grid => {
@@ -43,4 +43,13 @@ export async function auditImageResults({host, check, waitFor, wait, flushSync})
   flushSync(() => dialog?.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true})));
   await wait(40);
   check('关闭查看器后返回对话，不改变缩略网格', !host.querySelector('dialog.vig-viewer')?.open && !!byCount(8));
+  const remove=byCount(1)?.querySelector('[data-shot-delete]'), prior=posts.filter(item=>item.path==='/job/delete').length;
+  let confirmation='';const originalConfirm=window.confirm;window.confirm=message=>{confirmation=String(message);return true;};
+  try {
+    check('每轮图片工具栏显示有独立语义的删除动作',!!remove&&remove.getAttribute('aria-label')?.includes('删除本轮所有结果')&&remove.getAttribute('aria-label')?.includes('图库素材保留'));
+    flushSync(()=>remove?.click());await waitFor(()=>posts.filter(item=>item.path==='/job/delete').length===prior+1,2000);
+    const deletion=posts.filter(item=>item.path==='/job/delete').at(-1);
+    await waitFor(()=>!host.querySelector('[data-count="1"]'),2000);
+    check('确认后删除本轮对话结果、图库素材仍不调用删除',confirmation.includes('图库里的图不受影响')&&deletion?.body?.ids?.length===1&&!posts.some(item=>item.path==='/library/delete'));
+  } finally {window.confirm=originalConfirm;}
 }

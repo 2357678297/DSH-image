@@ -2712,30 +2712,33 @@ check(
   }
   /* 结果卡：图片自己一张卡，下面三个动作是纯文字按键（以前那块白底面板+分隔线像又一张卡） */
   check(
-    "结果卡：图片单独一个圆角框，五个动作无底色、无分隔线、排一行（短名字 + title 全称）",
+    "结果卡：图片单独一个圆角框，六个动作无底色、无分隔线、排一行（短名字 + title 全称）",
     (() => {
       const shot = renderToStaticMarkup(
         React.createElement(w.Shot, {
           image: { assetId: "a1", name: "cat.png", url: "/api/velapi-image-go/asset/a1.png", width: 10, height: 10 },
           onReuse: async () => {},
           onToast: () => {},
-          onGrid: () => {}, onSave: () => {}
+          onGrid: () => {}, onSave: () => {}, onDelete: () => {}
         })
       );
       return (
         shot.includes('class="vig-shot-img"') &&
         shot.includes('class="vig-shot"') &&
-        (shot.match(/class="vig-mini vig-shot-act"/g) || []).length === 5 && shot.includes('data-grid-open="1"') &&
+        (shot.match(/class="vig-mini vig-shot-act(?: is-danger)?"/g) || []).length === 6 && shot.includes('data-grid-open="1"') &&
         shot.includes('title="用这张重绘"') &&
         shot.includes('title="复制链接"') &&
         shot.includes('title="保存一份到本地文件夹') &&
         shot.includes('title="打开原图"') &&
+        shot.includes('title="删除本轮所有结果（图库素材保留）"') &&
+        shot.includes('aria-label="删除本轮所有结果（图库素材保留）"') &&
+        /\.vig-shot-bar \.vig-shot-act\.is-danger\{[^}]*color:var\(--vig-danger\)/.test(SOURCE) &&
         shot.includes('aria-label="用这张重绘"') &&
         /\.vig-shot-bar\{[^}]*justify-content:flex-end/.test(SOURCE) &&
         /\.vig-shot-bar \.vig-shot-act\{[^}]*border-radius:var\(--vig-r-pill\)/.test(SOURCE)
       );
     })(),
-    "vig-shot-img / 5 个 vig-shot-act 图标"
+    "vig-shot-img / 6 个 vig-shot-act 图标"
   );
   /* 结果图只作缩略预览：单图受尺寸上限约束，多图网格排列 */
   check(

@@ -351,7 +351,11 @@ window.fetch = async (url, init) => {
 		return new Response(TINY_PNG, { status: 200, headers: { "content-type": "image/png" } });
 	}
 	if (pathname.startsWith("/upload")) return json({ ok: true, item: { url: "/api/velapi-image-go/upload/up_1.png" } });
-	if (pathname.startsWith("/job/delete")) return json({ ok: true, removed: (body?.ids || []).length });
+	if (pathname.startsWith("/job/delete")) {
+		const ids=Array.isArray(body?.ids)?body.ids:[];
+		for(const id of Object.keys(convJobs)) convJobs[id]=convJobs[id].filter(job=>!ids.includes(job.id));
+		return json({ ok: true, removed: ids.length });
+	}
 	if (pathname.startsWith("/chat/agent")) {
 		// 模拟真实延迟：让「思考中」占位有时间被断言到
 		await new Promise((resolve) => setTimeout(resolve, 300));
@@ -471,7 +475,7 @@ flushSync(() => root.render(React.createElement(ui.Workbench, { onOpenInRightbar
 const shot = await waitFor(() => host.querySelector(".vig-grid.is-duo .vig-shot-img") ?? host.querySelector(".vig-shot-img"), 6000);
 check("结果卡挂起来了（有可点的图）", Boolean(shot), shot ? "" : "没有 .vig-shot-img");
 if (imageResultsFixture) {
-	await (${auditImageResults.toString()})({host,check,wait,waitFor,flushSync});
+	await (${auditImageResults.toString()})({host,check,wait,waitFor,flushSync,posts});
 	const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
 }
 

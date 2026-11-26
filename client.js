@@ -486,6 +486,7 @@ function writeConvSetting(id, settings) {
 			"chat.edited": "已填回输入框，改完再发",
 			"chat.confirmDelete": "删除这条对话记录？（图库里的图不受影响）",
 			"chat.deleted": "已删除这条记录",
+			"chat.deleteResultRecord": "删除本轮所有结果（图库素材保留）",
 			/* 对话（会话）：新建不带记忆，每个会话隔离 */
 			"chat.newConv": "新建对话",
 			"chat.newConvHint": "已新建对话（不带上一段记忆）",
@@ -1056,6 +1057,7 @@ function writeConvSetting(id, settings) {
 			"chat.edited": "Loaded back into the composer — tweak and send again",
 			"chat.confirmDelete": "Delete this conversation entry? (Library images are untouched)",
 			"chat.deleted": "Entry deleted",
+			"chat.deleteResultRecord": "Delete all results in this turn (keep library images)",
 			"chat.newConv": "New conversation",
 			"chat.newConvHint": "New conversation started (no memory from the previous one)",
 			"chat.renameConv": "Rename conversation",
@@ -2503,6 +2505,8 @@ body[data-ds-dark-theme] .vig-mask-pill{background:rgba(20,20,22,.94)}
 .vig-shot-bar .vig-shot-act{width:26px;min-width:26px;height:26px;padding:0;border-radius:var(--vig-r-pill);
 	color:var(--vig-text-faint);display:inline-flex;align-items:center;justify-content:center;line-height:0}
 .vig-shot-bar .vig-shot-act:hover{background:var(--vig-surface-sunken);color:var(--vig-text)}
+.vig-shot-bar .vig-shot-act.is-danger{margin-left:4px;border-left:1px solid var(--vig-line);border-radius:0 var(--vig-r-pill) var(--vig-r-pill) 0;color:var(--vig-danger)}
+.vig-shot-bar .vig-shot-act.is-danger:hover{background:var(--vig-surface-sunken);color:var(--vig-danger)}
 /* 工具行：无边框（靠 hover 底与图标区分），次要参数收进悬浮展开器面板 */
 .vig-tools .vig-sel{border-color:transparent;background:transparent;color:var(--vig-text-muted)}
 .vig-tools .vig-sel:hover{background:var(--vig-surface-sunken);color:var(--vig-text)}
@@ -3672,7 +3676,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			return out;
 		}
 
-		function Shot({ image, onReuse, onToast, onPreview, onSave, onGrid }) {
+		function Shot({ image, onReuse, onToast, onPreview, onSave, onGrid, onDelete }) {
 			const displayed = useRef(null);
 			const [busy, setBusy] = useState(false);
 			const safeName = (image.name || "image").replace(/[\\/:*?"<>|]+/g, "_");
@@ -3754,7 +3758,19 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							"aria-label": t("chat.openShort")
 						},
 						h(Icon, { name: "external", size: 13 })
-					)
+					),
+						 onDelete ? h(
+							"button",
+							{
+								type: "button",
+								className: "vig-mini vig-shot-act is-danger",
+								title: t("chat.deleteResultRecord"),
+								"aria-label": t("chat.deleteResultRecord"),
+								"data-shot-delete": "1",
+								onClick: () => onDelete()
+							},
+							h(Icon, { name: "trash", size: 13 })
+						) : null
 				)
 			);
 		}
@@ -4666,7 +4682,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												onGrid,
 												onToast,
 												onPreview: () => onPreview?.(previewItems, position, "chat"),
-												onSave: onSave ? () => onSave(image) : null
+												onSave: onSave ? () => onSave(image) : null,
+								onDelete: onDelete ? () => onDelete(job) : null
 											})
 										);
 									})()

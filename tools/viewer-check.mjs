@@ -22,6 +22,7 @@ import { auditGallery } from "../test/library-audit.test.mjs";
 import { auditGeminiUI } from "../test/gemini-ui.test.mjs";
 import { auditImageSizeUI } from "../test/image-size-ui.test.mjs";
 import { auditAttachmentUI } from "../test/attachment-ui.test.mjs";
+import { auditThinkingUI } from "../test/thinking-ui.test.mjs";
 import { auditStorageMove } from "../test/storage-move-ui.test.mjs";
 import { auditImageResults } from "../test/image-results.test.mjs";
 import { auditWorkbench } from "./workbench-audit.mjs";
@@ -180,6 +181,22 @@ let geminiAuditKind = "image";
 const geminiFixture = new URLSearchParams(location.search).get("audit") === "gemini";
 const imageSizeFixture = new URLSearchParams(location.search).get("audit") === "imagesize";
 const attachmentFixture = new URLSearchParams(location.search).get("audit") === "attachment";
+const thinkingFixture = new URLSearchParams(location.search).get("audit") === "thinking";
+let modernThinking = true, thinkingJobId = 0, lastThinkingJob = null;
+const thinkingJobs = new Map();
+const settleThinking = (status, generated) => {
+ if (!lastThinkingJob) return;
+ Object.assign(lastThinkingJob, {status, thinkingStatus:status, ...(generated ? {prompt:generated,planNote:"使用参考图构图，调整灯光",images:[IMAGES[0]]} : {}),
+  ...(status==='failed' ? {error:"思考失败，未提交生图：多模态模型未返回有效提示词",errorCode:"thinking_response"} : {})});
+};
+if (thinkingFixture) {
+ config.activeProviderId="pv_gpt";
+ config.defaultEndpoint="images_edits";
+ providers[1].models.push("fixture-vision-chat", "disabled-vision-chat");
+ providers[1].modelMeta["fixture-vision-chat"]={kind:"chat"};
+ providers[1].modelMeta["disabled-vision-chat"]={kind:"chat",enabled:false};
+ convJobs.conv_default.push({...JOB,id:"job_thinking_reference",count:1,prompt:"Thinking reference fixture",referenceUrls:["/api/velapi-image-go/upload/up_1.png","/api/velapi-image-go/upload/up_2.png"]});
+}
 if (attachmentFixture) {
  config.activeProviderId="pv_gpt"; config.defaultEndpoint="images_edits";
  convJobs.conv_default.push({...JOB,id:"job_attachment_url",count:1,prompt:"Attachment URL fixture",referenceUrls:["/api/velapi-image-go/asset/grid-qa-source.png"]});
@@ -237,6 +254,7 @@ window.fetch = async (url, init) => {
 				{ id: "images_edits", label: "图片编辑（/v1/images/edits）", route: "/images/edits", kind: "image" },
 				{ id: "videos_generations", label: "视频生成（/v1/videos/generations）", route: "/videos/generations", kind: "video" }
 			],
+			...(thinkingFixture && modernThinking ? {imageThinking:true} : {}),
 			chatModels: [{ id: "mock-chat", providerId: "pv_gpt", providerName: "GPT", label: "mock-chat" }]
 		});
 	if (pathname === "/conversations") {
@@ -300,6 +318,11 @@ window.fetch = async (url, init) => {
 		// 普通配置写回：把 patch 合进 config（界面靠回包 config 更新；不合并的话切协议不生效）
 		if (body && typeof body === "object") config = { ...config, ...body };
 		return json({ ok: true, config: { ...config } });
+	}
+	if (thinkingFixture && pathname === "/providers" && init?.method === "POST") {
+		const entry=providers.find(p=>p.id===body.id);
+		if (entry) entry.thinkingModel=body.thinkingModel;
+		return json({ok:true, item:entry, items:providers});
 	}
 	if (pathname.startsWith("/providers")) return json({ ok: true, items: providers });
 	if (pathname.startsWith("/library")) {
@@ -376,6 +399,27 @@ window.fetch = async (url, init) => {
 			}
 		});
 	}
+	if (thinkingFixture && pathname === "/generate") {
+		if (body?.thinking && body.prompt==='本地参数拒绝') return new Response(JSON.stringify({ok:false,code:"thinking_reference",error:"参考图仍待留档"}),{status:400});
+		const assisted=body.thinking===true;
+		const job={id:"job_thinking_"+(++thinkingJobId),status:assisted?"running":"succeeded",prompt:body.prompt,userText:body.userText,
+			model:body.model,providerId:body.providerId,conversationId:body.conversationId,size:body.size,count:body.n,quality:body.quality,
+			mode:body.mode, protocol:body.endpoint,referenceUrl:body.referenceUrl,referenceUrls:body.referenceUrls,
+			createdAt:new Date().toISOString(),images:assisted?[]:[IMAGES[0]],
+			...(assisted ? {thinkingModel:providers.find(p=>p.id===body.providerId)?.thinkingModel,thinkingStatus:"running"} : {})};
+		thinkingJobs.set(job.id,job); convJobs[job.conversationId]?.unshift(job);
+		if (assisted) lastThinkingJob=job;
+		return json({ok:true,job,queue:assisted?1:0});
+	}
+	if (thinkingFixture && pathname === "/job/cancel") {
+		const job=thinkingJobs.get(body.id);
+		if(job) Object.assign(job,{status:"canceled",thinkingStatus:"canceled"});
+		return json({ok:true});
+	}
+	if (thinkingFixture && pathname.startsWith("/job?")) {
+		const job=thinkingJobs.get(new URLSearchParams(pathname.split('?')[1]).get('id'));
+		if (job) return json({ok:true,job});
+	}
 	if (pathname.startsWith("/generate")) {
 		return json({
 			ok: true,
@@ -431,6 +475,11 @@ if (imageResultsFixture) {
 	const pre=document.createElement("pre");pre.id="vig-viewer-out";pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
 }
 
+if (thinkingFixture) {
+ const remount=async modern=>{modernThinking=modern;flushSync(()=>root.render(null));flushSync(()=>root.render(React.createElement(ui.Workbench,{onOpenInRightbar:()=>{}})));await waitFor(()=>host.querySelector('.vig-shot-img'),2000);};
+ await (${auditThinkingUI.toString()})({host,check,wait,waitFor,flushSync,posts,settle:settleThinking,remount});
+ const pre=document.createElement('pre');pre.id='vig-viewer-out';pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
+}
 if (attachmentFixture) {
  await (${auditAttachmentUI.toString()})({host,check,wait,waitFor,flushSync,posts});
  const pre=document.createElement('pre');pre.id='vig-viewer-out';pre.textContent=JSON.stringify({results,debug});document.body.append(pre);return;
@@ -1778,7 +1827,7 @@ const args = ["--headless=new", "--disable-gpu", "--no-sandbox", "--virtual-time
 if (shotPath) args.push("--hide-scrollbars", "--window-size=1040,900", `--screenshot=${shotPath}`);
 if (!shotPath && /ps=pick|audit=/.test(query)) args.push("--window-size=1440,1000");
 args.push("--dump-dom", url);
-const dom = ["audit=grid","audit=psoverflow","audit=gemini","audit=imagesize","audit=attachment"].includes(query) ? await runGridPage(page, CHROME, query) : execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+const dom = ["audit=grid","audit=psoverflow","audit=gemini","audit=imagesize","audit=attachment","audit=thinking"].includes(query) ? await runGridPage(page, CHROME, query) : execFileSync(CHROME, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 
 const match = dom.match(/<pre id="vig-viewer-out">([\s\S]*?)<\/pre>/);
 if (!match) {

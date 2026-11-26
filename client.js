@@ -515,6 +515,15 @@ function writeConvSetting(id, settings) {
 			"chat.contextOff": "上下文管理：关 —— 按原话直接生成",
 			"chat.planFailed": "上下文整理失败，已按原话生成",
 			"chat.planRewrite": "改写",
+			"chat.thinkingToggle": "思考辅助",
+			"chat.thinkingHelp": "先让此供应商配置的多模态模型理解提示词和参考图，再交给当前生图模型；失败时不会提交生图。",
+			"chat.thinkingUnavailable": "当前生图供应商未配置可用的多模态思考模型",
+			"chat.thinkingReload": "当前宿主不支持思考辅助；更新后请手动重启 DSH，或关闭思考后直接生成。",
+			"chat.thinkingConfigure": "配置模型",
+			"chat.thinkingRetryReferences": "原任务有未留档的参考图或蒙版，不能原样重试。请编辑这条消息，重新添加原图后生成。",
+			"chat.thinkingReady": "先由 {model} 整理提示词，再由所选生图模型出图。参考图也会发给思考模型。",
+			"chat.thinkingRewrite": "思考辅助提示词",
+			"chat.imageThinking": "多模态模型正在整理提示词…",
 			"chat.sizeCustom": "自定义",
 			"chat.imageSize": "图片比例与分辨率",
 			"chat.sizeAuto": "自动",
@@ -694,6 +703,10 @@ function writeConvSetting(id, settings) {
 			"prov.contextTurns": "上下文轮数（0~12）",
 			"prov.keyHint": "留空表示沿用当前配置里的密钥",
 			"prov.models": "模型（逗号分隔）",
+			"prov.thinkingModel": "思考模型（多模态）",
+			"prov.thinkingModelNone": "不使用思考辅助",
+			"prov.thinkingModelHint": "仅选择本供应商目录中的视觉/多模态对话模型；它负责理解需求，图片模型仍单独选择。",
+			"prov.thinkingUnset": "未配置思考模型",
 			"prov.test": "测试连接",
 			"prov.testOk": "已连通",
 			"prov.testBad": "连不上",
@@ -1064,6 +1077,15 @@ function writeConvSetting(id, settings) {
 			"chat.contextOff": "Context manager: off — generate from your text as-is",
 			"chat.planFailed": "Context rewrite failed — generating from your text as-is",
 			"chat.planRewrite": "Rewritten",
+			"chat.thinkingToggle": "Think",
+			"chat.thinkingHelp": "A multimodal model configured on this provider first reads the prompt and references, then the selected image model generates. Failure never falls through to image generation.",
+			"chat.thinkingUnavailable": "The selected image provider has no available multimodal thinking model",
+			"chat.thinkingReload": "The host does not support thinking assistance yet. Restart DSH after updating, or turn thinking off to generate directly.",
+			"chat.thinkingConfigure": "Configure model",
+			"chat.thinkingRetryReferences": "The original references or mask were not archived. Edit the message and reattach them before generating again.",
+			"chat.thinkingReady": "{model} refines the prompt first. The selected image model then generates. References are also sent to the thinking model.",
+			"chat.thinkingRewrite": "Thinking-assisted prompt",
+			"chat.imageThinking": "Multimodal model is refining the prompt…",
 			"chat.sizeCustom": "Custom",
 			"chat.imageSize": "Image aspect ratio and resolution",
 			"chat.sizeAuto": "Auto",
@@ -1231,6 +1253,10 @@ function writeConvSetting(id, settings) {
 			"prov.contextTurns": "Context turns (0–12)",
 			"prov.keyHint": "Leave blank to reuse the configured key",
 			"prov.models": "Models (comma separated)",
+			"prov.thinkingModel": "Thinking model (multimodal)",
+			"prov.thinkingModelNone": "No thinking assistance",
+			"prov.thinkingModelHint": "Choose a vision/multimodal chat model from this provider. It understands the request; the image model remains separate.",
+			"prov.thinkingUnset": "Thinking model not configured",
 			"prov.test": "Test",
 			"prov.testOk": "Connected",
 			"prov.testBad": "Failed",
@@ -2483,6 +2509,13 @@ body[data-ds-dark-theme] .vig-mask-pill{background:rgba(20,20,22,.94)}
 .vig-tools{position:relative;flex-wrap:nowrap}
 .vig-tools .vig-picker{min-width:0;flex:0 1 auto}
 .vig-tools .vig-send{margin-left:auto;flex:none;width:auto;min-width:42px;padding:0 10px;font:inherit;font-weight:600;white-space:nowrap}
+.vig-tools .vig-think{flex:none;width:auto;padding:0 8px;white-space:nowrap;line-height:1;font-size:12px;border:1px solid var(--vig-line)}
+.vig-tools .vig-think.is-on{background:var(--vig-accent);border-color:var(--vig-accent);color:var(--vig-surface)}
+.vig-tools .vig-think:focus-visible{outline:2px solid var(--vig-text);outline-offset:2px}
+.vig-think-note{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;font-size:12px;color:var(--vig-text-muted);overflow-wrap:anywhere}
+.vig-think-note .vig-btn{max-width:100%;min-height:28px}
+.vig-think-plan>summary{cursor:pointer;color:var(--vig-text-muted);font-size:12px;overflow-wrap:anywhere}
+.vig-think-plan .vig-text{margin-top:5px;font-size:12px;overflow-wrap:anywhere}
 .vig-tools .vig-sel{min-width:0;max-width:170px;flex:none;white-space:nowrap}
 /* 展开器：一块浮在工具行上方的面板，不占行内空间（不是把按钮塞回行里） */
 .vig-tools-pop{position:absolute;left:0;bottom:calc(100% + 10px);z-index:34;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
@@ -2546,6 +2579,7 @@ body[data-ds-dark-theme] .vig-ctx-pop{background:rgba(20,20,22,.96)}
    ============================================================ */
 .vig-bottom-dock{position:sticky;bottom:8px;display:flex;align-items:flex-end;justify-content:flex-end;height:0;z-index:7;pointer-events:none}
 .vig-root[data-compact="1"] .vig-main-body.vig-chat-feed{flex:0 1 auto;min-height:128px;height:clamp(180px,calc(var(--vig-host-height,100vh)*.47),600px);overflow:auto;scrollbar-gutter:stable}
+.vig-root[data-compact="1"] .vig-main:has([data-thinking-note]) .vig-chat-feed{height:clamp(128px,calc(var(--vig-host-height,100vh)*.47 - 64px),536px)}
 .vig-root[data-compact="1"] .vig-col:has(.vig-chat-feed){flex:0 0 auto!important}
 .vig-bottom-jump{pointer-events:auto;display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;
 	border-radius:var(--vig-r-pill);border:1px solid var(--vig-line);background:rgba(255,255,255,.94);
@@ -2841,7 +2875,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			} catch {
 				throw new Error(`${response.status} 非 JSON 响应：${text.slice(0, 120)}`);
 			}
-			if (!response.ok) throw new Error(payload?.error || `HTTP ${response.status}`);
+			if (!response.ok) throw Object.assign(new Error(payload?.error || `HTTP ${response.status}`), { code: payload?.code });
 			return payload;
 		}
 
@@ -3015,7 +3049,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 
 		/** 只记编辑过的字段，不把旧 prompt、模型或参考图冻结到下一次发送。 */
 		function requestOverrides(base, edited) {
-			return Object.fromEntries(Object.entries(edited).filter(([key, value]) => key !== "conversationId" && JSON.stringify(base[key]) !== JSON.stringify(value)));
+			return Object.fromEntries(Object.entries(edited).filter(([key, value]) => key !== "conversationId" && key !== "thinking" && JSON.stringify(base[key]) !== JSON.stringify(value)));
 		}
 
 		function sizeOptionsFor(current) {
@@ -4404,8 +4438,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		 * 以前只渲染回复，翻记录时看不出「当时让它做了什么」—— 提示词是这条任务的一部分，
 		 * 不能只活在输入框里。任务的 prompt 就是发出去的那句话，所以直接用它。
 		 */
-		function JobTurn({ job, onReuseImage, onToast, onRetry, onRefresh, onPreview, onSave, onDelete, onEdit, onGrid }) {
+		function JobTurn({ job, onReuseImage, onToast, onRetry, onRefresh, onPreview, onSave, onDelete, onEdit, onGrid, onCancelThinking }) {
 			const pending = job.status === "queued" || job.status === "running";
+			const planning = pending && job.thinkingModel && ["pending", "running"].includes(job.thinkingStatus);
 			const prompt = typeof job.prompt === "string" ? job.prompt.trim() : "";
 			// 气泡里显示用户原话（对话模型改写后的提示词单独留一行，见下面 planNote）
 			const displayPrompt = String(job.userText || job.prompt || "").trim();
@@ -4521,10 +4556,18 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							{ className: "vig-who" },
 							`${t("chat.assistant")} · ${job.model} · ${job.size}${job.protocol === GEMINI_NATIVE ? ` · ${[geminiRatioLabel(job.aspectRatio), protocolShortLabel(GEMINI_NATIVE)].filter(Boolean).join(" · ")}` : ""}${job.endpoint ? ` · ${job.endpoint}` : ""}`
 						),
-						// 对话模型把这句话整理成了什么（原话在上面气泡里，这里只摆改写结果）
-						job.planNote && job.planNote !== displayPrompt
-							? h("div", { className: "vig-who", title: job.planNote }, `${t("chat.planRewrite")} · ${job.planNote}`)
-							: null,
+						// Only show the final image prompt and the short visual summary, not model reasoning.
+						planning
+							? h("div", { className: "vig-think-note", "data-thinking-running": "1" },
+								h("span", {role:"status"}, `${t("chat.imageThinking")} · ${job.thinkingModel}`),
+								onCancelThinking ? h("button", {type:"button", className:"vig-btn is-ghost is-sm", "data-thinking-cancel":"1", onClick:()=>void onCancelThinking(job)}, t("chat.cancel")) : null)
+							: job.thinkingModel && job.thinkingStatus === "succeeded"
+								? h("details", { className: "vig-think-plan", "data-thinking-plan": "1" },
+									h("summary", null, `${t("chat.thinkingRewrite")} · ${job.thinkingModel}`),
+									job.planNote ? h("div", { className: "vig-who" }, job.planNote) : null,
+									h("div", { className: "vig-text" }, prompt))
+								: job.planNote && job.planNote !== displayPrompt
+									? h("div", { className: "vig-who", title: job.planNote }, `${t("chat.planRewrite")} · ${job.planNote}`) : null,
 						sourceLabel
 							? h(
 									"div",
@@ -4532,7 +4575,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									`${t("chat.source")} · ${sourceLabel}${job.sessionId ? ` · ${t("chat.session")} ${String(job.sessionId).slice(0, 24)}` : ""}`
 								)
 							: null,
-						pending && !job.stale
+						pending && !planning && !job.stale
 							? h(
 									"div",
 									{ className: "vig-row vig-muted" },
@@ -4851,6 +4894,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						onReuseImage: actions.switchToEdit,
 						onToast: actions.toast,
 						onRetry: actions.retryJob,
+						onCancelThinking: actions.cancelThinking,
 						onRefresh: actions.reload,
 						onPreview: actions.openViewer,
 						onSave: actions.exportAsset,
@@ -5010,6 +5054,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							)
 						: null,
 					unavailable ? h("div", {className:"vig-muted", role:"status", "data-gemini-unavailable":"1"}, t("chat.geminiReload")) : null,
+					!isVideoEndpoint && state.thinkingEnabled ? h("div", { className: "vig-think-note", role: "status", "data-thinking-note": "1" },
+						state.thinkingAvailable ? t("chat.thinkingReady", { model: state.thinkingModel }) : t(state.imageThinking ? "chat.thinkingUnavailable" : "chat.thinkingReload"),
+						state.imageThinking && !state.thinkingAvailable ? h("button", { type: "button", className: "vig-btn is-ghost is-sm", onClick: () => actions.setView("providers") }, t("chat.thinkingConfigure")) : null
+					) : null,
 					h("textarea", {
 						ref: inputRef,
 						className: "vig-input",
@@ -5264,6 +5312,16 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							},
 							h(Icon, { name: "note", size: 14 })
 						),
+						!isVideoEndpoint ? h("button", {
+							type: "button", className: `vig-tool vig-think${state.thinkingEnabled ? " is-on" : ""}`, "data-image-thinking": "1",
+							"aria-pressed": Boolean(state.thinkingEnabled), "aria-label": t("chat.thinkingToggle"),
+							title: state.thinkingAvailable ? `${t("chat.thinkingHelp")} · ${state.thinkingModel}` : state.imageThinking ? t("chat.thinkingUnavailable") : t("chat.thinkingReload"),
+							onClick: () => {
+								if (state.thinkingEnabled || state.thinkingAvailable) actions.setThinking(!state.thinkingEnabled);
+								else if (state.imageThinking) actions.setView("providers");
+								else actions.toast(t("chat.thinkingReload"), "err");
+							}
+						}, t("chat.thinkingToggle")) : null,
 						h(
 							"button",
 							{
@@ -5356,6 +5414,30 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			if (preferred && (wanted === "" || !(preferred.models || []).length || owns(preferred))) return preferred.id;
 			const owner = enabled.find(owns) ?? list.find(owns);
 			return owner?.id || preferred?.id || enabled[0]?.id || "";
+		}
+
+		// Check only the selected supplier's catalog, never a same-named model from another supplier.
+		function isThinkingModel(id, meta) {
+			if (!id || meta?.enabled === false) return false;
+			const kind = String(meta?.kind || "").toLowerCase();
+			return kind ? kind === "chat" : /(gpt-4|gpt-5|gpt-6|claude|gemini|deepseek|glm|qwen|grok-3|grok-4|llama|mistral|kimi|chat|reasoner|o[1-4](?:-|\.|$))/i.test(id) && !/(image|dall|banana|imagen|flux|seedream|kolors|ideogram|midjourney|stable-diffusion|sd[-_]?xl|tts|whisper|audio|video|veo|sora|kling|wan|hunyuan|minimax-video|embedding|rerank)/i.test(id);
+		}
+		function canUseThinking(provider, imageModel) {
+			const model = provider?.thinkingModel, image = provider?.modelMeta?.[imageModel];
+			const kind = String(image?.kind || "").toLowerCase();
+			return Boolean(provider && provider.enabled !== false && model !== imageModel && provider.models?.includes(imageModel) && image?.enabled !== false && (!kind || kind === "image") && provider.models?.includes(model) && isThinkingModel(model, provider.modelMeta?.[model]));
+		}
+		function thinkingImageRequest(body, override, refs) {
+			const local = url => typeof url === "string" && /^\/api\/velapi-image-go\/(?:upload|asset|preset)\/[A-Za-z0-9_-][\w.-]*$/.test(url);
+			const {image, ...rest} = body;
+			const urls = Array.isArray(body.referenceUrls) ? body.referenceUrls : body.referenceUrls ? [body.referenceUrls] : [];
+			const has = key => Object.hasOwn(override, key);
+			const setsRefs = has("referenceUrls") || has("referenceUrl");
+			const chosenUrls = [...(has("referenceUrl") && body.referenceUrl ? [body.referenceUrl] : []), ...(has("referenceUrls") ? urls : [])];
+			const images = has("images") ? body.images : has("image") ? (image ? [image] : []) : setsRefs ? chosenUrls : refs.map(ref => local(ref.url) ? ref.url : ref.dataUrl);
+			if (!Array.isArray(images)) return { ...rest, images }; // Host validation reports an explicit error.
+			const referenceUrls = images.filter(local);
+			return { ...rest, images, referenceUrls, referenceUrl: referenceUrls[0] || "" };
 		}
 
 		function modelOptionsFor(providers, config) {
@@ -6718,7 +6800,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 				return result;
 			};
 
-			const blank = { id: "", name: "", baseUrl: state.config.baseUrl, apiKey: "", useRuntimeKey: false, models: [], note: "" };
+			const blank = { id: "", name: "", baseUrl: state.config.baseUrl, apiKey: "", useRuntimeKey: false, models: [], thinkingModel: "", note: "" };
+			const thinkingModelOptions = dialog ? [...new Set(splitFieldList(dialog.modelsText))].filter(id => isThinkingModel(id, dialog.modelMeta?.[id])) : [];
 
 			return h(
 				"div",
@@ -6913,7 +6996,9 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 													h("span", { className: "vig-sep" }, "·"),
 													`${t("prov.modelsLabel")} ${modelsText}`,
 													provider.note ? h("span", { className: "vig-sep" }, "·") : null,
-													provider.note ? `${t("prov.note")} ${provider.note}` : null
+													provider.note ? `${t("prov.note")} ${provider.note}` : null,
+													provider.thinkingModel ? h("span", { className: "vig-sep" }, "·") : null,
+													provider.thinkingModel ? `${t("prov.thinkingModel")}：${provider.thinkingModel}` : null
 												)
 											),
 											h(
@@ -6985,12 +7070,26 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									h("textarea", {
 										className: "vig-in", rows: 2, style: { resize: "vertical", minHeight: 42 },
 										"data-provider-models": "1", value: dialog.modelsText,
-										onChange: (event) => changeDialog({ ...dialog, modelsText: event.target.value })
+										onChange: (event) => {
+											const modelsText = event.target.value;
+											const models = splitFieldList(modelsText);
+											changeDialog({ ...dialog, modelsText, thinkingModel: models.includes(dialog.thinkingModel) ? dialog.thinkingModel : "" });
+										}
 									})
 								),
 								h("label", { className: "vig-field" },
 									h("span", null, h("input", { type: "checkbox", "data-provider-runtime-key": "1", disabled: Boolean(dialog.apiKey.trim()), checked: !dialog.apiKey.trim() && dialog.useRuntimeKey,
 										onChange: (event) => changeDialog({ ...dialog, useRuntimeKey: event.target.checked }) }), " ", t("prov.key"), " · ", t("prov.keyRuntime"))
+								),
+								h(
+									"label",
+									{ className: "vig-field" },
+									h("span", { className: "vig-label" }, t("prov.thinkingModel")),
+									h("select", {
+										className: "vig-sel", "data-provider-thinking-model": "1", disabled: state.imageThinking === false, value: thinkingModelOptions.includes(dialog.thinkingModel) ? dialog.thinkingModel : "",
+										onChange: (event) => changeDialog({ ...dialog, thinkingModel: event.target.value })
+									}, h("option", { value: "" }, t("prov.thinkingModelNone")), thinkingModelOptions.map((id) => h("option", { key: id, value: id }, id))),
+									h("span", { className: "vig-muted" }, t(state.imageThinking === false ? "chat.thinkingReload" : "prov.thinkingModelHint"))
 								),
 								// 端点协议不在这里选：它在「对话生图」输入框那一行（跟着每次生成走）。
 								// 供应商这条记录只负责地址 / 密钥 / 模型，别让同一件事有两个家。
@@ -7032,8 +7131,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											"data-provider-save": "1", disabled: saveLock.busy,
 											onClick: () => saveLock.run(async () => {
 												const rev = draftRevision.current;
-												const { id, name, baseUrl, apiKey, note, modelsText, useRuntimeKey } = dialog;
-												const saved = await actions.saveProvider({ id, name, baseUrl, apiKey: apiKey.trim(), note, useRuntimeKey: !apiKey.trim() && useRuntimeKey, models: splitFieldList(modelsText) });
+												const { id, name, baseUrl, apiKey, note, modelsText, useRuntimeKey, thinkingModel } = dialog;
+												const saved = await actions.saveProvider({ id, name, baseUrl, apiKey: apiKey.trim(), note, useRuntimeKey: !apiKey.trim() && useRuntimeKey, models: splitFieldList(modelsText), thinkingModel: thinkingModelOptions.includes(thinkingModel) ? thinkingModel : "" });
 												if (saved && rev === draftRevision.current) closeDialog();
 											})
 										},
@@ -12410,6 +12509,13 @@ h(
 			const [conversations, setConversations] = useState([]);
 			const [conversationId, setConversationId] = useState(() => window.localStorage.getItem(CONV_KEY) || "");
 			const [chatModels, setChatModels] = useState([]);
+			const [imageThinking, setImageThinking] = useState(false);
+			const [thinkingEnabled, setThinkingEnabled] = useState(() => readConvSettings()[conversationId]?.thinkingEnabled === true);
+			const setThinkingPreference = (value) => {
+				const next = Boolean(value), owner = conversationIdRef.current;
+				setThinkingEnabled(next);
+				writeConvSetting(owner, { ...pickConfigFields(config), ...readConvSettings()[owner], thinkingEnabled: next });
+			};
 			const [config, setConfig] = useState({ baseUrl: "", apiKeyEnv: "", keyMask: "", hasKey: false, defaultModel: "", defaultSize: "1024x1024", videoSize: "1280x720", videoRatio: "16:9", videoResolution: "720p", videoSeconds: "4", defaultQuality: "LOW", defaultCount: 1, defaultEndpoint: window.localStorage.getItem(ENDPOINT_KEY) || "auto", activeProviderId: "", stateDir: "", chatModel: "", contextTurns: 6 });
 			const [providers, setProviders] = useState([]);
 			const [library, setLibrary] = useState([]);
@@ -12447,7 +12553,10 @@ h(
 			const [jsonDraft, setJsonDraft] = useState("");
 			const jsonOverrideRef = useRef(null);
 			const jsonBaseRef = useRef(null);
-			const buildRequestPreview = (prompt, raw = sizeRaw) => buildGenerationRequest({ prompt: String(prompt || "").trim(), config, providers, conversationId, references, isVideoEndpoint, sizeRaw: raw });
+			const buildRequestPreview = (prompt, raw = sizeRaw, withThinking = true) => {
+				const body = buildGenerationRequest({ prompt: String(prompt || "").trim(), config, providers, conversationId, references, isVideoEndpoint, sizeRaw: raw });
+				return withThinking && thinkingEnabled && !isVideoEndpoint ? thinkingImageRequest({ ...body, thinking: true }, {}, references) : body;
+			};
 			const jsonBody = () => {
 				const parsed = JSON.parse(jsonDraft);
 				if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not an object");
@@ -12493,6 +12602,10 @@ h(
 			})();
 			const selectedModelKind = modelKindOf(config.defaultModel, providers);
 			const isVideoEndpoint = config.defaultEndpoint !== GEMINI_NATIVE && (endpointKind === "video" || selectedModelKind === "video");
+			const thinkingProviderId = providerIdForModel(providers, config, config.defaultModel);
+			const thinkingProvider = providers.find((provider) => provider.id === thinkingProviderId);
+			const thinkingModel = thinkingProvider?.thinkingModel || "";
+			const thinkingAvailable = imageThinking && !isVideoEndpoint && canUseThinking(thinkingProvider, config.defaultModel);
 			/* 更新入口：一次点击 = 检查；查到新版本后再点一次 = 只拉取，不重启。
 			   （进度条只在这期间出现，结束就收起。） */
 			const [updateState, setUpdateState] = useState({ phase: "idle", percent: 0 });
@@ -12613,8 +12726,9 @@ h(
 				jsonOverrideRef.current = next.override;
 				if (!prev && next === current) persistComposer(id, next.text, next.refs, next.edit);
 				setJsonOpen(false); setPickOpen(false); setGridTarget(null);
-				const saved = readConvSettings()[id] || initialConfigRef.current;
-				if (saved) setConfig((previous) => ({ ...previous, geminiSize:undefined, geminiRatio:undefined, ...saved }));
+				const saved = readConvSettings()[id];
+				setThinkingEnabled(saved?.thinkingEnabled === true);
+				if (saved || initialConfigRef.current) setConfig((previous) => ({ ...previous, geminiSize:undefined, geminiRatio:undefined, ...(saved || initialConfigRef.current) }));
 			}, []);
 			const [pending, setPending] = useState(0);
 			const [unsent, setUnsent] = useState([]);
@@ -12645,7 +12759,14 @@ h(
 				const key = `${owner}:${epoch}:${entry.refId}:${entry.sourceRevision}`;
 				if (refUploads.current.has(key)) return refUploads.current.get(key);
 				const pending = uploadRefData(entry.name,entry.dataUrl).then(url=>{
-					if (!referenceOwned(target)) return url;
+					if (!referenceOwned(target)) {
+						const parked = owner && owner !== conversationIdRef.current && savedComposers.current.get(owner);
+						if (url && parked?.refs.some(item => attachmentMatches(item, target))) {
+							parked.refs = parked.refs.map(item => attachmentMatches(item, target) ? {...item,url} : item);
+							persistComposer(owner, parked.text, parked.refs, parked.edit);
+						}
+						return url;
+					}
 					if (url) setReferences(current=>current.map(item=>attachmentMatches(item,target) ? {...item,url}:item));
 					else if (warn) toast(t("attachment.uploadFailed"),"err");
 					return url;
@@ -12728,6 +12849,7 @@ h(
 						call("/conversations").catch(() => ({ items: [] }))
 					]);
 					if (!initialConfigRef.current && status.config?.defaultModel) initialConfigRef.current = pickConfigFields(status.config);
+					setImageThinking(status.imageThinking === true);
 					setConfig((previous) => ({
 						...status.config,
 						// 宿主老版本没有这个字段时，保留本地那份（协议选择不至于刷新就回默认）
@@ -12777,6 +12899,8 @@ h(
 
 			/** 单条任务轮询：终态即停，异常退避；超过 STALE_MS 还没终态就标 stale（别一直转圈）。 */
 			const STALE_MS = 6 * 60 * 1000;
+			const imageTimeout = useRef(300000);
+			imageTimeout.current = Number(config.timeoutMs) || 300000;
 			const watchJob = useCallback(
 				(jobId) => {
 					if (timers.current.has(jobId)) return;
@@ -12793,8 +12917,9 @@ h(
 							}
 							setJobs((list) => list.map((item) => (item.id === job.id ? { ...item, ...job } : item)));
 							if (job.status === "queued" || job.status === "running") {
-								// 宿主那边有 300s 超时兜着，正常不会走到这里；走到就是它没消息了
-								if (Date.now() - startedAt > STALE_MS) {
+								// Two sequential stages need their combined timeout plus a grace period.
+								const staleAfter = job.thinkingModel ? Math.max(STALE_MS, imageTimeout.current + Math.min(120000, imageTimeout.current) + 60000) : STALE_MS;
+								if (Date.now() - startedAt > staleAfter) {
 									timers.current.delete(jobId);
 									setJobs((list) => list.map((item) => (item.id === jobId ? { ...item, stale: true } : item)));
 									setGenerating(false);
@@ -12897,7 +13022,7 @@ h(
 						readyRefs.push(entry);
 					}
 					const urls = readyRefs.map((ref) => ref.url).filter(Boolean);
-					const finalBody = { ...requestBody,
+					const finalBody = requestBody.thinking === true ? thinkingImageRequest(requestBody, override, readyRefs) : { ...requestBody,
 						referenceUrls: Object.hasOwn(override, "referenceUrls") ? requestBody.referenceUrls : urls,
 						referenceUrl: Object.hasOwn(override, "referenceUrl") ? requestBody.referenceUrl : urls[0] || ""
 					};
@@ -12916,6 +13041,13 @@ h(
 						.catch(() => {});
 					if (isCurrent()) watchJob(job.id);
 				} catch (error) {
+					// Confirmed preflight errors have not queued anything; restore the exact draft only if still untouched.
+					if (requestBody.thinking && /^thinking_/.test(error?.code || "") && isCurrent() && inputEpoch.current === referenceEpoch && !draftNow.current && !jsonOverrideRef.current) {
+						jsonOverrideRef.current = override;
+						setDraft(inputText);
+						toast(String(error?.message ?? error), "err");
+						return;
+					}
 					// 网络中断不等于宿主没有接单。保留原文，让用户先查记录，不自动重发或覆盖新草稿。
 					if (!discardedConvs.current.has(requestBody.conversationId)) {
 						const entry = { owner:requestBody.conversationId, seq, text:inputText, error:String(error?.message ?? error) };
@@ -12940,7 +13072,7 @@ h(
 				const override = jsonOverrideRef.current || {};
 				const effectiveEndpoint = imageRequestProtocol(override.endpoint || config.defaultEndpoint, override.providerId || providerIdForModel(providers, config, override.model || config.defaultModel), providers);
 				if (effectiveEndpoint === GEMINI_NATIVE && !geminiReady(protocols)) { toast(t("chat.geminiReload"), "err"); return null; }
-				const base = buildRequestPreview(rawPrompt);
+				const base = buildRequestPreview(rawPrompt, sizeRaw, false);
 				let body;
 				try { body = normalizeGenerationBody({ ...base, ...override }, sizeRaw, isVideoEndpoint ? config.videoSize : config.defaultSize, isVideoEndpoint); }
 				catch (error) { toast(error.message, "err"); return null; }
@@ -12948,6 +13080,15 @@ h(
 				if (!known || ["chat", "audio", "embedding", "rerank"].includes(modelKindOf(body.model, providers))) {
 					toast(t("chat.modelInvalid"), "err");
 					return null;
+				}
+				delete body.thinking;
+				const video = modelKindOf(body.model, providers) === "video" || (protocols || []).some(p => p.id === effectiveEndpoint && p.kind === "video") || effectiveEndpoint === "videos_generations";
+				if (thinkingEnabled && !video) {
+					if (!imageThinking) { toast(t("chat.thinkingReload"), "err"); return null; }
+					const imageOwner = Object.hasOwn(override, "providerId") ? body.providerId : providerIdForModel(providers, config, body.model);
+					const owner = providers.find(provider => provider.id === imageOwner);
+					if (!canUseThinking(owner, body.model)) { toast(t("chat.thinkingUnavailable"), "err"); return null; }
+					body = { ...body, providerId: imageOwner, endpoint: effectiveEndpoint, thinking: true, userText: rawPrompt };
 				}
 				jsonOverrideRef.current = null;
 				// 入队即清空输入框：连点不会重复发送同一句（prompt 已经捕获进队列）
@@ -12991,6 +13132,12 @@ h(
 				} catch (error) { toast(String(error?.message ?? error), "err"); return false; }
 			};
 			const actions = {
+				setThinking: setThinkingPreference,
+				cancelThinking: async (job) => {
+					if (!job?.id || job.conversationId !== conversationIdRef.current) return;
+					try { await call("/job/cancel", { method: "POST", body: {id:job.id} }); }
+					catch (error) { toast(String(error?.message ?? error), "err"); }
+				},
 				dismissUnsent: (seq) => setUnsent((list) => list.filter((entry) => entry.seq !== seq)),
 				recoverUnsent: (entry) => {
 					if (entry.owner !== conversationIdRef.current) return;
@@ -13170,10 +13317,15 @@ h(
 						const nativeRetry = retryEndpoint === GEMINI_NATIVE;
 						if (nativeRetry && !geminiReady(protocols)) throw Error(t("chat.geminiReload"));
 						const providerId = job.providerId && retryModel === job.model ? job.providerId : providerIdForModel(providers, config, retryModel) || job.providerId || config.activeProviderId;
+						const repeatThinking = Boolean(job.thinkingModel && job.thinkingStatus !== "succeeded");
+						if (repeatThinking && !imageThinking) throw Error(t("chat.thinkingReload"));
+						if (job.thinkingRetryUnavailable) throw Error(t("chat.thinkingRetryReferences"));
 						const payload = await call("/generate", {
 							method: "POST",
 							body: {
 								prompt, model:retryModel, providerId,
+								...(job.thinkingModel ? { userText: job.userText || prompt, planNote: job.planNote || "" } : {}),
+								...(repeatThinking ? { thinking: true } : {}),
 								...(nativeRetry ? geminiBody({model:retryModel, size:job.size || "1K", aspect_ratio:job.aspectRatio, n:1}) : {
 									size: job.size || config.defaultSize, ...(job.aspectRatio ? {aspect_ratio:job.aspectRatio} : {}),
 									...(job.seconds ? {seconds:job.seconds} : {}), quality: job.quality || config.defaultQuality, n: job.count || config.defaultCount
@@ -13631,6 +13783,7 @@ h(
 				conversations,
 				conversationId,
 				isVideoEndpoint,
+				imageThinking, thinkingEnabled, thinkingAvailable, thinkingModel,
 				jsonOpen,
 				jsonDraft,
 				setJsonOpen,
@@ -14438,7 +14591,7 @@ h(
 			ProvidersView,
 			// 模型 → 供应商选路：模型属于谁就把请求发到谁那儿（纯函数，Node 里可测）
 			modelCatalogFor,
-			providerIdForModel,
+			providerIdForModel, isThinkingModel, canUseThinking, thinkingImageRequest,
 			AttachmentEditor, ATTACHMENT_LIMITS, attachmentSource, attachmentRect, attachmentPoint,
 			attachmentNewReference, attachmentNormalizeReferences, attachmentMatches, attachmentClearOverrides,
 			ModelPicker,

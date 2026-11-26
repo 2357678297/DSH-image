@@ -183,7 +183,7 @@ export async function auditAttachmentUI({host,check,wait,waitFor,flushSync}) {
       check('保存期间切换会话关闭窗口且B无A附件/草稿',!ctrl('editor')&&all('.vig-composer .vig-ref').length===0&&composer().value!=='A parked draft');
       await attach('B.png');const b=snapshot()[0];set(composer(),'B isolated draft');await settle(parked);check('A保存上传晚回不写B当前附件或文本',snapshot().length===1&&snapshot()[0]===b&&composer().value==='B isolated draft');
       await switchTo('conv_default');check('返回A保留自己的新字节与草稿，不回旧图',snapshot().length===1&&snapshot()[0]===edited&&composer().value==='A parked draft');
-      await open();await draw();await switchTo('conv_old');const restoredB=await refPNG(0);check('编辑未保存时切会话不泄漏modal或未确认像素',!ctrl('editor')&&equal(pixels(restoredB),originalPixels)&&composer().value==='B isolated draft',JSON.stringify({modal:!!ctrl('editor'),refs:snapshot().map(s=>s.slice(0,60)),draft:composer().value,active:q('[data-conv][aria-current="true"]')?.getAttribute('data-conv')}));await switchTo('conv_default');check('回A仍为已保存版本而非未确认笔迹',snapshot()[0]===edited);
+      await open();await draw();await switchTo('conv_old');const restoredB=await refPNG(0);check('编辑未保存时切会话不泄漏modal或未确认像素',!ctrl('editor')&&equal(pixels(restoredB),originalPixels)&&composer().value==='B isolated draft',JSON.stringify({modal:!!ctrl('editor'),refs:snapshot().map(s=>s.slice(0,60)),draft:composer().value,active:q('[data-conv][aria-current="true"]')?.getAttribute('data-conv')}));await switchTo('conv_default');const resumed=await refPNG(0),storedVersion=await decode(edited);check('回A仍为已保存版本而非未确认笔迹，宿主链接对应同一 PNG',snapshot()[0]===parked.url&&urlData.get(parked.url)===edited&&equal(pixels(resumed),pixels(storedVersion)));
     });
 
     await suite('上传失败保留并重发新字节',async()=>{

@@ -1,0 +1,103 @@
+// Production React handlers in the existing temporary Chrome fixture; no supplier calls.
+export async function auditThinkingUI({host, check, wait, waitFor, flushSync, posts, settle, remount}) {
+  const q = selector => host.querySelector(selector), all = selector => [...host.querySelectorAll(selector)];
+  const until = async (predicate, message, timeout = 4000) => {
+    const result = await waitFor(predicate, timeout);
+    if (!result) throw Error(`等待超时：${message}`);
+    return result;
+  };
+  const click = node => { if (!node) throw Error('缺少要点击的控件'); flushSync(() => node.click()); };
+  const area = () => q('.vig-composer .vig-input'), toggle = () => q('[data-image-thinking]');
+  const send = () => q('[data-force-generate]'), count = () => posts.filter(p => p.path === '/generate').length;
+  const body = () => posts.filter(p => p.path === '/generate').at(-1)?.body;
+  const text = value => flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(area(), value);
+    area().dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  const select = (node, value) => flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(node, value);
+    node.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  const pressed = () => toggle()?.getAttribute('aria-pressed');
+  const history = (prompt, label) => all('.vig-turn.is-user').find(n => n.textContent.includes(prompt))?.nextElementSibling?.querySelector(`button[aria-label="${label}"]`);
+  const swap = async id => { click(q(`[data-conv="${id}"]`)); await until(()=>q(`[data-conv="${id}"]`)?.getAttribute('aria-current') === 'true',id); };
+  const submit = async (prompt, key=false) => {
+    const before=count(); if (prompt != null) text(prompt);
+    if (key) flushSync(() => area().dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true})));
+    else click(send());
+    await until(()=>count()===before+1,'收到一次生成请求');
+    return body();
+  };
+  try {
+    const helper='fixture-vision-chat', model='gpt-image-2.5-c';
+    await until(()=>toggle() && q('[data-conv="conv_old"]'),'工作台加载');
+    check('思考开关默认关，按钮有名称和清晰状态',pressed()==='false' && toggle().textContent.includes('思考') && !!toggle().getAttribute('aria-label'));
+    const clear=await submit('不启用思考的文生图');
+    check('关闭时只提交原生图请求，不携带思考标志',!Object.hasOwn(clear,'thinking') && clear.prompt==='不启用思考的文生图' && clear.model===model);
+    const before=count(); click(toggle());
+    await until(()=>q('.vig-prov-acts'),'跳转供应商管理');
+    check('缺配置时点开关前往供应商管理，不发送',count()===before);
+    const card=all('.vig-prov').find(n=>n.querySelector('.vig-prov-name')?.textContent.includes('GPT'));
+    click([...card.querySelectorAll('button')].find(n=>n.textContent==='编辑'));
+    const picker=await until(()=>q('[data-provider-thinking-model]'),'思考模型下拉');
+    const options=[...picker.options].map(option=>option.value);
+    check('仅列当前供应商的对话模型，排除图片、视频、停用与其他供应商',JSON.stringify(options)===JSON.stringify(['',helper]),JSON.stringify(options));
+    select(picker,helper); click(q('[data-provider-save]'));
+    await until(()=>!q('[data-provider-editor]'),'供应商保存完成');
+    const saved=posts.filter(p=>p.path==='/providers').at(-1)?.body;
+    check('独立保存思考模型，不修改现有图片模型目录',saved?.thinkingModel===helper && saved.id==='pv_gpt' && saved.models.includes(model) && count()===before);
+    click(q('[data-page="chat"]')); click(toggle());
+    check('开启会显示选定模型与参考图也会发送的说明，操作本身不生图',pressed()==='true' && q('[data-thinking-note]')?.textContent.includes(helper) && q('[data-thinking-note]')?.textContent.includes('参考图') && count()===before);
+    await swap('conv_old'); check('另一会话默认关闭思考',pressed()==='false');
+    await swap('conv_default'); check('回到原会话恢复思考偏好',pressed()==='true');
+    await until(()=>history('Thinking reference fixture','编辑提示词（填回输入框）'),'历史参考图');
+    click(history('Thinking reference fixture','编辑提示词（填回输入框）'));
+    await until(()=>all('.vig-composer .vig-ref').length===2,'两个附件');
+    host.style.width='375px'; await wait(110); text('保留参考图主体并加强侧光');
+    const bounds=host.getBoundingClientRect(), controls=[toggle(),send()];
+    const hits=controls.map(node=>{ const r=node.getBoundingClientRect(), hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2); return {inside:r.left>=bounds.left-1 && r.right<=bounds.right+1, sized:r.width>=24 && r.height>=24, hit:node.contains(hit), cover:hit?.className, y:r.top}; });
+    const composer=q('.vig-composer');
+    check('375px 思考与生成可见可点，输入区无横向溢出',hits.every(r=>r.inside&&r.sized&&r.hit) && composer.scrollWidth<=composer.clientWidth+1, JSON.stringify({hits,width:composer.clientWidth,scrollWidth:composer.scrollWidth}));
+    const sent=await submit(null,true);
+    check('开启后 Enter 仍只发一个 /generate，锁定当前图片模型、参考图顺序和供应商',sent.thinking===true && sent.model===model && sent.providerId==='pv_gpt' && sent.userText==='保留参考图主体并加强侧光' && sent.mode==='edit' && !Object.hasOwn(sent,'image') && sent.images?.length===2 && sent.images.every((v,i)=>v===sent.referenceUrls[i]) && sent.images[0].endsWith('up_1.png') && sent.images[1].endsWith('up_2.png'),JSON.stringify(sent));
+    await until(()=>q('[data-thinking-running]'),'显示分析状态');
+    check('任务显示多模态模型正在整理和取消入口，保留原用户消息',q('[data-thinking-running]').textContent.includes(helper) && !!q('[data-thinking-cancel]') && !!history('保留参考图主体并加强侧光','编辑提示词（填回输入框）'));
+    await swap('conv_old'); text('B 未提交草稿'); settle('succeeded','从左前方打柔和侧光，保留参考图主体。');
+    await wait(180);
+    check('切会话后结果不会覆盖另一会话草稿，也不会额外发送',area().value==='B 未提交草稿' && !q('[data-thinking-plan]') && count()===before+1);
+    await swap('conv_default');
+    const detail=await until(()=>q('[data-thinking-plan]'),'最终图像提示词');
+    click(detail.querySelector('summary'));
+    check('最终提示词可展开，同时保留原词、思考与生图模型',detail.open && detail.textContent.includes('从左前方') && detail.textContent.includes(helper) && q('.vig-thread').textContent.includes(model) && !!history('保留参考图主体并加强侧光','重试'));
+    click(history('保留参考图主体并加强侧光','重试')); await until(()=>count()===before+2,'已整理任务重试');
+    check('思考成功的历史重试复用实际入图提示词，不再调用辅助模型',!Object.hasOwn(body(),'thinking') && body().prompt.includes('从左前方') && body().userText==='保留参考图主体并加强侧光' && body().providerId==='pv_gpt');
+    await submit('思考应当失败并留原词'); settle('failed');
+    await until(()=>q('.vig-fail')?.textContent.includes('未提交生图') || all('.vig-fail').some(n=>n.textContent.includes('未提交生图')),'思考失败卡');
+    const beforeRetry=count(); await wait(80);
+    check('分析失败显示未提交生图，保留原词且无静默重发',count()===beforeRetry && !!history('思考应当失败并留原词','编辑提示词（填回输入框）'));
+    click(history('思考应当失败并留原词','重试')); await until(()=>count()===beforeRetry+1,'手动重试思考');
+    check('分析失败后须手动重试，且先重新思考',body().thinking===true && body().prompt==='思考应当失败并留原词');
+    const pending=await until(()=>all('[data-thinking-cancel]').at(-1),'取消思考'); click(pending);
+    await until(()=>posts.some(p=>p.path==='/job/cancel'),'取消请求');
+    check('取消正在思考的任务不补发图片',count()===beforeRetry+1);
+    await submit('本地参数拒绝'); await until(()=>area().value==='本地参数拒绝','明确拒绝后恢复草稿');
+    check('思考请求未入队时恢复原草稿，不触发重发',area().value==='本地参数拒绝' && count()===beforeRetry+2);
+    const tools=q('[data-tools-toggle]'); if(tools.getAttribute('aria-expanded')!=='true')click(tools);
+    const modelPick=async id=>{
+      click(q('.vig-tools-pop .vig-pick'));
+      click(all('.vig-pop-item').find(n=>n.querySelector('.vig-pop-item-text')?.textContent===id));
+      await until(()=>q('.vig-tools-pop .vig-pick-text')?.textContent===id,'选择模型 '+id);
+    };
+    await modelPick('omni-flash'); await until(()=>!toggle(),'视频隐藏思考');
+    const video = await submit('视频仍使用原流程');
+    check('视频不显示或发送思考，仍用视频模型',!toggle()&&!Object.hasOwn(video,'thinking')&&video.model==='omni-flash');
+    await modelPick(model); await until(()=>pressed()==='true','切回图片恢复思考');
+    check('视频选择不清除会话的图片思考偏好',pressed()==='true');
+    await remount(false);
+    await until(()=>toggle() && q('[data-thinking-note]')?.textContent.includes('重启 DSH'),'旧宿主提示及保留的开启状态');
+    text('旧宿主不能偷偷绕过思考'); const oldCount=count(); click(send()); await wait(130);
+    check('旧宿主开着思考时阻止提交且保留草稿',pressed()==='true' && count()===oldCount && area().value==='旧宿主不能偷偷绕过思考');
+    click(toggle()); const legacy=await submit();
+    check('手动关闭后旧宿主仍可直接生图，浏览器不调用独立聊天端点',!Object.hasOwn(legacy,'thinking') && legacy.prompt==='旧宿主不能偷偷绕过思考' && !posts.some(p=>p.path.startsWith('/chat/')||p.path==='/think'));
+  } catch (error) { check('多模态思考真实组件交互未抛异常',false,error.stack || String(error)); }
+}

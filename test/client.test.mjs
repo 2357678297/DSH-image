@@ -3011,6 +3011,13 @@ check(
   const normalizedRefs = w.attachmentNormalizeReferences([firstRef,{...firstRef},{name:"third.png",sourceRevision:-1},null]);
   check("附件身份归一化：去掉空项、重复ID换新、有效项保留",normalizedRefs.length===3 && normalizedRefs[0]===firstRef && new Set(normalizedRefs.map(ref=>ref.refId)).size===3 && normalizedRefs.every(ref=>ref.sourceRevision===0));
   check("附件匹配使用身份及像素版本，不依赖对象或URL",w.attachmentMatches({...firstRef,url:"/api/velapi-image-go/upload/new.png"},firstRef) && !w.attachmentMatches({...firstRef,sourceRevision:1},firstRef) && !w.attachmentMatches(secondRef,firstRef) && !w.attachmentMatches(firstRef,{}));
+  const visionProvider = { id:"fixture", models:["vision-v1","img-v1","inactive-chat"], thinkingModel:"vision-v1", modelMeta:{"vision-v1":{kind:"chat"},"img-v1":{kind:"image"},"inactive-chat":{kind:"chat",enabled:false}} };
+  check("思考辅助按所选供应商与模型类型校验，不使用停用模型", w.canUseThinking(visionProvider,"img-v1") && !w.canUseThinking(visionProvider,"vision-v1") && !w.canUseThinking({...visionProvider,thinkingModel:"inactive-chat"},"img-v1") && !w.canUseThinking({...visionProvider,enabled:false},"img-v1"));
+  const studyRef = "/api/velapi-image-go/upload/study.png", inline = "data:image/png;base64,AAAA", input = { thinking:true,model:"img-v1",images:[inline],image:inline,referenceUrl:studyRef,referenceUrls:[studyRef],size:"2K" };
+  const plannedInput = w.thinkingImageRequest(input,{},[{url:studyRef,dataUrl:inline},{url:"",dataUrl:inline}]);
+  check("思考生成仅按附件顺序发一次输入，同步留档链接，不改生图参数", JSON.stringify(plannedInput.images)===JSON.stringify([studyRef,inline]) && plannedInput.referenceUrls.join()===studyRef && !Object.hasOwn(plannedInput,"image") && plannedInput.model==="img-v1" && plannedInput.size==="2K");
+  check("显式 JSON 附件覆盖不会和卡片上的旧图混合，思考开关仍由界面控制", w.thinkingImageRequest(input,{images:[inline]},[{url:studyRef}]).images.join()===inline && w.thinkingImageRequest(input,{images:[inline]},[]).referenceUrls.length===0 && !Object.hasOwn(w.requestOverrides({}, {thinking:true}),"thinking"));
+
   const preservedOverride = {prompt:"keep prompt",model:"model",providerId:"provider",size:"auto",n:1,quality:"HIGH"};
   const clearedOverride = w.attachmentClearOverrides({...preservedOverride,image:"old",images:["old"],referenceUrl:"old",referenceUrls:["old"],mask:"old",maskUrl:"old",maskDataUrl:"old"});
   check("编辑附件后清旧图与蒙版 JSON 覆盖，保留其它设置",JSON.stringify(clearedOverride)===JSON.stringify(preservedOverride) && w.attachmentClearOverrides({images:["old"],mask:"old"})===null && w.attachmentClearOverrides(null)===null);
@@ -3117,14 +3124,14 @@ check(
       /if \(job\.status === "queued" \|\| job\.status === "running"\) watchRef\.current\?\.\(job\.id\);/.test(SOURCE) &&
       /const watchRef = useRef\(null\);\s*watchRef\.current = watchJob;/.test(SOURCE) &&
       /const STALE_MS = 6 \* 60 \* 1000;/.test(SOURCE) &&
-      /if \(Date\.now\(\) - startedAt > STALE_MS\)/.test(SOURCE) &&
+      /if \(Date\.now\(\) - startedAt > staleAfter\)/.test(SOURCE) && /job\.thinkingModel \? Math\.max\(STALE_MS, imageTimeout\.current \+ Math\.min\(120000, imageTimeout\.current\) \+ 60000\) : STALE_MS/.test(SOURCE) &&
       /const actions = \{/.test(SOURCE) && /toast,/.test(SOURCE) && /reload,/.test(SOURCE)
   );
   check(
     "参考图上传拿回本站 URL，并随生成请求带出去（任务里只存 URL，不存 base64）",
     /const uploadRefData = async \(name, dataUrl\) => \{[\s\S]{0,300}call\("\/upload", \{ method: "POST", body: \{ name: name \|\| "reference\.png", data: dataUrl \} \}\)/.test(SOURCE) &&
       /current\.map\(item=>attachmentMatches\(item,target\) \? \{\.\.\.item,url\}:item\)/.test(SOURCE) &&
-      /if \(!referenceOwned\(target\)\) return url;/.test(SOURCE) &&
+      /if \(!referenceOwned\(target\)\) \{[\s\S]{0,420}parked\?\.refs\.some\(item => attachmentMatches\(item, target\)\)/.test(SOURCE) &&
       refBody.referenceUrl === refBody.referenceUrls[0] &&
       /referenceUrl: job\.referenceUrl \|\| ""/.test(SOURCE)
   );

@@ -1771,6 +1771,111 @@ await new Promise((resolve) => badKeyServer.close(resolve));
   }
 }
 
+
+/* Multimodal prompt preparation and generation are two stages of one real host job. */
+{
+  const imageModel = 'fixture-image-v1', helper = 'fixture-vision-chat', nativeModel = 'Nano-Banana-2';
+  const key = 'fixture-think-provider-key', raw = '保留产品轮廓，只把黄背景换成墨绿';
+  const refined = '同一产品，保留轮廓、材质和字样；仅换为均匀墨绿色背景。', summary = '保留主体，只换背景。';
+  const ref = upload.body.item.url, alternate = PNG_FOR_EDIT;
+  const hits = [], waitForHit = async (from, count = 1) => {
+    for (let i = 0; hits.length < from + count && i < 160; i++) await new Promise(resolve => setTimeout(resolve, 10));
+    if (hits.length < from + count) throw Error('Expected loopback request did not arrive');
+  };
+  let held, flavor = 'ok';
+  const relay = http.createServer(async (req, res) => {
+    const chunks = []; for await (const c of req) chunks.push(c);
+    const bytes = Buffer.concat(chunks), type = req.headers['content-type'] || '';
+    const body = type.includes('application/json') ? JSON.parse(bytes.toString() || 'null') : null;
+    const send = (data, status = 200) => res.writeHead(status, {'content-type':'application/json'}).end(JSON.stringify(data));
+    hits.push({url:req.url, method:req.method, auth:req.headers.authorization, type, bytes, body});
+    if (req.url === '/a/v1/chat/completions') {
+      const choice = (content, more = {}) => ({choices:[{finish_reason:'stop',message:{content,reasoning_content:'fixture-private-reasoning',...more}}]});
+      if (flavor === 'hold') await new Promise(resolve => { held=resolve; res.once('close',resolve); });
+      if (flavor === 'auth') return send({error:{message:key+' '+alternate}},401);
+      if (flavor === 'redirect') return res.writeHead(307,{location:'/never-redirect-here'}).end();
+      if (flavor === 'bad') return send(choice('未遵守计划格式'));
+      if (flavor === 'private') return send({choices:[{message:{content:'',reasoning_content:JSON.stringify({prompt:refined})}}]});
+      if (flavor === 'tool') return send(choice(JSON.stringify({prompt:refined}),{tool_calls:[{function:{name:'generate_image'}}]}));
+      if (flavor === 'echo') return send(choice(JSON.stringify({prompt:key,summary:alternate})));
+      return send(choice('```json\n'+JSON.stringify({prompt:refined,summary,model:'never-switch',providerId:'wrong',n:7})+'\n```'));
+    }
+    if (req.url === '/a/v1/models') return send({data:[{id:imageModel,kind:'image'}]});
+    if (req.url === '/a/v1/images/generations' || req.url === '/a/v1/images/edits') return send({data:[{b64_json:tinyPng}]});
+    if (req.url === `/a/v1beta/models/${nativeModel}:generateContent`) return send({candidates:[{content:{parts:[{inlineData:{mimeType:'image/png',data:tinyPng}}]}}]});
+    return send({error:{message:'unexpected loopback route'}},404);
+  });
+  await new Promise(resolve => relay.listen(0,'127.0.0.1',resolve));
+  const base = `http://127.0.0.1:${relay.address().port}`;
+  const api = (route,body) => call(route,{method:'POST',body});
+  const models = [imageModel, helper, nativeModel, 'not-enabled-chat', 'fixture-video'];
+  let a, b;
+  try {
+    a = (await api('/providers',{name:'Think A',baseUrl:base+'/a/v1',apiKey:key,models,
+      modelMeta:{[imageModel]:{kind:'image'},[helper]:{kind:'chat'},[nativeModel]:{kind:'image'},'not-enabled-chat':{kind:'chat',enabled:false},'fixture-video':{kind:'video'}},thinkingModel:helper})).body?.item;
+    b = (await api('/providers',{name:'Think B',baseUrl:base+'/b/v1',apiKey:'fixture-other-provider-key',models:[imageModel]})).body?.item;
+    if (!a?.id || !b?.id) throw Error('Unable to configure thinking fixtures');
+    const state = await call('/status'), list = await call('/providers');
+    check('思考能力与辅助模型按供应商独立保存，并不公开密钥',state.body?.imageThinking===true && list.body.items.find(p=>p.id===a.id)?.thinkingModel===helper && !list.body.items.find(p=>p.id===b.id)?.thinkingModel && !JSON.stringify(list.body).includes(key) && JSON.parse(fs.readFileSync(path.join(stateDir,'providers.json'),'utf8')).find(p=>p.id===a.id)?.thinkingModel===helper);
+    for (const bad of [imageModel,'not-enabled-chat','foreign-chat']) {
+      const invalid = await api('/providers',{id:a.id,thinkingModel:bad});
+      check(`拒绝不可用或不属于供应商的思考模型 ${bad}`,invalid.status===400 && invalid.body?.code==='invalid_thinking_model');
+    }
+    const post = extra => api('/generate',{providerId:a.id,model:imageModel,endpoint:'images_generations',prompt:raw,conversationId:'conv_default',size:'2304x3072',n:2,...extra});
+    const run = async extra => {
+      const at=hits.length, receipt=await post(extra), id=receipt.body?.job?.id;
+      return {receipt,job:id ? await pollJob(id) : null, wire:hits.slice(at)};
+    };
+    const off = await run({thinking:false});
+    check('关闭思考仅发一次原生图片请求，不改写原词',off.job?.status==='succeeded' && off.wire.length===1 && off.wire[0]?.url==='/a/v1/images/generations' && off.wire[0]?.body?.prompt===raw && !off.job.thinkingStatus);
+    const on = await run({thinking:true,userText:raw,quality:'HIGH'}), [think,draw] = on.wire;
+    check('文生图严格先思考后生图，两模型均使用所选供应商凭据',on.wire.length===2 && on.wire.every(r=>r.method==='POST' && r.auth===`Bearer ${key}`) && think?.url==='/a/v1/chat/completions' && think?.body?.model===helper && draw?.url==='/a/v1/images/generations' && draw.body?.model===imageModel && !('tools' in think.body));
+    check('辅助模型只改变提示词，尺寸数量质量和会话不被模型回复覆盖',on.receipt.status===200 && on.job?.status==='succeeded' && on.job.thinkingStatus==='succeeded' && on.job.thinkingModel===helper && on.job.prompt===refined && on.job.userText===raw && on.job.planNote===summary && on.job.conversationId==='conv_default' && draw?.body?.prompt===refined && draw.body.size==='2304x3072' && draw.body.n===2 && draw.body.quality==='HIGH');
+    const edited = await run({thinking:true,endpoint:'images_edits',mode:'edit',images:[ref,`data:image/png;base64,${alternate}`],referenceUrl:ref,referenceUrls:[ref],mask:`data:image/png;base64,${tinyPng}`});
+    const parts = edited.wire[0]?.body?.messages?.at(-1)?.content;
+    const files = edited.wire[1]?.type.startsWith('multipart/') ? await new Response(edited.wire[1].bytes,{headers:{'content-type':edited.wire[1].type}}).formData() : null;
+    const pixels = await Promise.all((files?.getAll('image') || []).map(async f=>Buffer.from(await f.arrayBuffer()).toString('base64')));
+    const expected = [tinyPng,alternate];
+    check('图生图：多模态分析看到原词与有序原参考字节；原编辑请求保留顺序和独立蒙版',edited.job?.status==='succeeded' && Array.isArray(parts) && parts[0]?.text.includes(raw) && JSON.stringify(parts.slice(1).map(p=>p.image_url?.url?.split(',')[1]))===JSON.stringify(expected) && JSON.stringify(pixels)===JSON.stringify(expected) && files.get('prompt')===refined && files.getAll('mask').length===1 && edited.job.thinkingRetryUnavailable);
+    const native = await run({thinking:true,model:nativeModel,endpoint:'gemini_generate',size:'2K',aspect_ratio:'auto',n:1,mode:'edit',images:[ref,alternate]});
+    check('Gemini 原生：思考在 chat 接口、图片在原生接口，auto 档位和参考图顺序保留',native.job?.status==='succeeded' && native.wire.length===2 && native.wire[1]?.url===`/a/v1beta/models/${nativeModel}:generateContent` && native.wire[1]?.body?.contents?.[0]?.parts?.[0]?.text===refined && JSON.stringify(native.wire[1]?.body?.contents?.[0]?.parts?.slice(1).map(p=>p.inlineData?.data))===JSON.stringify(expected) && JSON.stringify(native.wire[1]?.body?.generationConfig?.imageConfig)==='{"imageSize":"2K"}');
+    const ran = hits.length;
+    for (const opts of [{providerId:b.id},{providerId:'nope'},{endpoint:'videos_generations'},{model:helper},{images:['https://example.invalid/image.png']},{images:['data:image/png;base64,YQ==']},{images:Array(5).fill(ref)}]) {
+      const invalid = await post({thinking:true,...opts});
+      check('无效思考任务在排队前拒绝：'+Object.keys(opts).join(','),invalid.status===400 && /^thinking_/.test(invalid.body?.code || '') && hits.length===ran);
+    }
+    for (const type of ['bad','private','tool','auth','redirect','echo']) {
+      flavor=type;
+      const failure=await run({thinking:true,images:[ref]});
+      check(`思考异常 ${type}：仅一次分析请求，保留原词，不泄露并阻断生图`,failure.wire.length===1 && failure.job?.status==='failed' && failure.job.thinkingStatus==='failed' && failure.job.prompt===raw && failure.job.error?.startsWith('思考失败，未提交生图') && ![key,alternate,'fixture-private-reasoning'].some(x=>JSON.stringify(failure.job).includes(x)));
+    }
+    flavor='hold';
+    const at=hits.length, canceled=await post({thinking:true,images:[ref]});
+    await waitForHit(at);
+    const id=canceled.body.job.id;
+    const running=(await call('/job?id='+encodeURIComponent(id))).body.job;
+    const stored=JSON.parse(fs.readFileSync(path.join(stateDir,'jobs.json'),'utf8')).find(j=>j.id===id);
+    const listed=(await call('/jobs?limit=200')).body.items.find(j=>j.id===id);
+    check('思考运行中：详情、列表、落盘只暴露状态与原词，不保留凭据或参考字节',[running,stored,listed].every(item=>item?.thinkingModel===helper && ![key,tinyPng,'requestImages','fixture-private-reasoning'].some(x=>JSON.stringify(item).includes(x))) && running.thinkingStatus==='running');
+    await api('/job/cancel',{id}); held?.();
+    const done=await pollJob(id);
+    check('取消思考不会继续生成',done?.status==='canceled' && done.thinkingStatus==='canceled' && hits.length===at+1);
+    const changedAt=hits.length, changed=await post({thinking:true});
+    await waitForHit(changedAt);
+    await api('/providers',{id:a.id,baseUrl:base+'/b/v1'}); held?.();
+    const stopped=await pollJob(changed.body.job.id);
+    check('思考期间更换供应商地址后不转发给新地址，也不出图',hits.length===changedAt+1 && stopped?.status==='failed' && stopped.errorCode==='thinking_provider_changed');
+    await api('/providers',{id:a.id,baseUrl:base+'/a/v1'});
+    await api('/models/refresh',{providerId:a.id});
+    check('目录刷新移除已不存在的思考模型',(await call('/providers')).body.items.find(p=>p.id===a.id)?.thinkingModel==='');
+  } finally {
+    held?.();
+    if (a?.id) await api('/providers/delete',{id:a.id});
+    if (b?.id) await api('/providers/delete',{id:b.id});
+    await new Promise(resolve => relay.close(resolve));
+  }
+}
+
 await new Promise((resolve) => mockServer.close(resolve));
 
 /* 界面那份协议表与宿主这份必须是同一套 id：两边各写一份 label 可以，

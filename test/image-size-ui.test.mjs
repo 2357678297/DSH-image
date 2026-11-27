@@ -129,6 +129,10 @@ export async function auditImageSizeUI({host,check,wait,waitFor,flushSync,posts}
     // 字段视图：勾选态来自「与标准值的差异」，取消勾选即回到标准值。
     editor=await openJson();const field=key=>need(get('[data-json-field="'+key+'"]'),'字段 '+key),box=key=>need(get('[data-json-check="'+key+'"]'),'勾选 '+key);
     check('默认按字段编辑：中文名与原始字段名并列，未改动不勾选',!!get('[data-json-fields]')&&get('[data-json-fields]').textContent.includes('提示词')&&get('[data-json-fields]').textContent.includes('quality')&&!box('quality').checked);
+    const jsonKeys=Object.keys(parseJson()),rowKeys=all('[data-json-row]').map(n=>n.getAttribute('data-json-row'));
+    check('表格覆盖请求体里的每一个字段，键与行一一对应',jsonKeys.length>0&&rowKeys.length===jsonKeys.length&&jsonKeys.every(k=>rowKeys.includes(k)),JSON.stringify({rows:rowKeys,keys:jsonKeys}));
+    const conversationRow=all('[data-json-row]').find(n=>n.getAttribute('data-json-row')==='conversationId');
+    check('会话等由工作台管理的字段在表里只读',!conversationRow||conversationRow.querySelector('[data-json-check]')?.disabled===true);
     const qualities=['LOW','MEDIUM','HIGH'], standardQuality=parseJson().quality, firstQuality=qualities.find(q=>q!==standardQuality)||'HIGH';
     set(field('quality'),firstQuality);await until(()=>box('quality').checked,'改动后自动勾选');
     check('改动字段自动勾选并计入覆盖数',/1/.test(get('.vig-json-badge')?.textContent||''),get('.vig-json-badge')?.textContent);

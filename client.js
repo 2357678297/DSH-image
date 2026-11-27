@@ -624,6 +624,21 @@ function writeConvSetting(id, settings) {
 			"json.modeEdit": "图生图（编辑）",
 			"json.seconds": "时长（秒）",
 			"json.secondsHint": "仅视频协议使用",
+			"json.userText": "用户原话",
+			"json.planNote": "计划备注",
+			"json.conversationId": "会话",
+			"json.referenceUrl": "参考图",
+			"json.referenceUrls": "参考图列表",
+			"json.image": "内联参考图",
+			"json.images": "内联参考图列表",
+			"json.source": "来源",
+			"json.thinking": "思考辅助",
+			"json.thinkingProviderId": "思考供应商",
+			"json.thinkingModel": "思考模型",
+			"json.aspectRatioCamel": "宽高比（驼峰）",
+			"json.locked": "由工作台管理，不可在这里改",
+			"json.complexHint": "复杂值：切到「自定义 JSON」修改",
+			"json.tableHint": "每行一个字段；勾选表示本行覆盖了标准值，取消勾选即回到标准值。",
 			"chat.jsonHint": "修改的字段仅用于本会话的下一次发送；会话 ID 由工作台管理。size 是档位，aspect_ratio 是宽高比。关闭原样发送则转换为像素。",
 			"chat.jsonApply": "应用",
 			"chat.jsonReset": "恢复默认",
@@ -1405,6 +1420,21 @@ function writeConvSetting(id, settings) {
 			"json.modeEdit": "Image edit",
 			"json.seconds": "Duration (s)",
 			"json.secondsHint": "Video protocols only",
+			"json.userText": "User text",
+			"json.planNote": "Plan note",
+			"json.conversationId": "Conversation",
+			"json.referenceUrl": "Reference",
+			"json.referenceUrls": "References",
+			"json.image": "Inline reference",
+			"json.images": "Inline references",
+			"json.source": "Source",
+			"json.thinking": "Thinking assist",
+			"json.thinkingProviderId": "Thinking provider",
+			"json.thinkingModel": "Thinking model",
+			"json.aspectRatioCamel": "Aspect ratio (camel)",
+			"json.locked": "Managed by the workbench; not editable here",
+			"json.complexHint": "Complex value: switch to Custom JSON",
+			"json.tableHint": "One field per row; checked means this row overrides the standard value. Unchecking restores it.",
 			"chat.geminiRatio": "Image aspect ratio", "chat.geminiSize": "Image resolution",
 			"chat.geminiRatioAuto": "Auto", "chat.geminiRatioAutoHint": "Auto: omit the fixed ratio. With references, let the model follow the original framing; otherwise let it choose.",
 			"prov.shortRerank": "Rerank",
@@ -2860,12 +2890,23 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 @media (hover:none){.vig-stage-nav{opacity:1;pointer-events:auto}.vig-stage-view.is-painting .vig-stage-nav{display:none}}
 .vig-json-editor{box-sizing:border-box;width:100%;height:clamp(100px,36dvh,320px);max-height:56dvh;font:12px ui-monospace,monospace;resize:vertical}
 .vig-json-editor[hidden]{display:none}
+.vig-json-table{display:grid;gap:1px;border:1px solid var(--vig-line);border-radius:var(--vig-r-tile);background:var(--vig-line);overflow:hidden}
+.vig-json-row{display:grid;grid-template-columns:24px minmax(88px,auto) minmax(0,1fr);align-items:center;gap:8px;padding:4px 8px;background:var(--vig-surface-sunken)}
+.vig-json-row.is-on{background:var(--vig-surface)}
+.vig-json-row.is-locked{opacity:.7}
+.vig-json-row-check{margin:0;width:14px;height:14px;accent-color:var(--vig-accent)}
+.vig-json-row-name{display:flex;align-items:baseline;gap:6px;min-width:0}
+.vig-json-row-label{font-size:12.5px;font-weight:500;color:var(--vig-text);white-space:nowrap}
+.vig-json-row-key{font:11px ui-monospace,monospace;color:var(--vig-text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vig-json-row-value{font:11px ui-monospace,monospace;color:var(--vig-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.vig-json-row :is(input.vig-input,.vig-sel){width:100%;min-width:0;height:28px;font-size:12.5px}
+.vig-json-empty{padding:14px;text-align:center;font-size:12px;color:var(--vig-text-muted)}
 .vig-json-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px}
 .vig-json-modes{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--vig-line-strong);border-radius:var(--vig-r-pill)}
 .vig-json-modes .vig-btn{min-height:26px;height:26px;padding:0 10px;border:0;border-radius:var(--vig-r-pill);background:transparent;font-size:12px;color:var(--vig-text-muted)}
 .vig-json-modes .vig-btn[aria-pressed="true"]{background:var(--vig-accent);color:var(--vig-surface)}
 .vig-json-badge{margin-left:auto;font-size:11px;color:var(--vig-text-faint);white-space:nowrap}
-.vig-json-fields{display:grid;gap:1px;max-height:clamp(150px,44dvh,430px);overflow:auto;overscroll-behavior:contain;border:1px solid var(--vig-line);border-radius:var(--vig-r-tile);padding:4px;background:var(--vig-surface-sunken)}
+.vig-json-fields{max-height:clamp(160px,52dvh,480px);overflow:auto;overscroll-behavior:contain;border-radius:var(--vig-r-tile)}
 .vig-json-field{display:grid;gap:4px;padding:6px 8px 8px;border-radius:9px}
 .vig-json-field.is-on{background:var(--vig-surface)}
 .vig-json-field-head{display:flex;align-items:center;gap:7px;min-width:0;cursor:pointer}
@@ -5051,18 +5092,28 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) view = parsed;
 					} catch (error) { view = {}; }
 					const standard = jsonBase || {};
-					const specs = [
-						{ key: "prompt", label: t("json.prompt"), kind: "textarea" },
-						{ key: "model", label: t("json.model"), kind: "text" },
-						{ key: "providerId", label: t("json.provider"), kind: "select", options: (providers || []).map((item) => ({ value: item.id, label: item.name || item.id })) },
-						{ key: "endpoint", label: t("json.endpoint"), kind: "select", options: protocolOptions(protocols).map((item) => ({ value: item.id, label: item.label })) },
-						{ key: "size", label: t("json.size"), kind: "text", placeholder: t("json.sizeHint") },
-						{ key: "aspect_ratio", label: t("json.aspectRatio"), kind: "text", placeholder: t("json.aspectRatioHint") },
-						{ key: "quality", label: t("json.quality"), kind: "select", options: [{ value: "", label: t("json.qualityDefault") }, { value: "LOW", label: "LOW" }, { value: "MEDIUM", label: "MEDIUM" }, { value: "HIGH", label: "HIGH" }] },
-						{ key: "n", label: t("json.count"), kind: "number" },
-						{ key: "mode", label: t("json.mode"), kind: "select", options: [{ value: "generate", label: t("json.modeGenerate") }, { value: "edit", label: t("json.modeEdit") }] },
-						{ key: "seconds", label: t("json.seconds"), kind: "text", placeholder: t("json.secondsHint") }
-					];
+					const FIELD_LABELS = {
+						prompt: t("json.prompt"), userText: t("json.userText"), planNote: t("json.planNote"),
+						conversationId: t("json.conversationId"), model: t("json.model"), providerId: t("json.provider"),
+						size: t("json.size"), quality: t("json.quality"), n: t("json.count"), seconds: t("json.seconds"),
+						endpoint: t("json.endpoint"), mode: t("json.mode"),
+						referenceUrl: t("json.referenceUrl"), referenceUrls: t("json.referenceUrls"),
+						image: t("json.image"), images: t("json.images"), source: t("json.source"),
+						thinking: t("json.thinking"), thinkingProviderId: t("json.thinkingProviderId"), thinkingModel: t("json.thinkingModel"),
+						aspect_ratio: t("json.aspectRatio"), aspectRatio: t("json.aspectRatioCamel")
+					};
+					const FIELD_ORDER = ["prompt", "model", "providerId", "endpoint", "size", "aspect_ratio", "aspectRatio", "quality", "n", "mode", "seconds", "userText", "planNote", "referenceUrl", "referenceUrls", "image", "images", "source", "thinking", "thinkingProviderId", "thinkingModel", "conversationId"];
+					const LOCKED_FIELDS = new Set(["conversationId", "thinking", "thinkingProviderId", "thinkingModel"]);
+					const FIELD_SELECTS = {
+						providerId: (providers || []).map((item) => ({ value: item.id, label: item.name || item.id })),
+						endpoint: protocolOptions(protocols).map((item) => ({ value: item.id, label: item.label })),
+						quality: [{ value: "", label: t("json.qualityDefault") }, { value: "LOW", label: "LOW" }, { value: "MEDIUM", label: "MEDIUM" }, { value: "HIGH", label: "HIGH" }],
+						mode: [{ value: "generate", label: t("json.modeGenerate") }, { value: "edit", label: t("json.modeEdit") }]
+					};
+					const FIELD_PLACEHOLDERS = { size: t("json.sizeHint"), aspect_ratio: t("json.aspectRatioHint"), seconds: t("json.secondsHint") };
+					const keys = [...FIELD_ORDER.filter((key) => Object.hasOwn(view, key) || Object.hasOwn(standard, key)),
+						...Object.keys(view).filter((key) => !FIELD_ORDER.includes(key))]
+						.filter((key, index, list) => list.indexOf(key) === index);
 					const fieldValue = (key) => {
 						const raw = Object.hasOwn(view, key) ? view[key] : "";
 						return raw === null || raw === undefined ? "" : String(raw);
@@ -5072,25 +5123,36 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						const after = Object.hasOwn(standard, key) ? standard[key] : undefined;
 						return JSON.stringify(before) !== JSON.stringify(after);
 					};
-					const overriddenCount = specs.filter((spec) => isOverridden(spec.key)).length;
-					const standardHint = (key) => {
-						if (!Object.hasOwn(standard, key)) return "";
-						const raw = standard[key];
-						if (raw === null || raw === undefined || raw === "") return "";
-						return typeof raw === "string" ? raw : JSON.stringify(raw);
+					const overriddenCount = keys.filter((key) => !LOCKED_FIELDS.has(key) && isOverridden(key)).length;
+					const summary = (raw) => {
+						if (raw === null) return "null";
+						if (raw === undefined) return "";
+						if (typeof raw === "string") return raw;
+						if (typeof raw === "number" || typeof raw === "boolean") return String(raw);
+						return JSON.stringify(raw);
 					};
-					const fieldControl = (spec) => {
+					const fieldControl = (key) => {
+						const raw = Object.hasOwn(view, key) ? view[key] : undefined;
+						if (LOCKED_FIELDS.has(key)) return h("span", { className: "vig-json-row-value", title: t("json.locked") }, summary(raw));
+						if (raw !== null && raw !== undefined && typeof raw === "object") return h("span", { className: "vig-json-row-value", title: t("json.complexHint") }, summary(raw));
 						const shared = {
-							className: spec.kind === "select" ? "vig-sel" : "vig-input",
-							"data-json-field": spec.key,
-							value: fieldValue(spec.key),
-							...(spec.placeholder ? { placeholder: spec.placeholder } : {}),
-							"aria-label": `${spec.label}（${spec.key}）`,
-							onChange: (event) => actions.writeJsonField(spec.key, spec.kind === "number" ? (event.target.value === "" ? "" : Number(event.target.value)) : event.target.value)
+							"data-json-field": key,
+							"aria-label": `${FIELD_LABELS[key] || key}（${key}）`,
+							value: fieldValue(key),
+							...(FIELD_PLACEHOLDERS[key] ? { placeholder: FIELD_PLACEHOLDERS[key] } : {}),
+							onChange: (event) => actions.writeJsonField(key, typeof raw === "number"
+								? (event.target.value === "" ? "" : Number(event.target.value))
+								: typeof raw === "boolean" ? event.target.value === "true" : event.target.value)
 						};
-						if (spec.kind === "textarea") return h("textarea", shared);
-						if (spec.kind === "select") return h("select", shared, spec.options.map((option) => h("option", { key: option.value, value: option.value }, option.label)));
-						return h("input", { ...shared, type: spec.kind === "number" ? "number" : "text", ...(spec.kind === "number" ? { min: 1, max: 4, step: 1 } : {}) });
+						const options = FIELD_SELECTS[key];
+						if (options) {
+							const list = options.some((option) => option.value === shared.value) ? options : [...options, { value: shared.value, label: shared.value || "—" }];
+							return h("select", { ...shared, className: "vig-sel" }, list.map((option) => h("option", { key: option.value, value: option.value }, option.label)));
+						}
+						if (typeof raw === "boolean") {
+							return h("select", { ...shared, className: "vig-sel" }, ["true", "false"].map((value) => h("option", { key: value, value }, value)));
+						}
+						return h("input", { ...shared, className: "vig-input", type: typeof raw === "number" ? "number" : "text" });
 					};
 					return h(
 						WorkbenchDialog,
@@ -5099,7 +5161,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							"div",
 							{ className: "vig-modal vig-json-modal", onClick: (event) => event.stopPropagation() },
 							h("span", { className: "vig-modal-title" }, t("chat.jsonBody")),
-							h("p", { className: "vig-muted", style: { fontSize: 12, margin: "4px 0 10px" } }, jsonCustom ? t("chat.jsonCustomHint") : t("chat.jsonFieldsHint")),
+							h("p", { className: "vig-muted", style: { fontSize: 12, margin: "4px 0 10px" } }, jsonCustom ? t("chat.jsonCustomHint") : t("json.tableHint")),
 							h(
 								"div",
 								{ className: "vig-json-head" },
@@ -5120,23 +5182,27 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							jsonCustom ? null : h(
 								"div",
 								{ className: "vig-json-fields", "data-json-fields": "1" },
-								specs.map((spec) => {
-									const checked = isOverridden(spec.key);
-									const hint = standardHint(spec.key);
-									return h(
-										"div",
-										{ className: `vig-json-field${checked ? " is-on" : ""}`, key: spec.key },
-										h(
-											"label",
-											{ className: "vig-json-field-head" },
-											h("input", { type: "checkbox", className: "vig-ctx-check", "data-json-check": spec.key, checked, onChange: (event) => { if (!event.target.checked) actions.toggleJsonField(spec.key); } }),
-											h("span", { className: "vig-json-field-name" }, spec.label),
-											h("code", { className: "vig-json-field-key" }, spec.key),
-											hint ? h("span", { className: "vig-json-field-base", title: `${t("chat.jsonStandard")}：${hint}` }, hint) : null
-										),
-										fieldControl(spec)
-									);
-								})
+								keys.length === 0
+									? h("div", { className: "vig-json-empty" }, t("json.tableHint"))
+									: h("div", { className: "vig-json-table" }, keys.map((key) => {
+										const locked = LOCKED_FIELDS.has(key);
+										const checked = !locked && isOverridden(key);
+										return h(
+											"div",
+											{ className: `vig-json-row${checked ? " is-on" : ""}${locked ? " is-locked" : ""}`, key, "data-json-row": key },
+											h("input", {
+												type: "checkbox", className: "vig-ctx-check vig-json-row-check",
+												"data-json-check": key, checked, disabled: locked,
+												"aria-label": `${(FIELD_LABELS[key] || key)}：${t("chat.jsonStandard")}`,
+												onChange: (event) => { if (!event.target.checked) actions.toggleJsonField(key); }
+											}),
+											h("div", { className: "vig-json-row-name" },
+												h("span", { className: "vig-json-row-label", title: locked ? t("json.locked") : undefined }, FIELD_LABELS[key] || key),
+												h("code", { className: "vig-json-row-key" }, key)
+											),
+											fieldControl(key)
+										);
+									}))
 							),
 							h("textarea", {
 								className: "vig-input vig-json-editor", "aria-label": t("chat.jsonBody"),

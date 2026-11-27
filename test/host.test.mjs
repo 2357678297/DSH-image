@@ -1775,7 +1775,7 @@ await new Promise((resolve) => badKeyServer.close(resolve));
 /* Multimodal prompt preparation and generation are two stages of one real host job. */
 {
   const imageModel = 'fixture-image-v1', helper = 'fixture-vision-chat', nativeModel = 'Nano-Banana-2';
-  const key = 'fixture-think-provider-key', raw = '保留产品轮廓，只把黄背景换成墨绿';
+  const key = 'fixture-think-provider-key', otherKey = 'fixture-other-provider-key', raw = '保留产品轮廓，只把黄背景换成墨绿';
   const refined = '同一产品，保留轮廓、材质和字样；仅换为均匀墨绿色背景。', summary = '保留主体，只换背景。';
   const ref = upload.body.item.url, alternate = PNG_FOR_EDIT;
   const hits = [], waitForHit = async (from, count = 1) => {
@@ -1788,11 +1788,12 @@ await new Promise((resolve) => badKeyServer.close(resolve));
     const bytes = Buffer.concat(chunks), type = req.headers['content-type'] || '';
     const body = type.includes('application/json') ? JSON.parse(bytes.toString() || 'null') : null;
     const send = (data, status = 200) => res.writeHead(status, {'content-type':'application/json'}).end(JSON.stringify(data));
-    hits.push({url:req.url, method:req.method, auth:req.headers.authorization, type, bytes, body});
-    if (req.url === '/a/v1/chat/completions') {
+    hits.push({url:req.url, port:req.socket.localPort, method:req.method, auth:req.headers.authorization, type, bytes, body});
+    if (req.url === '/a/v1/chat/completions' || req.url === '/b/v1/chat/completions') {
       const choice = (content, more = {}) => ({choices:[{finish_reason:'stop',message:{content,reasoning_content:'fixture-private-reasoning',...more}}]});
       if (flavor === 'hold') await new Promise(resolve => { held=resolve; res.once('close',resolve); });
       if (flavor === 'auth') return send({error:{message:key+' '+alternate}},401);
+      if (flavor === 'unavailable') return send({error:{message:otherKey+' '+alternate}},503);
       if (flavor === 'redirect') return res.writeHead(307,{location:'/never-redirect-here'}).end();
       if (flavor === 'bad') return send(choice('未遵守计划格式'));
       if (flavor === 'private') return send({choices:[{message:{content:'',reasoning_content:JSON.stringify({prompt:refined})}}]});
@@ -1807,16 +1808,19 @@ await new Promise((resolve) => badKeyServer.close(resolve));
   });
   await new Promise(resolve => relay.listen(0,'127.0.0.1',resolve));
   const base = `http://127.0.0.1:${relay.address().port}`;
+  const assistantRelay = http.createServer(relay.listeners('request')[0]);
+  await new Promise(resolve => assistantRelay.listen(0,'127.0.0.1',resolve));
+  const assistantBase = `http://127.0.0.1:${assistantRelay.address().port}`;
   const api = (route,body) => call(route,{method:'POST',body});
   const models = [imageModel, helper, nativeModel, 'not-enabled-chat', 'fixture-video'];
   let a, b;
   try {
     a = (await api('/providers',{name:'Think A',baseUrl:base+'/a/v1',apiKey:key,models,
       modelMeta:{[imageModel]:{kind:'image'},[helper]:{kind:'chat'},[nativeModel]:{kind:'image'},'not-enabled-chat':{kind:'chat',enabled:false},'fixture-video':{kind:'video'}},thinkingModel:helper})).body?.item;
-    b = (await api('/providers',{name:'Think B',baseUrl:base+'/b/v1',apiKey:'fixture-other-provider-key',models:[imageModel]})).body?.item;
+    b = (await api('/providers',{name:'Think B',baseUrl:assistantBase+'/b/v1',apiKey:otherKey,models:[imageModel,helper],modelMeta:{[imageModel]:{kind:'image'},[helper]:{kind:'chat'}}})).body?.item;
     if (!a?.id || !b?.id) throw Error('Unable to configure thinking fixtures');
     const state = await call('/status'), list = await call('/providers');
-    check('思考能力与辅助模型按供应商独立保存，并不公开密钥',state.body?.imageThinking===true && list.body.items.find(p=>p.id===a.id)?.thinkingModel===helper && !list.body.items.find(p=>p.id===b.id)?.thinkingModel && !JSON.stringify(list.body).includes(key) && JSON.parse(fs.readFileSync(path.join(stateDir,'providers.json'),'utf8')).find(p=>p.id===a.id)?.thinkingModel===helper);
+    check('思考能力与辅助模型按供应商独立保存，并不公开密钥',state.body?.imageThinking===true && state.body?.imageThinkingCrossProvider===true && list.body.items.find(p=>p.id===a.id)?.thinkingModel===helper && !list.body.items.find(p=>p.id===b.id)?.thinkingModel && !JSON.stringify(list.body).includes(key) && JSON.parse(fs.readFileSync(path.join(stateDir,'providers.json'),'utf8')).find(p=>p.id===a.id)?.thinkingModel===helper);
     for (const bad of [imageModel,'not-enabled-chat','foreign-chat']) {
       const invalid = await api('/providers',{id:a.id,thinkingModel:bad});
       check(`拒绝不可用或不属于供应商的思考模型 ${bad}`,invalid.status===400 && invalid.body?.code==='invalid_thinking_model');
@@ -1880,13 +1884,45 @@ await new Promise((resolve) => badKeyServer.close(resolve));
     const stopped=await pollJob(changed.body.job.id);
     check('思考期间更换供应商地址后不转发给新地址，也不出图',hits.length===changedAt+1 && stopped?.status==='failed' && stopped.errorCode==='thinking_provider_changed');
     await api('/providers',{id:a.id,baseUrl:base+'/a/v1'});
+    const external = { thinkingProviderId:b.id, thinkingModel:helper };
+    const saved = await api('/providers',{id:a.id,...external});
+    const record = JSON.parse(fs.readFileSync(path.join(stateDir,'providers.json'),'utf8')).find(p=>p.id===a.id);
+    check('生图供应商可保存外部思考供应商及同名模型',saved.body?.item?.thinkingProviderId===b.id && record?.thinkingProviderId===b.id && record?.thinkingModel===helper);
+    for (const choice of [{thinkingProviderId:'unknown-thinker',thinkingModel:helper},{thinkingProviderId:b.id,thinkingModel:imageModel}]) {
+      const bad=await api('/providers',{id:a.id,...choice});
+      check('跨供应商绑定拒绝未知供应商或图片模型',bad.status===400 && bad.body?.code==='invalid_thinking_model');
+    }
+    const stale = await run({thinking:true,thinkingProviderId:a.id,thinkingModel:helper});
+    check('设置已切换时旧页面的选路在请求上游前被拒绝',stale.receipt.status===400 && stale.receipt.body?.code==='thinking_route_changed' && stale.wire.length===0);
+    flavor='unavailable';
+    const failedRemote = await run({thinking:true,...external});
+    check('外部思考 503 保留原词、供应商和状态，不生成或换路',failedRemote.job?.thinkingStatus==='failed' && failedRemote.job.thinkingProviderId===b.id && failedRemote.job.prompt===raw && failedRemote.job.error.includes('HTTP 503') && failedRemote.wire.length===1 && failedRemote.wire[0].port===assistantRelay.address().port && !JSON.stringify(failedRemote.job).includes(otherKey));
+    flavor='ok';
+    const cross = await run({thinking:true,...external}), [analysis,image] = cross.wire;
+    check('跨供应商思考和生图分别使用两台本机服务及各自 API Key',cross.job?.status==='succeeded' && cross.wire.length===2 && analysis?.port===assistantRelay.address().port && analysis?.url==='/b/v1/chat/completions' && analysis.auth===`Bearer ${otherKey}` && analysis.body?.model===helper && image?.port===relay.address().port && image?.url==='/a/v1/images/generations' && image.auth===`Bearer ${key}` && image.body?.model===imageModel && image.body?.prompt===refined && cross.job.providerId===a.id && cross.job.thinkingProviderId===b.id && cross.job.thinkingProviderName==='Think B');
+    const crossGemini = await run({thinking:true,...external,model:nativeModel,endpoint:'gemini_generate',size:'2K',aspect_ratio:'auto',n:1,mode:'edit',images:[ref]});
+    check('跨供应商与 Gemini 原生兼容，生图仍使用原供应商和本轮附件',crossGemini.job?.status==='succeeded' && crossGemini.wire.length===2 && crossGemini.wire[0].auth===`Bearer ${otherKey}` && crossGemini.wire[1].auth===`Bearer ${key}` && crossGemini.wire[1].url===`/a/v1beta/models/${nativeModel}:generateContent` && crossGemini.wire[1].body?.contents?.[0]?.parts?.[1]?.inlineData?.data===tinyPng);
+    flavor='hold';
+    const atRemote=hits.length, queuedRemote=await post({thinking:true,...external});
+    await waitForHit(atRemote);
+    await api('/providers',{id:b.id,enabled:false}); held?.();
+    const halted=await pollJob(queuedRemote.body.job.id);
+    const disabled=await run({thinking:true,...external});
+    check('停用思考供应商会中止后续生图并拒绝新请求，同名本地模型不能接管',halted?.errorCode==='thinking_provider_changed' && disabled.receipt.body?.code==='thinking_model' && hits.length===atRemote+1);
+    await api('/providers',{id:b.id,enabled:true});
+    await api('/models/refresh',{providerId:a.id});
+    check('刷新生图目录保留绑定的外部思考模型',(await call('/providers')).body.items.find(p=>p.id===a.id)?.thinkingProviderId===b.id);
+    await api('/providers/delete',{id:b.id});
+    const deleted=await run({thinking:true,...external});
+    check('删除思考供应商后明确拒绝，无上游请求',deleted.receipt.body?.code==='thinking_model' && deleted.wire.length===0);
+    await api('/providers',{id:a.id,models,thinkingProviderId:'',thinkingModel:helper});
     await api('/models/refresh',{providerId:a.id});
     check('目录刷新移除已不存在的思考模型',(await call('/providers')).body.items.find(p=>p.id===a.id)?.thinkingModel==='');
   } finally {
     held?.();
     if (a?.id) await api('/providers/delete',{id:a.id});
     if (b?.id) await api('/providers/delete',{id:b.id});
-    await new Promise(resolve => relay.close(resolve));
+    await Promise.all([new Promise(resolve => relay.close(resolve)), new Promise(resolve => assistantRelay.close(resolve))]);
   }
 }
 

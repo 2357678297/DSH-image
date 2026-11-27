@@ -29,7 +29,12 @@ export async function auditThinkingUI({host, check, wait, waitFor, flushSync, po
     return body();
   };
   try {
-    const helper='fixture-vision-chat', model='gpt-image-2.5-c';
+    const helper='fixture-vision-chat', model='gpt-image-2.5-c', remote='pv_grok';
+    const editImageProvider = async () => {
+      const card = await until(() => all('.vig-prov').find(n => n.querySelector('.vig-prov-name')?.textContent.includes('GPT')), '查找生图供应商');
+      click([...card.querySelectorAll('button')].find(n=>n.textContent==='编辑'));
+      return until(()=>q('[data-provider-thinking-model]'),'思考模型下拉');
+    };
     await until(()=>toggle() && q('[data-conv="conv_old"]'),'工作台加载');
     check('思考开关默认关，按钮有名称和清晰状态',pressed()==='false' && toggle().textContent.includes('思考') && !!toggle().getAttribute('aria-label'));
     const clear=await submit('不启用思考的文生图');
@@ -37,17 +42,17 @@ export async function auditThinkingUI({host, check, wait, waitFor, flushSync, po
     const before=count(); click(toggle());
     await until(()=>q('.vig-prov-acts'),'跳转供应商管理');
     check('缺配置时点开关前往供应商管理，不发送',count()===before);
-    const card=all('.vig-prov').find(n=>n.querySelector('.vig-prov-name')?.textContent.includes('GPT'));
-    click([...card.querySelectorAll('button')].find(n=>n.textContent==='编辑'));
-    const picker=await until(()=>q('[data-provider-thinking-model]'),'思考模型下拉');
-    const options=[...picker.options].map(option=>option.value);
-    check('仅列当前供应商的对话模型，排除图片、视频、停用与其他供应商',JSON.stringify(options)===JSON.stringify(['',helper]),JSON.stringify(options));
-    select(picker,helper); click(q('[data-provider-save]'));
+    const picker=await editImageProvider();
+    const options=[...picker.options].map(option=>option.value).filter(Boolean).map(value=>JSON.parse(value));
+    const namedOptions = [...picker.options].filter(option=>option.text.startsWith(helper)).map(option=>option.text);
+    check('按供应商分组列出可用对话模型，保留同名选项并排除停用或图片视频模型', options.some(([id,m])=>id==='' && m===helper) && options.some(([id,m])=>id===remote && m===helper) &&
+      options.every(([id,m])=>['',remote].includes(id) && ![model,'omni-flash','disabled-vision-chat','offline-vision-chat'].includes(m)) && namedOptions.includes(`${helper} · GPT`) && namedOptions.includes(`${helper} · grok`),JSON.stringify(options));
+    select(picker,JSON.stringify([remote,helper])); click(q('[data-provider-save]'));
     await until(()=>!q('[data-provider-editor]'),'供应商保存完成');
     const saved=posts.filter(p=>p.path==='/providers').at(-1)?.body;
-    check('独立保存思考模型，不修改现有图片模型目录',saved?.thinkingModel===helper && saved.id==='pv_gpt' && saved.models.includes(model) && count()===before);
+    check('独立保存思考模型，不修改现有图片模型目录',saved?.thinkingModel===helper && saved.thinkingProviderId===remote && saved.id==='pv_gpt' && saved.models.includes(model) && count()===before);
     click(q('[data-page="chat"]')); click(toggle());
-    check('开启会显示选定模型与参考图也会发送的说明，操作本身不生图',pressed()==='true' && q('[data-thinking-note]')?.textContent.includes(helper) && q('[data-thinking-note]')?.textContent.includes('参考图') && count()===before);
+    check('开启会显示选定模型与参考图也会发送的说明，操作本身不生图',pressed()==='true' && q('[data-thinking-note]')?.textContent.includes(`grok · ${helper}`) && q('[data-thinking-note]')?.textContent.includes('参考图') && count()===before);
     await swap('conv_old'); check('另一会话默认关闭思考',pressed()==='false');
     await swap('conv_default'); check('回到原会话恢复思考偏好',pressed()==='true');
     await until(()=>history('Thinking reference fixture','编辑提示词（填回输入框）'),'历史参考图');
@@ -59,10 +64,10 @@ export async function auditThinkingUI({host, check, wait, waitFor, flushSync, po
     const composer=q('.vig-composer');
     check('375px 思考与生成可见可点，输入区无横向溢出',hits.every(r=>r.inside&&r.sized&&r.hit) && composer.scrollWidth<=composer.clientWidth+1, JSON.stringify({hits,width:composer.clientWidth,scrollWidth:composer.scrollWidth}));
     const sent=await submit(null,true);
-    check('开启后 Enter 仍只发一个 /generate，锁定当前图片模型、参考图顺序和供应商',sent.thinking===true && sent.model===model && sent.providerId==='pv_gpt' && sent.userText==='保留参考图主体并加强侧光' && sent.mode==='edit' && !Object.hasOwn(sent,'image') && sent.images?.length===2 && sent.images.every((v,i)=>v===sent.referenceUrls[i]) && sent.images[0].endsWith('up_1.png') && sent.images[1].endsWith('up_2.png'),JSON.stringify(sent));
+    check('开启后 Enter 仍只发一个 /generate，锁定当前图片模型、参考图顺序和供应商',sent.thinking===true && sent.thinkingProviderId===remote && sent.thinkingModel===helper && sent.model===model && sent.providerId==='pv_gpt' && sent.userText==='保留参考图主体并加强侧光' && sent.mode==='edit' && !Object.hasOwn(sent,'image') && sent.images?.length===2 && sent.images.every((v,i)=>v===sent.referenceUrls[i]) && sent.images[0].endsWith('up_1.png') && sent.images[1].endsWith('up_2.png'),JSON.stringify(sent));
     await until(()=>q('[data-thinking-running]'),'显示分析状态');
     const thinkingCard=q('[data-thinking-running]'), cancelButton=q('[data-thinking-cancel]');
-    check('思考状态使用统一信息卡：图标与动效、主状态、参考说明、模型标签、独立取消',thinkingCard?.classList.contains('vig-thinking-card')&&thinkingCard.querySelector('.vig-thinking-mark svg.vig-ic')&&thinkingCard.querySelector('.vig-thinking-orbit')&&thinkingCard.querySelectorAll('.vig-thinking-dots i').length===3&&thinkingCard.querySelector('.vig-thinking-title')?.textContent==='思考中'&&thinkingCard.querySelector('.vig-thinking-detail')?.textContent.includes('参考图')&&thinkingCard.querySelector('.vig-thinking-model')?.textContent===helper&&thinkingCard.getAttribute('role')==='status'&&cancelButton?.textContent==='取消'&&cancelButton.getAttribute('aria-label').includes(helper));
+    check('思考状态使用统一信息卡：图标与动效、主状态、参考说明、模型标签、独立取消',thinkingCard?.classList.contains('vig-thinking-card')&&thinkingCard.querySelector('.vig-thinking-mark svg.vig-ic')&&thinkingCard.querySelector('.vig-thinking-orbit')&&thinkingCard.querySelectorAll('.vig-thinking-dots i').length===3&&thinkingCard.querySelector('.vig-thinking-title')?.textContent==='思考中'&&thinkingCard.querySelector('.vig-thinking-detail')?.textContent.includes('参考图')&&thinkingCard.querySelector('.vig-thinking-model')?.textContent===`grok · ${helper}`&&thinkingCard.getAttribute('role')==='status'&&cancelButton?.textContent==='取消'&&cancelButton.getAttribute('aria-label').includes(helper));
     const animateCSS=ui.CSS;check('思考微动效使用主题色，遵从prefers-reduced-motion且焦点明确',animateCSS.includes('.vig-thinking-orbit')&&animateCSS.includes('var(--vig-accent)')&&animateCSS.includes('prefers-reduced-motion:reduce')&&animateCSS.includes('.vig-thinking-cancel:focus-visible'));
     host.style.width='320px';await wait(100);
     const compactCard=q('[data-thinking-running]'),compactCancel=q('[data-thinking-cancel]'),compactBounds=host.getBoundingClientRect(),cardBounds=compactCard.getBoundingClientRect(),cancelBounds=compactCancel.getBoundingClientRect();
@@ -82,8 +87,15 @@ export async function auditThinkingUI({host, check, wait, waitFor, flushSync, po
     await until(()=>q('.vig-fail')?.textContent.includes('未提交生图') || all('.vig-fail').some(n=>n.textContent.includes('未提交生图')),'思考失败卡');
     const beforeRetry=count(); await wait(80);
     check('分析失败显示未提交生图，保留原词且无静默重发',count()===beforeRetry && !!history('思考应当失败并留原词','编辑提示词（填回输入框）'));
+    click(q('[data-page="providers"]'));
+    const replacement=await editImageProvider();
+    check('重新打开配置还原已保存的外部模型选择', replacement.value===JSON.stringify([remote,helper]));
+    select(replacement,JSON.stringify(['',helper])); click(q('[data-provider-save]'));
+    await until(()=>!q('[data-provider-editor]'),'保存替代思考模型');
+    click(q('[data-page="chat"]'));
+    await until(()=>history('思考应当失败并留原词','重试'),'历史任务回到界面');
     click(history('思考应当失败并留原词','重试')); await until(()=>count()===beforeRetry+1,'手动重试思考');
-    check('分析失败后须手动重试，且先重新思考',body().thinking===true && body().prompt==='思考应当失败并留原词');
+    check('思考 503 后手动重试采用新的思考供应商与原生图模型、提示词',body().thinking===true && body().thinkingProviderId==='pv_gpt' && body().thinkingModel===helper && body().providerId==='pv_gpt' && body().model===model && body().prompt==='思考应当失败并留原词');
     const pending=await until(()=>all('[data-thinking-cancel]').at(-1),'取消思考'); click(pending);
     await until(()=>posts.some(p=>p.path==='/job/cancel'),'取消请求');
     check('取消正在思考的任务不补发图片',count()===beforeRetry+1);
@@ -100,6 +112,30 @@ export async function auditThinkingUI({host, check, wait, waitFor, flushSync, po
     check('视频不显示或发送思考，仍用视频模型',!toggle()&&!Object.hasOwn(video,'thinking')&&video.model==='omni-flash');
     await modelPick(model); await until(()=>pressed()==='true','切回图片恢复思考');
     check('视频选择不清除会话的图片思考偏好',pressed()==='true');
+    text('用 JSON 切换这一轮的生图供应商');
+    click(q('[data-json-body]'));
+    const jsonEditor = await until(()=>q('[data-json-editor]'),'打开 JSON 参数');
+    const edited = {...JSON.parse(jsonEditor.value), model, providerId:'pv_other_image', thinkingProviderId:'wrong', thinkingModel:'wrong'};
+    flushSync(()=>{
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(jsonEditor,JSON.stringify(edited));
+      jsonEditor.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    click(q('[data-json-apply]'));
+    await until(()=>!q('[data-json-editor]'),'应用生图来源覆盖');
+    const visibleReceiver = q('[data-thinking-note]')?.textContent || '';
+    click(q('[data-json-body]'));
+    const reopened = await until(()=>q('[data-json-editor]'),'查看有效思考来源');
+    const preview = JSON.parse(reopened.value);
+    click(q('[data-json-apply]'));
+    await until(()=>!q('[data-json-editor]'),'返回输入区');
+    let rerouted;
+    try { rerouted = await submit(); }
+    catch (error) {
+      throw Error(`${error.message}\n${JSON.stringify({visibleReceiver, preview, draft:area()?.value, disabled:send()?.disabled, feedback:q('.vig-toasts')?.textContent})}`);
+    }
+    const sourcesAgree = [preview,rerouted].every(item=>item.providerId==='pv_other_image' && item.thinkingProviderId===remote && item.thinkingModel===helper);
+    check('JSON 覆盖生图供应商时，输入区、JSON 预览与发送的思考数据接收方一致', visibleReceiver.includes(`grok · ${helper}`) && sourcesAgree);
+    settle('succeeded','测试供应商覆盖的最终提示词。');
     await remount(false);
     await until(()=>toggle() && q('[data-thinking-note]')?.textContent.includes('重启 DSH'),'旧宿主提示及保留的开启状态');
     text('旧宿主不能偷偷绕过思考'); const oldCount=count(); click(send()); await wait(130);

@@ -187,7 +187,7 @@ const thinkingJobs = new Map();
 const settleThinking = (status, generated) => {
  if (!lastThinkingJob) return;
  Object.assign(lastThinkingJob, {status, thinkingStatus:status, ...(generated ? {prompt:generated,planNote:"使用参考图构图，调整灯光",images:[IMAGES[0]]} : {}),
-  ...(status==='failed' ? {error:"思考失败，未提交生图：多模态模型未返回有效提示词",errorCode:"thinking_response"} : {})});
+  ...(status==='failed' ? {error:"思考失败，未提交生图：思考供应商暂不可用（HTTP 503）",errorCode:"thinking_upstream"} : {})});
 };
 if (thinkingFixture) {
  config.activeProviderId="pv_gpt";
@@ -195,6 +195,10 @@ if (thinkingFixture) {
  providers[1].models.push("fixture-vision-chat", "disabled-vision-chat");
  providers[1].modelMeta["fixture-vision-chat"]={kind:"chat"};
  providers[1].modelMeta["disabled-vision-chat"]={kind:"chat",enabled:false};
+ providers[0].models.push("fixture-vision-chat");
+ providers[0].modelMeta["fixture-vision-chat"]={kind:"chat"};
+ providers.push({id:"pv_disabled",name:"Disabled",enabled:false,models:["offline-vision-chat"],modelMeta:{"offline-vision-chat":{kind:"chat"}}});
+ providers.push({id:"pv_other_image",name:"第二生图渠道",enabled:true,models:["gpt-image-2.5-c"],modelMeta:{"gpt-image-2.5-c":{kind:"image"}},thinkingProviderId:"pv_grok",thinkingModel:"fixture-vision-chat"});
  convJobs.conv_default.push({...JOB,id:"job_thinking_reference",count:1,prompt:"Thinking reference fixture",referenceUrls:["/api/velapi-image-go/upload/up_1.png","/api/velapi-image-go/upload/up_2.png"]});
 }
 if (attachmentFixture) {
@@ -254,7 +258,7 @@ window.fetch = async (url, init) => {
 				{ id: "images_edits", label: "图片编辑（/v1/images/edits）", route: "/images/edits", kind: "image" },
 				{ id: "videos_generations", label: "视频生成（/v1/videos/generations）", route: "/videos/generations", kind: "video" }
 			],
-			...(thinkingFixture && modernThinking ? {imageThinking:true} : {}),
+			...(thinkingFixture && modernThinking ? {imageThinking:true,imageThinkingCrossProvider:true} : {}),
 			chatModels: [{ id: "mock-chat", providerId: "pv_gpt", providerName: "GPT", label: "mock-chat" }]
 		});
 	if (pathname === "/conversations") {
@@ -321,7 +325,7 @@ window.fetch = async (url, init) => {
 	}
 	if (thinkingFixture && pathname === "/providers" && init?.method === "POST") {
 		const entry=providers.find(p=>p.id===body.id);
-		if (entry) entry.thinkingModel=body.thinkingModel;
+		if (entry && Object.hasOwn(body,"thinkingModel")) Object.assign(entry,{thinkingModel:body.thinkingModel,thinkingProviderId:body.thinkingProviderId || ""});
 		return json({ok:true, item:entry, items:providers});
 	}
 	if (pathname.startsWith("/providers")) return json({ ok: true, items: providers });
@@ -406,11 +410,12 @@ window.fetch = async (url, init) => {
 	if (thinkingFixture && pathname === "/generate") {
 		if (body?.thinking && body.prompt==='本地参数拒绝') return new Response(JSON.stringify({ok:false,code:"thinking_reference",error:"参考图仍待留档"}),{status:400});
 		const assisted=body.thinking===true;
+		const analysisProvider=providers.find(p=>p.id===body.thinkingProviderId);
 		const job={id:"job_thinking_"+(++thinkingJobId),status:assisted?"running":"succeeded",prompt:body.prompt,userText:body.userText,
 			model:body.model,providerId:body.providerId,conversationId:body.conversationId,size:body.size,count:body.n,quality:body.quality,
 			mode:body.mode, protocol:body.endpoint,referenceUrl:body.referenceUrl,referenceUrls:body.referenceUrls,
 			createdAt:new Date().toISOString(),images:assisted?[]:[IMAGES[0]],
-			...(assisted ? {thinkingModel:providers.find(p=>p.id===body.providerId)?.thinkingModel,thinkingStatus:"running"} : {})};
+			...(assisted ? {thinkingModel:body.thinkingModel,thinkingProviderId:analysisProvider?.id,thinkingProviderName:analysisProvider?.name,thinkingStatus:"running"} : {})};
 		thinkingJobs.set(job.id,job); convJobs[job.conversationId]?.unshift(job);
 		if (assisted) lastThinkingJob=job;
 		return json({ok:true,job,queue:assisted?1:0});

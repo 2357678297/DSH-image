@@ -517,12 +517,12 @@ function writeConvSetting(id, settings) {
 			"chat.planFailed": "上下文整理失败，已按原话生成",
 			"chat.planRewrite": "改写",
 			"chat.thinkingToggle": "思考辅助",
-			"chat.thinkingHelp": "先让此供应商配置的多模态模型理解提示词和参考图，再交给当前生图模型；失败时不会提交生图。",
-			"chat.thinkingUnavailable": "当前生图供应商未配置可用的多模态思考模型",
+			"chat.thinkingHelp": "使用所选思考模型整理提示词，再交给当前生图模型。",
+			"chat.thinkingUnavailable": "请在当前生图供应商的设置中选择可用的思考模型",
 			"chat.thinkingReload": "当前宿主不支持思考辅助；更新后请手动重启 DSH，或关闭思考后直接生成。",
 			"chat.thinkingConfigure": "配置模型",
 			"chat.thinkingRetryReferences": "原任务有未留档的参考图或蒙版，不能原样重试。请编辑这条消息，重新添加原图后生成。",
-			"chat.thinkingReady": "先由 {model} 整理提示词，再由所选生图模型出图。参考图也会发给思考模型。",
+			"chat.thinkingReady": "{provider} · {model} 将接收本会话相关前文和参考图，整理提示词后交给生图模型。",
 			"chat.thinkingRewrite": "思考辅助提示词",
 			"chat.imageThinking": "思考中",
 			"chat.imageThinkingDetail": "正在理解提示词和参考图",
@@ -709,7 +709,10 @@ function writeConvSetting(id, settings) {
 			"prov.models": "模型（逗号分隔）",
 			"prov.thinkingModel": "思考模型（多模态）",
 			"prov.thinkingModelNone": "不使用思考辅助",
-			"prov.thinkingModelHint": "仅选择本供应商目录中的视觉/多模态对话模型；它负责理解需求，图片模型仍单独选择。",
+			"prov.thinkingModelUnavailable": "当前配置不可用 · {model}",
+			"prov.thinkingCurrentProvider": "本供应商",
+			"prov.thinkingCrossProviderReload": "手动重启 DSH 后可选择其他供应商的模型。",
+			"prov.thinkingModelHint": "请选择支持图片输入、兼容 Chat Completions 的模型。提示词、相关前文和参考图将发送给所选思考供应商。",
 			"prov.thinkingUnset": "未配置思考模型",
 			"prov.test": "测试连接",
 			"prov.testOk": "已连通",
@@ -1083,12 +1086,12 @@ function writeConvSetting(id, settings) {
 			"chat.planFailed": "Context rewrite failed — generating from your text as-is",
 			"chat.planRewrite": "Rewritten",
 			"chat.thinkingToggle": "Think",
-			"chat.thinkingHelp": "A multimodal model configured on this provider first reads the prompt and references, then the selected image model generates. Failure never falls through to image generation.",
+			"chat.thinkingHelp": "The selected thinking model refines the prompt before the image model generates.",
 			"chat.thinkingUnavailable": "The selected image provider has no available multimodal thinking model",
 			"chat.thinkingReload": "The host does not support thinking assistance yet. Restart DSH after updating, or turn thinking off to generate directly.",
 			"chat.thinkingConfigure": "Configure model",
 			"chat.thinkingRetryReferences": "The original references or mask were not archived. Edit the message and reattach them before generating again.",
-			"chat.thinkingReady": "{model} refines the prompt first. The selected image model then generates. References are also sent to the thinking model.",
+			"chat.thinkingReady": "{provider} · {model} receives relevant conversation context and references, then sends the refined prompt to the image model.",
 			"chat.thinkingRewrite": "Thinking-assisted prompt",
 			"chat.imageThinking": "Thinking",
 			"chat.imageThinkingDetail": "Reading the prompt and references",
@@ -1263,7 +1266,10 @@ function writeConvSetting(id, settings) {
 			"prov.models": "Models (comma separated)",
 			"prov.thinkingModel": "Thinking model (multimodal)",
 			"prov.thinkingModelNone": "No thinking assistance",
-			"prov.thinkingModelHint": "Choose a vision/multimodal chat model from this provider. It understands the request; the image model remains separate.",
+			"prov.thinkingModelUnavailable": "Unavailable selection · {model}",
+			"prov.thinkingCurrentProvider": "This provider",
+			"prov.thinkingCrossProviderReload": "Restart DSH to choose models from other providers.",
+			"prov.thinkingModelHint": "Choose a vision model compatible with Chat Completions. The selected provider receives the prompt, relevant context, and references.",
 			"prov.thinkingUnset": "Thinking model not configured",
 			"prov.test": "Test",
 			"prov.testOk": "Connected",
@@ -3080,7 +3086,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 
 		/** 只记编辑过的字段，不把旧 prompt、模型或参考图冻结到下一次发送。 */
 		function requestOverrides(base, edited) {
-			return Object.fromEntries(Object.entries(edited).filter(([key, value]) => key !== "conversationId" && key !== "thinking" && JSON.stringify(base[key]) !== JSON.stringify(value)));
+			return Object.fromEntries(Object.entries(edited).filter(([key, value]) => !["conversationId", "thinking", "thinkingProviderId", "thinkingModel"].includes(key) && JSON.stringify(base[key]) !== JSON.stringify(value)));
 		}
 
 		function sizeOptionsFor(current) {
@@ -4487,6 +4493,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const prompt = typeof job.prompt === "string" ? job.prompt.trim() : "";
 			// 气泡里显示用户原话（对话模型改写后的提示词单独留一行，见下面 planNote）
 			const displayPrompt = String(job.userText || job.prompt || "").trim();
+			const thinkingLabel = [job.thinkingProviderName || job.thinkingProviderId, job.thinkingModel].filter(Boolean).join(" · ");
 			/* 进行中占位（用户消息 + 「思考中」气泡）：agent / 生图都可能跑几十秒，
 			   没有这个占位用户会以为界面没反应。 */
 			if (job.kind === "pending") {
@@ -4613,13 +4620,13 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									h("div", { className: "vig-thinking-detail" }, t("chat.imageThinkingDetail")),
 									h("div", { className: "vig-thinking-meta" },
 										h("span", { className: "vig-thinking-role" }, t("chat.thinkingModelLabel")),
-										h("span", { className: "vig-thinking-model", title: job.thinkingModel }, job.thinkingModel)
+										h("span", { className: "vig-thinking-model", title: thinkingLabel }, thinkingLabel)
 									)
 								),
-								onCancelThinking ? h("button", { type: "button", className: "vig-btn is-ghost vig-thinking-cancel", "data-thinking-cancel": "1", title: t("chat.cancelThinkingTitle"), "aria-label": `${t("chat.cancelThinkingTitle")} · ${job.thinkingModel}`, onClick: () => onCancelThinking(job) }, t("chat.cancel")) : null)
+								onCancelThinking ? h("button", { type: "button", className: "vig-btn is-ghost vig-thinking-cancel", "data-thinking-cancel": "1", title: t("chat.cancelThinkingTitle"), "aria-label": `${t("chat.cancelThinkingTitle")} · ${thinkingLabel}`, onClick: () => onCancelThinking(job) }, t("chat.cancel")) : null)
 							: job.thinkingModel && job.thinkingStatus === "succeeded"
 								? h("details", { className: "vig-think-plan", "data-thinking-plan": "1" },
-									h("summary", null, `${t("chat.thinkingRewrite")} · ${job.thinkingModel}`),
+									h("summary", null, `${t("chat.thinkingRewrite")} · ${thinkingLabel}`),
 									job.planNote ? h("div", { className: "vig-who" }, job.planNote) : null,
 									h("div", { className: "vig-text" }, prompt))
 								: job.planNote && job.planNote !== displayPrompt
@@ -5111,8 +5118,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							)
 						: null,
 					unavailable ? h("div", {className:"vig-muted", role:"status", "data-gemini-unavailable":"1"}, t("chat.geminiReload")) : null,
-					!isVideoEndpoint && state.thinkingEnabled ? h("div", { className: "vig-think-note", role: "status", "data-thinking-note": "1" },
-						state.thinkingAvailable ? t("chat.thinkingReady", { model: state.thinkingModel }) : t(state.imageThinking ? "chat.thinkingUnavailable" : "chat.thinkingReload"),
+					!(state.thinkingRequestVideo ?? isVideoEndpoint) && state.thinkingEnabled ? h("div", { className: "vig-think-note", role: "status", "data-thinking-note": "1" },
+						state.thinkingAvailable ? t("chat.thinkingReady", { provider: state.thinkingProviderName, model: state.thinkingModel }) : t(state.imageThinking ? "chat.thinkingUnavailable" : "chat.thinkingReload"),
 						state.imageThinking && !state.thinkingAvailable ? h("button", { type: "button", className: "vig-btn is-ghost is-sm", onClick: () => actions.setView("providers") }, t("chat.thinkingConfigure")) : null
 					) : null,
 					h("textarea", {
@@ -5369,10 +5376,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							},
 							h(Icon, { name: "note", size: 14 })
 						),
-						!isVideoEndpoint ? h("button", {
+						!(state.thinkingRequestVideo ?? isVideoEndpoint) ? h("button", {
 							type: "button", className: `vig-tool vig-think${state.thinkingEnabled ? " is-on" : ""}`, "data-image-thinking": "1",
 							"aria-pressed": Boolean(state.thinkingEnabled), "aria-label": t("chat.thinkingToggle"),
-							title: state.thinkingAvailable ? `${t("chat.thinkingHelp")} · ${state.thinkingModel}` : state.imageThinking ? t("chat.thinkingUnavailable") : t("chat.thinkingReload"),
+							title: state.thinkingAvailable ? `${t("chat.thinkingHelp")} · ${state.thinkingProviderName} · ${state.thinkingModel}` : state.imageThinking ? t("chat.thinkingUnavailable") : t("chat.thinkingReload"),
 							onClick: () => {
 								if (state.thinkingEnabled || state.thinkingAvailable) actions.setThinking(!state.thinkingEnabled);
 								else if (state.imageThinking) actions.setView("providers");
@@ -5479,10 +5486,21 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const kind = String(meta?.kind || "").toLowerCase();
 			return kind ? kind === "chat" : /(gpt-4|gpt-5|gpt-6|claude|gemini|deepseek|glm|qwen|grok-3|grok-4|llama|mistral|kimi|chat|reasoner|o[1-4](?:-|\.|$))/i.test(id) && !/(image|dall|banana|imagen|flux|seedream|kolors|ideogram|midjourney|stable-diffusion|sd[-_]?xl|tts|whisper|audio|video|veo|sora|kling|wan|hunyuan|minimax-video|embedding|rerank)/i.test(id);
 		}
-		function canUseThinking(provider, imageModel) {
-			const model = provider?.thinkingModel, image = provider?.modelMeta?.[imageModel];
+		function thinkingProviderLabel(provider, providers) {
+			const name = provider.name || provider.id;
+			return providers.some(item => item.id !== provider.id && item.name === name)
+				? `${name} (${provider.id || t("prov.thinkingCurrentProvider")})` : name;
+		}
+		function resolveThinkingChoice(imageProvider, imageModel, providers) {
+			if (!imageProvider || imageProvider.enabled === false || !imageProvider.models?.includes(imageModel)) return null;
+			const image = imageProvider.modelMeta?.[imageModel];
 			const kind = String(image?.kind || "").toLowerCase();
-			return Boolean(provider && provider.enabled !== false && model !== imageModel && provider.models?.includes(imageModel) && image?.enabled !== false && (!kind || kind === "image") && provider.models?.includes(model) && isThinkingModel(model, provider.modelMeta?.[model]));
+			if (image?.enabled === false || (kind && kind !== "image") || isThinkingModel(imageModel, image)) return null;
+			const model = imageProvider.thinkingModel;
+			const provider = imageProvider.thinkingProviderId && imageProvider.thinkingProviderId !== imageProvider.id
+				? providers.find(item => item.id === imageProvider.thinkingProviderId) : imageProvider;
+			if (!provider || provider.enabled === false || !provider.models?.includes(model) || !isThinkingModel(model, provider.modelMeta?.[model])) return null;
+			return { provider, model };
 		}
 		function thinkingImageRequest(body, override, refs) {
 			const local = url => typeof url === "string" && /^\/api\/velapi-image-go\/(?:upload|asset|preset)\/[A-Za-z0-9_-][\w.-]*$/.test(url);
@@ -6858,7 +6876,17 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			};
 
 			const blank = { id: "", name: "", baseUrl: state.config.baseUrl, apiKey: "", useRuntimeKey: false, models: [], thinkingModel: "", note: "" };
-			const thinkingModelOptions = dialog ? [...new Set(splitFieldList(dialog.modelsText))].filter(id => isThinkingModel(id, dialog.modelMeta?.[id])) : [];
+			const thinkingSources = dialog ? [{ ...dialog, name: dialog.name || t("prov.thinkingCurrentProvider"), models: splitFieldList(dialog.modelsText) },
+				...(state.imageThinkingCrossProvider ? state.providers.filter(provider => provider.id !== dialog.id && provider.enabled !== false) : [])] : [];
+			const thinkingGroups = thinkingSources.map(provider => ({
+				id: provider.id === dialog.id ? "" : provider.id,
+				name: thinkingProviderLabel(provider, thinkingSources),
+				models: [...new Set(provider.models || [])].filter(id => isThinkingModel(id, provider.modelMeta?.[id]))
+			})).filter(group => group.models.length);
+			const boundProviderId = dialog?.thinkingProviderId !== dialog?.id ? dialog?.thinkingProviderId || "" : "";
+			const boundModel = dialog?.thinkingModel || "";
+			const boundValue = boundModel ? JSON.stringify([boundProviderId, boundModel]) : "";
+			const thinkingOptionAvailable = !boundModel || thinkingGroups.some(group => group.id === boundProviderId && group.models.includes(boundModel));
 
 			return h(
 				"div",
@@ -7055,7 +7083,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 													provider.note ? h("span", { className: "vig-sep" }, "·") : null,
 													provider.note ? `${t("prov.note")} ${provider.note}` : null,
 													provider.thinkingModel ? h("span", { className: "vig-sep" }, "·") : null,
-													provider.thinkingModel ? `${t("prov.thinkingModel")}：${provider.thinkingModel}` : null
+													provider.thinkingModel ? `${t("prov.thinkingModel")}：${provider.thinkingProviderId ? `${state.providers.find(item => item.id === provider.thinkingProviderId)?.name || provider.thinkingProviderId} · ` : ""}${provider.thinkingModel}` : null
 												)
 											),
 											h(
@@ -7130,7 +7158,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										onChange: (event) => {
 											const modelsText = event.target.value;
 											const models = splitFieldList(modelsText);
-											changeDialog({ ...dialog, modelsText, thinkingModel: models.includes(dialog.thinkingModel) ? dialog.thinkingModel : "" });
+											changeDialog({ ...dialog, modelsText, thinkingModel: boundProviderId || models.includes(dialog.thinkingModel) ? dialog.thinkingModel : "" });
 										}
 									})
 								),
@@ -7143,10 +7171,18 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									{ className: "vig-field" },
 									h("span", { className: "vig-label" }, t("prov.thinkingModel")),
 									h("select", {
-										className: "vig-sel", "data-provider-thinking-model": "1", disabled: state.imageThinking === false, value: thinkingModelOptions.includes(dialog.thinkingModel) ? dialog.thinkingModel : "",
-										onChange: (event) => changeDialog({ ...dialog, thinkingModel: event.target.value })
-									}, h("option", { value: "" }, t("prov.thinkingModelNone")), thinkingModelOptions.map((id) => h("option", { key: id, value: id }, id))),
-									h("span", { className: "vig-muted" }, t(state.imageThinking === false ? "chat.thinkingReload" : "prov.thinkingModelHint"))
+										className: "vig-in", "data-provider-thinking-model": "1", disabled: state.imageThinking === false, value: boundValue,
+										"aria-label": t("prov.thinkingModel"),
+										onChange: (event) => {
+											const [thinkingProviderId, thinkingModel] = event.target.value ? JSON.parse(event.target.value) : ["", ""];
+											changeDialog({ ...dialog, thinkingProviderId, thinkingModel });
+										}
+									}, h("option", { value: "" }, t("prov.thinkingModelNone")),
+										!thinkingOptionAvailable ? h("option", { value: boundValue, disabled: true }, t("prov.thinkingModelUnavailable", { model: boundModel })) : null,
+										thinkingGroups.map(group => h("optgroup", { label: group.name, key: group.id }, group.models.map(model =>
+											h("option", { key: model, value: JSON.stringify([group.id, model]) }, `${model} · ${group.name}`))))),
+									h("span", { className: "vig-muted" }, t(state.imageThinking === false ? "chat.thinkingReload" : "prov.thinkingModelHint")),
+									state.imageThinking && !state.imageThinkingCrossProvider ? h("span", { className: "vig-muted" }, t("prov.thinkingCrossProviderReload")) : null
 								),
 								// 端点协议不在这里选：它在「对话生图」输入框那一行（跟着每次生成走）。
 								// 供应商这条记录只负责地址 / 密钥 / 模型，别让同一件事有两个家。
@@ -7188,8 +7224,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											"data-provider-save": "1", disabled: saveLock.busy,
 											onClick: () => saveLock.run(async () => {
 												const rev = draftRevision.current;
-												const { id, name, baseUrl, apiKey, note, modelsText, useRuntimeKey, thinkingModel } = dialog;
-												const saved = await actions.saveProvider({ id, name, baseUrl, apiKey: apiKey.trim(), note, useRuntimeKey: !apiKey.trim() && useRuntimeKey, models: splitFieldList(modelsText), thinkingModel: thinkingModelOptions.includes(thinkingModel) ? thinkingModel : "" });
+												const { id, name, baseUrl, apiKey, note, modelsText, useRuntimeKey } = dialog;
+												const thinking = state.imageThinking !== false && thinkingOptionAvailable ? { thinkingModel: boundModel,
+													...(state.imageThinkingCrossProvider ? { thinkingProviderId: boundProviderId } : {}) } : {};
+												const saved = await actions.saveProvider({ id, name, baseUrl, apiKey: apiKey.trim(), note, useRuntimeKey: !apiKey.trim() && useRuntimeKey, models: splitFieldList(modelsText), ...thinking });
 												if (saved && rev === draftRevision.current) closeDialog();
 											})
 										},
@@ -12567,6 +12605,7 @@ h(
 			const [conversationId, setConversationId] = useState(() => window.localStorage.getItem(CONV_KEY) || "");
 			const [chatModels, setChatModels] = useState([]);
 			const [imageThinking, setImageThinking] = useState(false);
+			const [imageThinkingCrossProvider, setImageThinkingCrossProvider] = useState(false);
 			const [thinkingEnabled, setThinkingEnabled] = useState(() => readConvSettings()[conversationId]?.thinkingEnabled === true);
 			const setThinkingPreference = (value) => {
 				const next = Boolean(value), owner = conversationIdRef.current;
@@ -12612,7 +12651,7 @@ h(
 			const jsonBaseRef = useRef(null);
 			const buildRequestPreview = (prompt, raw = sizeRaw, withThinking = true) => {
 				const body = buildGenerationRequest({ prompt: String(prompt || "").trim(), config, providers, conversationId, references, isVideoEndpoint, sizeRaw: raw });
-				return withThinking && thinkingEnabled && !isVideoEndpoint ? thinkingImageRequest({ ...body, thinking: true }, {}, references) : body;
+				return withThinking && thinkingEnabled && !thinkingSelection.video ? thinkingImageRequest({ ...body, thinking: true, ...thinkingRequestFields(thinkingChoice) }, {}, references) : body;
 			};
 			const jsonBody = () => {
 				const parsed = JSON.parse(jsonDraft);
@@ -12659,10 +12698,22 @@ h(
 			})();
 			const selectedModelKind = modelKindOf(config.defaultModel, providers);
 			const isVideoEndpoint = config.defaultEndpoint !== GEMINI_NATIVE && (endpointKind === "video" || selectedModelKind === "video");
-			const thinkingProviderId = providerIdForModel(providers, config, config.defaultModel);
-			const thinkingProvider = providers.find((provider) => provider.id === thinkingProviderId);
-			const thinkingModel = thinkingProvider?.thinkingModel || "";
-			const thinkingAvailable = imageThinking && !isVideoEndpoint && canUseThinking(thinkingProvider, config.defaultModel);
+			// The composer and the send queue use the same effective route, including one-time JSON overrides.
+			const imageRequestSelection = (override = {}) => {
+				const model = Object.hasOwn(override, "model") ? override.model : config.defaultModel;
+				const defaultOwner = providerIdForModel(providers, config, model || config.defaultModel);
+				const providerId = Object.hasOwn(override, "providerId") ? override.providerId : defaultOwner;
+				const endpoint = imageRequestProtocol(override.endpoint || config.defaultEndpoint, providerId || defaultOwner, providers);
+				const video = modelKindOf(model, providers) === "video" || endpoint === "videos_generations" || protocols.some(p => p.id === endpoint && p.kind === "video");
+				const imageProvider = providers.find(provider => provider.id === providerId);
+				return { providerId, endpoint, video, choice: resolveThinkingChoice(imageProvider, model, providers) };
+			};
+			const thinkingSelection = imageRequestSelection(jsonOverrideRef.current || {});
+			const thinkingChoice = thinkingSelection.choice;
+			const thinkingAvailable = Boolean(imageThinking && !thinkingSelection.video && thinkingChoice &&
+				(imageThinkingCrossProvider || thinkingChoice.provider.id === thinkingSelection.providerId));
+			const thinkingRequestFields = choice => imageThinkingCrossProvider && choice
+				? { thinkingProviderId: choice.provider.id, thinkingModel: choice.model } : {};
 			/* 更新入口：一次点击 = 检查；查到新版本后再点一次 = 只拉取，不重启。
 			   （进度条只在这期间出现，结束就收起。） */
 			const [updateState, setUpdateState] = useState({ phase: "idle", percent: 0 });
@@ -12907,6 +12958,7 @@ h(
 					]);
 					if (!initialConfigRef.current && status.config?.defaultModel) initialConfigRef.current = pickConfigFields(status.config);
 					setImageThinking(status.imageThinking === true);
+					setImageThinkingCrossProvider(status.imageThinkingCrossProvider === true);
 					setConfig((previous) => ({
 						...status.config,
 						// 宿主老版本没有这个字段时，保留本地那份（协议选择不至于刷新就回默认）
@@ -13127,8 +13179,8 @@ h(
 				}
 				// JSON 修改只属于当前会话的下一次入队，不读取队列等待期间的新设置。
 				const override = jsonOverrideRef.current || {};
-				const effectiveEndpoint = imageRequestProtocol(override.endpoint || config.defaultEndpoint, override.providerId || providerIdForModel(providers, config, override.model || config.defaultModel), providers);
-				if (effectiveEndpoint === GEMINI_NATIVE && !geminiReady(protocols)) { toast(t("chat.geminiReload"), "err"); return null; }
+				const selection = imageRequestSelection(override);
+				if (selection.endpoint === GEMINI_NATIVE && !geminiReady(protocols)) { toast(t("chat.geminiReload"), "err"); return null; }
 				const base = buildRequestPreview(rawPrompt, sizeRaw, false);
 				let body;
 				try { body = normalizeGenerationBody({ ...base, ...override }, sizeRaw, isVideoEndpoint ? config.videoSize : config.defaultSize, isVideoEndpoint); }
@@ -13139,13 +13191,14 @@ h(
 					return null;
 				}
 				delete body.thinking;
-				const video = modelKindOf(body.model, providers) === "video" || (protocols || []).some(p => p.id === effectiveEndpoint && p.kind === "video") || effectiveEndpoint === "videos_generations";
-				if (thinkingEnabled && !video) {
+				delete body.thinkingProviderId;
+				delete body.thinkingModel;
+				if (thinkingEnabled && !selection.video) {
 					if (!imageThinking) { toast(t("chat.thinkingReload"), "err"); return null; }
-					const imageOwner = Object.hasOwn(override, "providerId") ? body.providerId : providerIdForModel(providers, config, body.model);
-					const owner = providers.find(provider => provider.id === imageOwner);
-					if (!canUseThinking(owner, body.model)) { toast(t("chat.thinkingUnavailable"), "err"); return null; }
-					body = { ...body, providerId: imageOwner, endpoint: effectiveEndpoint, thinking: true, userText: rawPrompt };
+					const { choice, providerId, endpoint } = selection;
+					if (!choice) { toast(t("chat.thinkingUnavailable"), "err"); return null; }
+					if (!imageThinkingCrossProvider && choice.provider.id !== providerId) { toast(t("prov.thinkingCrossProviderReload"), "err"); return null; }
+					body = { ...body, providerId, endpoint, thinking: true, ...thinkingRequestFields(choice), userText: rawPrompt };
 				}
 				jsonOverrideRef.current = null;
 				// 入队即清空输入框：连点不会重复发送同一句（prompt 已经捕获进队列）
@@ -13376,13 +13429,16 @@ h(
 						const providerId = job.providerId && retryModel === job.model ? job.providerId : providerIdForModel(providers, config, retryModel) || job.providerId || config.activeProviderId;
 						const repeatThinking = Boolean(job.thinkingModel && job.thinkingStatus !== "succeeded");
 						if (repeatThinking && !imageThinking) throw Error(t("chat.thinkingReload"));
+						const retryChoice = repeatThinking ? resolveThinkingChoice(providers.find(provider => provider.id === providerId), retryModel, providers) : null;
+						if (repeatThinking && !retryChoice) throw Error(t("chat.thinkingUnavailable"));
+						if (retryChoice && !imageThinkingCrossProvider && retryChoice.provider.id !== providerId) throw Error(t("prov.thinkingCrossProviderReload"));
 						if (job.thinkingRetryUnavailable) throw Error(t("chat.thinkingRetryReferences"));
 						const payload = await call("/generate", {
 							method: "POST",
 							body: {
 								prompt, model:retryModel, providerId,
 								...(job.thinkingModel ? { userText: job.userText || prompt, planNote: job.planNote || "" } : {}),
-								...(repeatThinking ? { thinking: true } : {}),
+								...(repeatThinking ? { thinking: true, ...thinkingRequestFields(retryChoice) } : {}),
 								...(nativeRetry ? geminiBody({model:retryModel, size:job.size || "1K", aspect_ratio:job.aspectRatio, n:1}) : {
 									size: job.size || config.defaultSize, ...(job.aspectRatio ? {aspect_ratio:job.aspectRatio} : {}),
 									...(job.seconds ? {seconds:job.seconds} : {}), quality: job.quality || config.defaultQuality, n: job.count || config.defaultCount
@@ -13840,7 +13896,8 @@ h(
 				conversations,
 				conversationId,
 				isVideoEndpoint,
-				imageThinking, thinkingEnabled, thinkingAvailable, thinkingModel,
+				imageThinking, imageThinkingCrossProvider, thinkingEnabled, thinkingAvailable, thinkingRequestVideo: thinkingSelection.video,
+				thinkingModel: thinkingChoice?.model || "", thinkingProviderName: thinkingChoice ? thinkingProviderLabel(thinkingChoice.provider, providers) : "",
 				jsonOpen,
 				jsonDraft,
 				setJsonOpen,
@@ -14648,7 +14705,7 @@ h(
 			ProvidersView,
 			// 模型 → 供应商选路：模型属于谁就把请求发到谁那儿（纯函数，Node 里可测）
 			modelCatalogFor,
-			providerIdForModel, isThinkingModel, canUseThinking, thinkingImageRequest,
+			providerIdForModel, isThinkingModel, resolveThinkingChoice, thinkingImageRequest,
 			AttachmentEditor, ATTACHMENT_LIMITS, attachmentSource, attachmentRect, attachmentPoint,
 			attachmentNewReference, attachmentNormalizeReferences, attachmentMatches, attachmentClearOverrides,
 			ModelPicker,

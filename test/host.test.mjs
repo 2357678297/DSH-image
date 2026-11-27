@@ -196,6 +196,15 @@ check("POST /notes/delete 删除信息", notes2.body?.items?.length === 0);
 
 const tinyPng =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+const svgFixture = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64">\n' +
+  '  <title>本机矢量稿</title><rect width="96" height="64" fill="#1463da"/>\n' +
+  '</svg>\n';
+const svgFixtureBytes = Buffer.from(svgFixture, "utf8");
+const svgFixtureBase64 = svgFixtureBytes.toString("base64");
+// 2×1 GIF89a with two solid-color frames and different frame delays.
+const gifFixtureBase64 = "R0lGODlhAgABAIAAAP8AAAAA/yH5BAQKAAAALAAAAAACAAEAAAICBAoAIfkEBBQAAAAsAAAAAAIAAQAAAgJMCgA7";
+const gifFixtureBytes = Buffer.from(gifFixtureBase64, "base64");
 const upload = await call("/upload", { method: "POST", body: { name: "ref.png", data: `data:image/png;base64,${tinyPng}` } });
 check("POST /upload 收参考图", upload.status === 200 && upload.body?.item?.format === "png", upload.body?.item?.url);
 const fetched = await fetch(`${origin}${upload.body?.item?.url}`);
@@ -1619,6 +1628,8 @@ await new Promise((resolve) => badKeyServer.close(resolve));
     switch (prompt) {
       case "Gemini inline": case "Gemini Flash 2.5": case "Gemini ordered refs": case "Gemini auto": case "Gemini auto tool": result = candidate([image]); break;
       case "Gemini Markdown parts": result = candidate([{text:markdown}]); break;
+      case "Gemini inline SVG": result = candidate([{inlineData:{mimeType:"image/svg+xml",data:svgFixtureBase64}}]); break;
+      case "Gemini inline GIF": result = candidate([{inlineData:{mimeType:"image/gif",data:gifFixtureBase64}}]); break;
       case "Gemini Markdown choices":
         signalReading(); await inspected;
         result = {choices:[{message:{role:"assistant",content:markdown}}]}; break;
@@ -1659,7 +1670,9 @@ await new Promise((resolve) => badKeyServer.close(resolve));
       ['Gemini inline', {size:'1K',aspect_ratio:'16:9'}, model, '1K','16:9', tinyPng,'png'],
       ['Gemini Markdown parts',{size:'2048x3072',aspect_ratio:undefined}, model, '2K','2:3',jpeg,'jpg'],
       ['Gemini Markdown choices',{size:'4K',aspect_ratio:'21:9',mode:'edit',images:[`data:image/png;base64,${PNG_FOR_EDIT}`,tinyPng],referenceUrls:[upload.body.item.url]}, model,'4K','21:9',jpeg,'jpg'],
-      ['Gemini Flash 2.5',{model:legacy,size:'1K',aspect_ratio:'9:16'},legacy,undefined,'9:16',tinyPng,'png']
+      ['Gemini Flash 2.5',{model:legacy,size:'1K',aspect_ratio:'9:16'},legacy,undefined,'9:16',tinyPng,'png'],
+      ['Gemini inline SVG',{size:'2K',aspect_ratio:'4:3'},model,'2K','4:3',svgFixtureBase64,'svg'],
+      ['Gemini inline GIF',{size:'2K',aspect_ratio:'4:3'},model,'2K','4:3',gifFixtureBase64,'gif']
     ];
     for (const [prompt,opts,requestedModel,tier,ratio,expectedData,format] of cases) {
       const {submitted,job,requests} = await submit(prompt,opts), [hit] = requests;
@@ -1672,9 +1685,13 @@ await new Promise((resolve) => badKeyServer.close(resolve));
       else check(`${prompt}：文生图不附参考图字节`,inputs.length===0);
       const out = job?.images?.[0], asset = (await call('/library?limit=200')).body.items.find(a=>a.id===out?.assetId && a.jobId===job?.id);
       const download = asset?.url?.startsWith('/api/velapi-image-go/asset/') ? await fetch(origin+asset.url) : null;
-      const expected = Buffer.from(expectedData, 'base64'), mime = format==='jpg' ? 'image/jpeg' : 'image/png';
-      const identical = download?.status===200 && download.headers.get('content-type')===mime && Buffer.from(await download.arrayBuffer()).equals(expected);
-      check(`${prompt}：生成成功、图库关联当前任务，GET 图片逐字节一致`,submitted.status===200 && job?.status==='succeeded' && job?.protocol===protocol && job?.images?.length===1 && asset?.url===out?.url && asset?.model===requestedModel && asset?.format===format && asset?.bytes===expected.length && asset?.width===(format==='jpg'?2:1) && asset?.height===1 && identical,`status=${job?.status}, format=${asset?.format}, bytes=${asset?.bytes??0}, verified=${!!identical}`);
+      const expected = Buffer.from(expectedData, 'base64');
+      const expectedFormat = {
+        png:{mime:'image/png',width:1,height:1}, jpg:{mime:'image/jpeg',width:2,height:1},
+        svg:{mime:'image/svg+xml',width:96,height:64}, gif:{mime:'image/gif',width:2,height:1}
+      }[format];
+      const identical = download?.status===200 && download.headers.get('content-type')?.split(';',1)[0].trim()===expectedFormat.mime && Buffer.from(await download.arrayBuffer()).equals(expected);
+      check(`${prompt}：生成成功、图库关联当前任务，GET 图片逐字节一致`,submitted.status===200 && job?.status==='succeeded' && job?.protocol===protocol && job?.images?.length===1 && asset?.url===out?.url && asset?.model===requestedModel && asset?.format===format && asset?.bytes===expected.length && asset?.width===expectedFormat.width && asset?.height===expectedFormat.height && identical,`status=${job?.status}, format=${asset?.format}, bytes=${asset?.bytes??0}, verified=${!!identical}`);
     }
     for (const [size,tier] of [['1152x1536','1K'],['2304x3072','2K'],['4608x6144','4K']]) {
       for (const automatic of [false,true]) {
@@ -1923,6 +1940,150 @@ await new Promise((resolve) => badKeyServer.close(resolve));
     if (a?.id) await api('/providers/delete',{id:a.id});
     if (b?.id) await api('/providers/delete',{id:b.id});
     await Promise.all([new Promise(resolve => relay.close(resolve)), new Promise(resolve => assistantRelay.close(resolve))]);
+  }
+}
+
+/* 上游生成/编辑返回的矢量稿。用实际 HTTP 传输验证接收、落盘和下载。 */
+{
+  const model = "svg-result-fixture";
+  const apiKey = "fixture-svg-only";
+  const requests = [];
+  const responses = new Map();
+  const svgServer = http.createServer(async (request, response) => {
+    const method = request.method;
+    const route = request.url;
+    requests.push({ method, route, authorized: request.headers.authorization === `Bearer ${apiKey}` });
+    if (method === "GET" && route === "/vector.svg") {
+      response.writeHead(200, { "content-type": "image/svg+xml" }).end(svgFixtureBytes);
+      return;
+    }
+    if (method !== "POST" || !["/v1/images/generations", "/v1/images/edits"].includes(route)) {
+      response.writeHead(404).end();
+      return;
+    }
+    try {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      const raw = Buffer.concat(chunks);
+      const prompt = route === "/v1/images/edits"
+        ? (await new Response(raw, { headers: { "content-type": request.headers["content-type"] } }).formData()).get("prompt")
+        : JSON.parse(raw.toString("utf8")).prompt;
+      const reply = responses.get(prompt);
+      if (!reply) {
+        response.writeHead(400).end();
+        return;
+      }
+      response.writeHead(200, { "content-type": reply.mime }).end(reply.body);
+    } catch {
+      response.writeHead(400).end();
+    }
+  });
+  await new Promise(resolve => svgServer.listen(0, "127.0.0.1", resolve));
+  const svgOrigin = `http://127.0.0.1:${svgServer.address().port}`;
+  const json = value => ({ mime: "application/json", body: JSON.stringify(value) });
+  const inlineSvg = `data:image/svg+xml;base64,${svgFixtureBase64}`;
+  const cases = [
+    { label: "下载 URL", response: json({ data: [{ url: svgOrigin + "/vector.svg" }] }), downloads: true },
+    { label: "裸 Base64", response: json({ data: [{ b64_json: svgFixtureBase64 }] }) },
+    { label: "url 的 SVG data URL", response: json({ data: [{ url: inlineSvg }] }) },
+    { label: "b64_json 的 SVG data URL", response: json({ data: [{ b64_json: inlineSvg }] }) },
+    { label: "data[].svg", response: json({ data: [{ svg: svgFixture }] }) },
+    { label: "顶层 svg", response: json({ svg: svgFixture }) },
+    { label: "直接 XML 响应", response: { mime: "image/svg+xml; charset=UTF-8", body: svgFixtureBytes } },
+    { label: "同项 PNG + SVG", response: json({ data: [{ b64_json: tinyPng, svg: svgFixture }] }), mixed: true }
+  ];
+  let provider;
+  let svgExport;
+  try {
+    const createdProvider = await call("/providers", { method: "POST", body: {
+      name: "SVG loopback fixture", baseUrl: `${svgOrigin}/v1`, apiKey, models: [model]
+    } });
+    provider = createdProvider.body?.item;
+    if (!provider?.id) throw Error("SVG loopback provider setup failed");
+    for (const endpoint of ["images_generations", "images_edits"]) {
+      const editing = endpoint === "images_edits";
+      const route = editing ? "/v1/images/edits" : "/v1/images/generations";
+      for (const testCase of cases) {
+        const prompt = `SVG ${endpoint} ${testCase.label}`;
+        responses.set(prompt, testCase.response);
+        const since = requests.length;
+        const { created, job } = await runMockJob(prompt, {
+          providerId: provider.id, model, endpoint,
+          ...(editing ? { mode: "edit", referenceUrls: [upload.body.item.url] } : {})
+        });
+        const received = requests.slice(since);
+        const expectedCount = testCase.downloads ? 2 : 1;
+        check(`${prompt}：成功并保留原请求路由`, created.status === 200 && job?.status === "succeeded" &&
+          received.length === expectedCount && received[0]?.method === "POST" && received[0]?.route === route && received[0]?.authorized &&
+          (!testCase.downloads || (received[1]?.method === "GET" && received[1]?.route === "/vector.svg")),
+          `job=${job?.status}, requests=${received.map(hit => `${hit.method} ${hit.route}`).join(",")}`);
+
+        const images = job?.images ?? [];
+        const svg = images.find(image => image.format === "svg");
+        const assets = (await call("/library?limit=200")).body?.items ?? [];
+        const asset = assets.find(item => item.id === svg?.assetId && item.jobId === job?.id);
+        const staticResponse = asset?.url?.startsWith("/api/velapi-image-go/asset/") ? await fetch(origin + asset.url) : null;
+        const bytes = staticResponse ? Buffer.from(await staticResponse.arrayBuffer()) : null;
+        const mime = staticResponse?.headers.get("content-type")?.split(";", 1)[0].trim();
+        check(`${prompt}：SVG 原字节、格式、文件名与 viewBox 尺寸`, images.length === (testCase.mixed ? 2 : 1) &&
+          svg?.url?.endsWith(".svg") && asset?.url === svg.url && asset?.format === "svg" &&
+          asset.width === 96 && asset.height === 64 && asset.bytes === svgFixtureBytes.length &&
+          staticResponse?.status === 200 && mime === "image/svg+xml" && bytes?.equals(svgFixtureBytes),
+          `format=${asset?.format}, size=${asset?.width}x${asset?.height}, bytes=${bytes?.length}`);
+        if (staticResponse && !svgExport) {
+          const headers = staticResponse.headers;
+          check("SVG 原图响应以附件下载并设置沙箱和 nosniff", /\battachment\b/i.test(headers.get("content-disposition") ?? "") &&
+            /\bsandbox\b/.test(headers.get("content-security-policy") ?? "") && headers.get("x-content-type-options") === "nosniff");
+          svgExport = path.basename(asset.url);
+        }
+        if (testCase.mixed) {
+          const png = images.find(image => image.format === "png");
+          const pngResponse = png?.url?.startsWith("/api/velapi-image-go/asset/") ? await fetch(origin + png.url) : null;
+          const pngBytes = pngResponse ? Buffer.from(await pngResponse.arrayBuffer()) : null;
+          check(`${prompt}：位图也保存为 PNG 原字节`, png?.url?.endsWith(".png") && pngResponse?.status === 200 &&
+            pngResponse.headers.get("content-type") === "image/png" && pngBytes?.equals(Buffer.from(tinyPng, "base64")));
+        }
+      }
+    }
+    const exportDir = path.join(stateDir, "svg-export-test");
+    await call("/config", { method: "POST", body: { saveDir: exportDir } });
+    const exported = svgExport ? await call("/asset/export", { method: "POST", body: { files: [svgExport] } }) : null;
+    const saved = exported?.body?.items?.[0]?.path;
+    check("SVG 原图导出保留扩展名和原字节", exported?.status === 200 && saved?.endsWith(".svg") &&
+      path.resolve(path.dirname(saved)) === path.resolve(exportDir) && fs.existsSync(saved) && fs.readFileSync(saved).equals(svgFixtureBytes));
+
+    for (const { label, endpoint, response } of [
+      { label: "直接 GIF 响应", endpoint: "images_generations", response: { mime: "image/gif", body: gifFixtureBytes } },
+      { label: "data[].gif", endpoint: "images_edits", response: json({ data: [{ gif: `data:image/gif;base64,${gifFixtureBase64}` }] }) }
+    ]) {
+      const prompt = `GIF ${label}`;
+      responses.set(prompt, response);
+      const editing = endpoint === "images_edits";
+      const since = requests.length;
+      const { created, job } = await runMockJob(prompt, {
+        providerId: provider.id, model, endpoint,
+        ...(editing ? { mode: "edit", referenceUrls: [upload.body.item.url] } : {})
+      });
+      const hits = requests.slice(since);
+      const gif = job?.images?.[0];
+      const download = gif?.url?.startsWith("/api/velapi-image-go/asset/") ? await fetch(origin + gif.url) : null;
+      const bytes = download ? Buffer.from(await download.arrayBuffer()) : null;
+      check(`${prompt}：双帧 GIF 以原始字节、.gif 和 image/gif 保存`, created.status === 200 && job?.status === "succeeded" &&
+        hits.length === 1 && hits[0]?.route === (editing ? "/v1/images/edits" : "/v1/images/generations") &&
+        job.images?.length === 1 && gif?.format === "gif" && gif?.url?.endsWith(".gif") &&
+        download?.status === 200 && download.headers.get("content-type") === "image/gif" && bytes?.equals(gifFixtureBytes),
+        `job=${job?.status}, format=${gif?.format}, bytes=${bytes?.length}`);
+    }
+
+    const invalidPrompt = "SVG 不完整文档";
+    responses.set(invalidPrompt, { mime: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg"><rect width="16" height="16"/>' });
+    const before = (await call("/library?limit=200")).body?.items?.length;
+    const { job: invalid } = await runMockJob(invalidPrompt, { providerId: provider.id, model, endpoint: "images_generations" });
+    const after = (await call("/library?limit=200")).body?.items?.length;
+    check("声明为 SVG 的不完整文档失败并保持图库数量", invalid?.status === "failed" && !invalid.images?.length && before === after);
+  } finally {
+    if (provider?.id) await call("/providers/delete", { method: "POST", body: { id: provider.id } });
+    await new Promise(resolve => svgServer.close(resolve));
   }
 }
 

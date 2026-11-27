@@ -601,6 +601,29 @@ function writeConvSetting(id, settings) {
 			"chat.modelInvalid": "当前模型不能生图（是对话/音频模型，或不在任何供应商目录里），先选一个图片模型",
 			"chat.queueFull": "发送太快了：这一句处理完再发下一句（最多排 6 条）",
 			"chat.jsonBody": "JSON 请求体",
+			"chat.jsonCustom": "自定义 JSON",
+			"chat.jsonCustomHint": "直接编辑完整请求体；勾选与编辑只用于本会话的下一次发送。",
+			"chat.jsonFields": "字段",
+			"chat.jsonFieldsHint": "勾选即用这里的值覆盖标准值；取消勾选回到标准值。",
+			"chat.jsonOverridden": "已覆盖 {n} 项",
+			"chat.jsonStandard": "标准值",
+			"chat.jsonShowFields": "按字段编辑",
+			"json.prompt": "提示词",
+			"json.model": "模型",
+			"json.provider": "供应商",
+			"json.endpoint": "接口协议",
+			"json.size": "尺寸",
+			"json.sizeHint": "档位或像素：2K、2K · 16:9、1536x864",
+			"json.aspectRatio": "宽高比",
+			"json.aspectRatioHint": "16:9、1:1、auto",
+			"json.quality": "质量",
+			"json.qualityDefault": "默认（不指定）",
+			"json.count": "张数",
+			"json.mode": "模式",
+			"json.modeGenerate": "文生图",
+			"json.modeEdit": "图生图（编辑）",
+			"json.seconds": "时长（秒）",
+			"json.secondsHint": "仅视频协议使用",
 			"chat.jsonHint": "修改的字段仅用于本会话的下一次发送；会话 ID 由工作台管理。size 是档位，aspect_ratio 是宽高比。关闭原样发送则转换为像素。",
 			"chat.jsonApply": "应用",
 			"chat.jsonReset": "恢复默认",
@@ -1359,6 +1382,29 @@ function writeConvSetting(id, settings) {
 			"prov.shortGemini": "Gemini native",
 			"chat.geminiReload": "This host does not support Gemini native image generation. Update the plugin and restart DSH; refreshing this page is not enough.",
 			"chat.geminiParams": "Gemini native returns one image. Use a resolution and ratio supported by the selected model; masks and video duration are not supported.",
+			"chat.jsonCustom": "Custom JSON",
+			"chat.jsonCustomHint": "Edit the full request body directly; checks and edits apply to the next send in this conversation only.",
+			"chat.jsonFields": "Fields",
+			"chat.jsonFieldsHint": "Checked fields override the standard value; clearing a check restores it.",
+			"chat.jsonOverridden": "{n} overridden",
+			"chat.jsonStandard": "standard",
+			"chat.jsonShowFields": "Edit by field",
+			"json.prompt": "Prompt",
+			"json.model": "Model",
+			"json.provider": "Provider",
+			"json.endpoint": "Endpoint protocol",
+			"json.size": "Size",
+			"json.sizeHint": "Tier or pixels: 2K, 2K · 16:9, 1536x864",
+			"json.aspectRatio": "Aspect ratio",
+			"json.aspectRatioHint": "16:9, 1:1, auto",
+			"json.quality": "Quality",
+			"json.qualityDefault": "Default (omit)",
+			"json.count": "Count",
+			"json.mode": "Mode",
+			"json.modeGenerate": "Text to image",
+			"json.modeEdit": "Image edit",
+			"json.seconds": "Duration (s)",
+			"json.secondsHint": "Video protocols only",
 			"chat.geminiRatio": "Image aspect ratio", "chat.geminiSize": "Image resolution",
 			"chat.geminiRatioAuto": "Auto", "chat.geminiRatioAutoHint": "Auto: omit the fixed ratio. With references, let the model follow the original framing; otherwise let it choose.",
 			"prov.shortRerank": "Rerank",
@@ -2813,6 +2859,22 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-tiles[data-density="large"]{grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr))}
 @media (hover:none){.vig-stage-nav{opacity:1;pointer-events:auto}.vig-stage-view.is-painting .vig-stage-nav{display:none}}
 .vig-json-editor{box-sizing:border-box;width:100%;height:clamp(100px,36dvh,320px);max-height:56dvh;font:12px ui-monospace,monospace;resize:vertical}
+.vig-json-editor[hidden]{display:none}
+.vig-json-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px}
+.vig-json-modes{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--vig-line-strong);border-radius:var(--vig-r-pill)}
+.vig-json-modes .vig-btn{min-height:26px;height:26px;padding:0 10px;border:0;border-radius:var(--vig-r-pill);background:transparent;font-size:12px;color:var(--vig-text-muted)}
+.vig-json-modes .vig-btn[aria-pressed="true"]{background:var(--vig-accent);color:var(--vig-surface)}
+.vig-json-badge{margin-left:auto;font-size:11px;color:var(--vig-text-faint);white-space:nowrap}
+.vig-json-fields{display:grid;gap:1px;max-height:clamp(150px,44dvh,430px);overflow:auto;overscroll-behavior:contain;border:1px solid var(--vig-line);border-radius:var(--vig-r-tile);padding:4px;background:var(--vig-surface-sunken)}
+.vig-json-field{display:grid;gap:4px;padding:6px 8px 8px;border-radius:9px}
+.vig-json-field.is-on{background:var(--vig-surface)}
+.vig-json-field-head{display:flex;align-items:center;gap:7px;min-width:0;cursor:pointer}
+.vig-json-field-name{font-size:12.5px;font-weight:500;color:var(--vig-text)}
+.vig-json-field-key{font:11px ui-monospace,monospace;color:var(--vig-text-faint)}
+.vig-json-field-base{margin-left:auto;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:11px ui-monospace,monospace;color:var(--vig-text-faint)}
+.vig-json-field :is(input.vig-input,textarea.vig-input,.vig-sel){width:100%;height:30px;font-size:12.5px}
+.vig-json-field textarea.vig-input{height:auto;min-height:58px;padding:6px 9px;resize:vertical;font:12.5px/1.5 var(--vig-font)}
+.vig-json-field:not(.is-on) :is(input.vig-input,textarea.vig-input,.vig-sel){border-color:var(--vig-line);color:var(--vig-text-muted)}
 
 `;
 
@@ -4734,7 +4796,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function ChatView({ state, actions }) {
-			const { config, providers, notes, jobs, busyJobIds, references, draft, conversations, conversationId, isVideoEndpoint, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft, sizeRaw, toggleJsonSize } = state;
+			const { config, providers, protocols, notes, jobs, busyJobIds, references, draft, conversations, conversationId, isVideoEndpoint, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft, sizeRaw, toggleJsonSize, jsonCustom, setJsonCustom, jsonBase } = state;
 			const [overLimit, setOverLimit] = useState(false);
 			// 浮层只展示直出参数；编辑通过同一个 JSON 入口。
 			const [summaryOpen, setSummaryOpen] = useState(false);
@@ -4981,36 +5043,118 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						void onPasteImage(file);
 					}
 				},
-				/* 编辑当前会话的下一次请求。 */
-				jsonOpen ? h(
-					WorkbenchDialog,
-					{ label: t("chat.jsonBody"), onDismiss: () => setJsonOpen(false) },
-					h(
-						"div",
-						{ className: "vig-modal vig-json-modal", onClick: (event) => event.stopPropagation() },
-						h("span", { className: "vig-modal-title" }, t("chat.jsonBody")),
-						h("p", { className: "vig-muted", style: { fontSize: 12, margin: "4px 0 10px" } }, t("chat.jsonHint")),
-						h(
-							"label",
-							{ className: "vig-ctx-row", style: { marginBottom: 8 } },
-							h("input", { type: "checkbox", className: "vig-ctx-check", checked: nativeGemini || sizeRaw, disabled:nativeGemini, "data-size-raw": "1", onChange: () => toggleJsonSize(!sizeRaw) }),
-							h("span", null, t("chat.sizeRaw"))
-						),
-						h("textarea", {
-							className: "vig-input vig-json-editor", "aria-label": t("chat.jsonBody"),
-							"data-json-editor": "1",
-							value: jsonDraft,
-							onChange: (event) => setJsonDraft(event.target.value)
-						}),
+				/* 编辑当前会话的下一次请求：默认按字段改，需要时切到自定义 JSON。 */
+				jsonOpen ? (() => {
+					let view = {};
+					try {
+						const parsed = JSON.parse(jsonDraft);
+						if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) view = parsed;
+					} catch (error) { view = {}; }
+					const standard = jsonBase || {};
+					const specs = [
+						{ key: "prompt", label: t("json.prompt"), kind: "textarea" },
+						{ key: "model", label: t("json.model"), kind: "text" },
+						{ key: "providerId", label: t("json.provider"), kind: "select", options: (providers || []).map((item) => ({ value: item.id, label: item.name || item.id })) },
+						{ key: "endpoint", label: t("json.endpoint"), kind: "select", options: protocolOptions(protocols).map((item) => ({ value: item.id, label: item.label })) },
+						{ key: "size", label: t("json.size"), kind: "text", placeholder: t("json.sizeHint") },
+						{ key: "aspect_ratio", label: t("json.aspectRatio"), kind: "text", placeholder: t("json.aspectRatioHint") },
+						{ key: "quality", label: t("json.quality"), kind: "select", options: [{ value: "", label: t("json.qualityDefault") }, { value: "LOW", label: "LOW" }, { value: "MEDIUM", label: "MEDIUM" }, { value: "HIGH", label: "HIGH" }] },
+						{ key: "n", label: t("json.count"), kind: "number" },
+						{ key: "mode", label: t("json.mode"), kind: "select", options: [{ value: "generate", label: t("json.modeGenerate") }, { value: "edit", label: t("json.modeEdit") }] },
+						{ key: "seconds", label: t("json.seconds"), kind: "text", placeholder: t("json.secondsHint") }
+					];
+					const fieldValue = (key) => {
+						const raw = Object.hasOwn(view, key) ? view[key] : "";
+						return raw === null || raw === undefined ? "" : String(raw);
+					};
+					const isOverridden = (key) => {
+						const before = Object.hasOwn(view, key) ? view[key] : undefined;
+						const after = Object.hasOwn(standard, key) ? standard[key] : undefined;
+						return JSON.stringify(before) !== JSON.stringify(after);
+					};
+					const overriddenCount = specs.filter((spec) => isOverridden(spec.key)).length;
+					const standardHint = (key) => {
+						if (!Object.hasOwn(standard, key)) return "";
+						const raw = standard[key];
+						if (raw === null || raw === undefined || raw === "") return "";
+						return typeof raw === "string" ? raw : JSON.stringify(raw);
+					};
+					const fieldControl = (spec) => {
+						const shared = {
+							className: spec.kind === "select" ? "vig-sel" : "vig-input",
+							"data-json-field": spec.key,
+							value: fieldValue(spec.key),
+							...(spec.placeholder ? { placeholder: spec.placeholder } : {}),
+							"aria-label": `${spec.label}（${spec.key}）`,
+							onChange: (event) => actions.writeJsonField(spec.key, spec.kind === "number" ? (event.target.value === "" ? "" : Number(event.target.value)) : event.target.value)
+						};
+						if (spec.kind === "textarea") return h("textarea", shared);
+						if (spec.kind === "select") return h("select", shared, spec.options.map((option) => h("option", { key: option.value, value: option.value }, option.label)));
+						return h("input", { ...shared, type: spec.kind === "number" ? "number" : "text", ...(spec.kind === "number" ? { min: 1, max: 4, step: 1 } : {}) });
+					};
+					return h(
+						WorkbenchDialog,
+						{ label: t("chat.jsonBody"), onDismiss: () => setJsonOpen(false) },
 						h(
 							"div",
-							{ style: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 } },
-							h("button", { className: "vig-btn", onClick: () => { actions.resetJsonBody(); } }, t("chat.jsonReset")),
-							h("button", { className: "vig-btn", onClick: () => setJsonOpen(false) }, "关闭"),
-							h("button", { className: "vig-btn is-primary", "data-json-apply": "1", onClick: () => actions.applyJsonBody() }, t("chat.jsonApply"))
+							{ className: "vig-modal vig-json-modal", onClick: (event) => event.stopPropagation() },
+							h("span", { className: "vig-modal-title" }, t("chat.jsonBody")),
+							h("p", { className: "vig-muted", style: { fontSize: 12, margin: "4px 0 10px" } }, jsonCustom ? t("chat.jsonCustomHint") : t("chat.jsonFieldsHint")),
+							h(
+								"div",
+								{ className: "vig-json-head" },
+								h(
+									"div",
+									{ className: "vig-json-modes", role: "group" },
+									h("button", { type: "button", className: "vig-btn", "data-json-mode": "fields", "aria-pressed": !jsonCustom, onClick: () => setJsonCustom(false) }, t("chat.jsonShowFields")),
+									h("button", { type: "button", className: "vig-btn", "data-json-mode": "custom", "aria-pressed": jsonCustom, onClick: () => setJsonCustom(true) }, t("chat.jsonCustom"))
+								),
+								h("span", { className: "vig-json-badge" }, t("chat.jsonOverridden", { n: overriddenCount }))
+							),
+							h(
+								"label",
+								{ className: "vig-ctx-row", style: { marginBottom: 8 } },
+								h("input", { type: "checkbox", className: "vig-ctx-check", checked: nativeGemini || sizeRaw, disabled: nativeGemini, "data-size-raw": "1", onChange: () => toggleJsonSize(!sizeRaw) }),
+								h("span", null, t("chat.sizeRaw"))
+							),
+							jsonCustom ? null : h(
+								"div",
+								{ className: "vig-json-fields", "data-json-fields": "1" },
+								specs.map((spec) => {
+									const checked = isOverridden(spec.key);
+									const hint = standardHint(spec.key);
+									return h(
+										"div",
+										{ className: `vig-json-field${checked ? " is-on" : ""}`, key: spec.key },
+										h(
+											"label",
+											{ className: "vig-json-field-head" },
+											h("input", { type: "checkbox", className: "vig-ctx-check", "data-json-check": spec.key, checked, onChange: (event) => { if (!event.target.checked) actions.toggleJsonField(spec.key); } }),
+											h("span", { className: "vig-json-field-name" }, spec.label),
+											h("code", { className: "vig-json-field-key" }, spec.key),
+											hint ? h("span", { className: "vig-json-field-base", title: `${t("chat.jsonStandard")}：${hint}` }, hint) : null
+										),
+										fieldControl(spec)
+									);
+								})
+							),
+							h("textarea", {
+								className: "vig-input vig-json-editor", "aria-label": t("chat.jsonBody"),
+								"data-json-editor": "1",
+								hidden: !jsonCustom,
+								value: jsonDraft,
+								onChange: (event) => setJsonDraft(event.target.value)
+							}),
+							h(
+								"div",
+								{ style: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 } },
+								h("button", { className: "vig-btn", onClick: () => { actions.resetJsonBody(); } }, t("chat.jsonReset")),
+								h("button", { className: "vig-btn", onClick: () => setJsonOpen(false) }, "关闭"),
+								h("button", { className: "vig-btn is-primary", "data-json-apply": "1", onClick: () => actions.applyJsonBody() }, t("chat.jsonApply"))
+							)
 						)
-					)
-				) : null,
+					);
+				})() : null,
 				h(
 					"div",
 					{ className: "vig-main-head" },
@@ -12647,6 +12791,8 @@ h(
 				}
 			};
 			const [jsonDraft, setJsonDraft] = useState("");
+			/* 结构化字段视图与自定义 JSON 视图二选一；勾选态由「与标准值的差异」直接派生。 */
+			const [jsonCustom, setJsonCustom] = useState(false);
 			const jsonOverrideRef = useRef(null);
 			const jsonBaseRef = useRef(null);
 			const buildRequestPreview = (prompt, raw = sizeRaw, withThinking = true) => {
@@ -12659,6 +12805,7 @@ h(
 				return parsed;
 			};
 			const openJsonPreview = () => {
+				setJsonCustom(false);
 				const base = buildRequestPreview(draft);
 				jsonBaseRef.current = base;
 				const candidate = { ...base, ...jsonOverrideRef.current };
@@ -12686,6 +12833,27 @@ h(
 					setJsonOpen(false);
 					toast(t("chat.jsonApplied"));
 				} catch (error) { toast(error.message === t("chat.geminiReload") || error.message === t("chat.geminiParams") ? error.message : t("chat.jsonInvalid"), "err"); }
+			};
+			/* 结构化字段：读写都落在同一份草稿上，免得两套状态互相打架。 */
+			const jsonParsedObject = () => {
+				try {
+					const parsed = JSON.parse(jsonDraft);
+					return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+				} catch (error) { return null; }
+			};
+			const writeJsonField = (key, value) => {
+				const parsed = jsonParsedObject();
+				if (!parsed) { toast(t("chat.jsonInvalid"), "err"); return; }
+				if (value === undefined) delete parsed[key]; else parsed[key] = value;
+				setJsonDraft(JSON.stringify(parsed, null, 2));
+			};
+			const toggleJsonField = (key) => {
+				const parsed = jsonParsedObject();
+				if (!parsed) { toast(t("chat.jsonInvalid"), "err"); return; }
+				const base = jsonBaseRef.current || {};
+				if (Object.hasOwn(base, key)) parsed[key] = base[key];
+				else delete parsed[key];
+				setJsonDraft(JSON.stringify(parsed, null, 2));
 			};
 			// 端点协议整表由宿主 /status 给（宿主给了就用它那份带 label 的）。
 			const [protocols, setProtocols] = useState([]);
@@ -13269,6 +13437,8 @@ h(
 				resetJsonBody: () => { jsonOverrideRef.current = null; jsonBaseRef.current = buildRequestPreview(draft); setJsonDraft(JSON.stringify(jsonBaseRef.current, null, 2)); toast(t("chat.jsonReset")); },
 				openJsonBody: () => openJsonPreview(),
 				applyJsonBody: () => applyJsonDraft(),
+				writeJsonField,
+				toggleJsonField,
 				toast,
 				reload,
 				setView,
@@ -13902,6 +14072,11 @@ h(
 				jsonDraft,
 				setJsonOpen,
 				setJsonDraft,
+				jsonCustom,
+				setJsonCustom,
+				jsonBase: jsonBaseRef.current,
+				writeJsonField,
+				toggleJsonField,
 				sizeRaw,
 				toggleJsonSize,
 				chatModels

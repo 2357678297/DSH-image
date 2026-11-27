@@ -125,6 +125,23 @@ export async function auditImageSizeUI({host,check,wait,waitFor,flushSync,posts}
     check('从Gemini/视频返回普通images，自动选择和3:4三档完整保留',imageSize()?.value==='auto'&&['auto',...triples.map(t=>t[1])].every(value=>menu().some(o=>o.value===value)));
     await assertNarrow('协议往返');
     check('全流程只使用假宿主配置/生成，未走聊天或真实宿主写入',!posts.some(p=>p.path.startsWith('/chat/')||p.path==='/conversations/delete'||p.path==='/conversations/rename'));
+
+    // 字段视图：勾选态来自「与标准值的差异」，取消勾选即回到标准值。
+    editor=await openJson();const field=key=>need(get('[data-json-field="'+key+'"]'),'字段 '+key),box=key=>need(get('[data-json-check="'+key+'"]'),'勾选 '+key);
+    check('默认按字段编辑：中文名与原始字段名并列，未改动不勾选',!!get('[data-json-fields]')&&get('[data-json-fields]').textContent.includes('提示词')&&get('[data-json-fields]').textContent.includes('quality')&&!box('quality').checked);
+    const qualities=['LOW','MEDIUM','HIGH'], standardQuality=parseJson().quality, firstQuality=qualities.find(q=>q!==standardQuality)||'HIGH';
+    set(field('quality'),firstQuality);await until(()=>box('quality').checked,'改动后自动勾选');
+    check('改动字段自动勾选并计入覆盖数',/1/.test(get('.vig-json-badge')?.textContent||''),get('.vig-json-badge')?.textContent);
+    click(box('quality'));await until(()=>!box('quality').checked,'取消勾选');
+    check('取消勾选回到标准值',parseJson().quality===standardQuality,JSON.stringify({standard:standardQuality,now:parseJson().quality}));
+    const secondQuality=qualities.find(q=>q!==standardQuality&&q!==firstQuality)||firstQuality;
+    set(field('quality'),secondQuality);await until(()=>box('quality').checked,'再次勾选');
+    click(get('[data-json-mode="custom"]'));await until(()=>get('[data-json-editor]').hidden===false,'切到自定义 JSON');
+    check('自定义 JSON 按钮展开原文并收起字段表',parseJson().quality===secondQuality&&!get('[data-json-fields]'));
+    click(get('[data-json-mode="fields"]'));await until(()=>!!get('[data-json-fields]'),'切回字段');
+    click(get('[data-json-apply]'));await until(()=>!get('[data-json-editor]'),'应用字段覆盖');
+    body=await submit('imagesize field view fixture');
+    check('字段覆盖如实进入下一次请求',body.quality===secondQuality,bodyDetail(body));
   } catch(error) {
     check('普通图片尺寸完整交互执行完成',false,String(error.stack||error)+'; refs='+all('.vig-composer .vig-ref').length+'; draft='+composer()?.value+'; selected='+imageSize()?.value);
   } finally {window.confirm=originalConfirm;}

@@ -2142,16 +2142,16 @@ check(
     /setInterval\(decide, 1000\)/.test(SOURCE) &&
     /\.vig-pane-host\{/.test(css)
 );
-// 同一个事实只出现一次：供应商名在检查器、密钥在工作区头部、模型在输入区、库存计数在侧栏底部。
+// 同一个事实只出现一次：供应商名与密钥状态都在供应商管理、模型在输入区、库存计数在侧栏底部。
 // 之前头部挂了一颗「velapi」胶囊、检查器里又抄了一遍密钥胶囊和「供应商管理」跳转，看着就是重复。
 const renderedAll = htmlFor(mounted.slots, "settings.section");
 const headerBlock = renderedAll.match(/<header class="vig-head"[\s\S]*?<\/header>/)?.[0] ?? "";
 check("工作台头部不挂状态胶囊", headerBlock.length > 0 && !headerBlock.includes("vig-pill"), headerBlock.slice(0, 80));
-// 桌面端没绑 Ctrl+R、菜单里没有「重新加载」，所以把重载入口做进面板头部。
+// 头部只留刊头：刷新 / 重载按钮与状态点都属于重复入口，已移除。
 check(
-  "头部有「重载界面」按钮（桌面端刷新界面的唯一手边入口）",
-  headerBlock.includes('title="重载界面"') && /onClick: reloadShell/.test(SOURCE) && /window\.location\.reload\(\)/.test(SOURCE),
-  headerBlock.match(/<button[^>]*重载界面[^>]*>/)?.[0] ?? headerBlock.slice(0, 120)
+  "头部不再放刷新、重载按钮",
+  !/<button/i.test(headerBlock) && !/重载界面/.test(headerBlock) && !/lib\.refresh/.test(headerBlock),
+  headerBlock.slice(0, 120)
 );
 {
   const start = SOURCE.indexOf('title: t("panel.provider")');
@@ -2162,7 +2162,7 @@ check(
   // 数胶囊要先剥掉 <style>：CSS 里的 .vig-pill 规则会被一起数进去
   const body = renderedAll.replace(/<style>[\s\S]*?<\/style>/g, "");
   const pills = (body.match(/class="vig-pill/g) ?? []).length;
-  check("整页里状态胶囊不超过两颗（密钥 + 队列各一）", pills <= 2, `实际 ${pills} 颗`);
+  check("整页里状态胶囊最多一颗（只剩排队提示）", pills <= 1, `实际 ${pills} 颗`);
 }
 /* ---- 9. 停靠入口的可见性判定 ------------------------------------- *
  * 用户报障「重启 DSH 后按键又不见了」。根因：宿主对注册时写了 keepMounted

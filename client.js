@@ -5329,7 +5329,6 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						)
 					),
 					h("div", { className: "vig-spacer" }),
-					h(Pill, { tone: config.hasKey ? "ok" : "warn" }, config.hasKey ? t("status.key", { mask: config.keyMask }) : t("status.nokey")),
 					state.pending > 0 ? h(Pill, null, t("status.pending", { n: state.pending })) : null
 				),
 				h(
@@ -12786,19 +12785,6 @@ h(
 
 
 
-		/** 重载整个界面。
-		 *  桌面端（Electron）没有绑 Ctrl+R，菜单里也没有「重新加载」，F12 才开得出控制台，
-		 *  所以把这件事做进面板：客户端插件平时是热的（宿主盯着 bundle 文件，一变就通过
-		 *  /plugins/events 推 rebuilt，页面里的 client-hmr 立刻重载那个条目），
-		 *  但这个按钮是页面级兜底 —— 缓存、半挂的席位、连不上的事件流，重载一次全清掉。 */
-		function reloadShell() {
-			try {
-				window.location.reload();
-			} catch (error) {
-				console.warn("[velapi-image-go] reload failed", error);
-			}
-		}
-
 		/* 渲染兜底：插件重载或渲染异常时不再整块白屏，给出可恢复的一屏错误提示。 */
 		// 有些最小 React 环境（测试用 mock）没有 Component：降级成一个普通类，避免模块加载就崩
 		const BoundaryBase =
@@ -13244,9 +13230,7 @@ h(
 			const [fatal, setFatal] = useState("");
 			// 宿主版本比界面旧（/capabilities 都没有）：原生拖拽 / 图生图修复都在宿主侧，
 			// 必须重启 DSH。这里明确挂出来，别让用户以为「拖到 PPT 坏了」。
-			const [hostOutdated, setHostOutdated] = useState(false);
 			// 新宿主但没有 Electron 原生拖拽能力（被沙箱限制）：也得出声，改为引导用复制图片
-			const [capsInfo, setCapsInfo] = useState(null);
 			// 图片查看器：{ items, index, source }；source = chat / library（决定给不给「删除」）
 			const [viewer, setViewer] = useState(null);
 			const [gridTarget, setGridTarget] = useState(null);
@@ -13285,18 +13269,10 @@ h(
 					// 预设卡这条单独兜底：宿主老版本还没这条路由时，界面照常起来（空墙而已），
 					// 不至于因为一条 404 把整个工作台打进错误页。
 					const presetList = await call("/presets").catch(() => ({ items: [] }));
-					// 宿主能力（原生拖拽 / 剪贴板）：老宿主 404 就保持 null，并在头部挂「重启 DSH」提示
+					// 宿主能力（原生拖拽 / 剪贴板）：老宿主 404 就保持 null，拖拽自动退回 HTML5。
 					void call("/capabilities")
-						.then((caps) => {
-							setHostCapabilities(caps);
-							setCapsInfo(caps);
-							setHostOutdated(false);
-						})
-						.catch(() => {
-							setHostCapabilities(null);
-							setCapsInfo(null);
-							setHostOutdated(true);
-						});
+						.then((caps) => setHostCapabilities(caps))
+						.catch(() => setHostCapabilities(null));
 					const [status, providerList, lib, noteList, convList] = await Promise.all([
 						call("/status"),
 						call("/providers"),
@@ -14299,31 +14275,9 @@ h(
 					// 刊头 kicker：一行小号大写字距的英文副标，给顶部一点杂志刊头的气口
 					h("span", { className: "vig-kicker" }, t("nav.kicker")),
 					h("div", { className: "vig-spacer" }),
-					// 头部不再挂「velapi / 队列」这类状态胶囊：同一个事实在侧栏底部、
-					// 工作区头部、检查器里各出现一次，看着就是重复。现在头部只在服务端
-					// 不可用时出声，其余状态各自只有一个归属地。
-					fatal ? h(Pill, { tone: "warn" }, t("common.service")) : null,
-					hostOutdated
-						? h(
-								"span",
-								{ className: "vig-pill is-warn", title: t("common.restartHint"), style: { cursor: "help" } },
-								h("i", { className: "vig-dot" }),
-								t("common.restartNeed")
-							)
-						: capsInfo && capsInfo.nativeDrag === false
-							? h(
-									"span",
-									{ className: "vig-pill is-warn", title: t("common.noNativeDragHint"), style: { cursor: "help" } },
-									h("i", { className: "vig-dot" }),
-									t("common.noNativeDrag")
-								)
-							: null,
-					// 头部只留两个按钮：拉数据、重载界面。
-					// 「在右侧栏打开」那种需要用户先找到再点的入口，已经被固定面板取代了
-					// （用户原话：我不要手动，我要固定）。
-					h("button", { className: "vig-icon-btn", title: t("lib.refresh"), onClick: () => void reload() }, h(Icon, { name: "refresh" })),
-					// 桌面端刷新界面的唯一手边入口（Ctrl+R 没绑，F12 也只开控制台）。
-					h("button", { className: "vig-icon-btn", title: t("common.reloadShell"), onClick: reloadShell }, h(Icon, { name: "reboot" }))
+					// 头部只留刊头。状态点、刷新与重载按钮都已去掉：这些入口在
+					// 供应商管理和图库里各有归属，挂在刊头上只是重复。
+					fatal ? h(Pill, { tone: "warn" }, t("common.service")) : null
 				),
 				h(
 					"div",

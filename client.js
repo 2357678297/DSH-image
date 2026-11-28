@@ -623,7 +623,7 @@ function writeConvSetting(id, settings) {
 			"json.mode": "模式",
 			"json.modeGenerate": "文生图",
 			"json.modeEdit": "图生图（编辑）",
-			"json.seconds": "时长（秒）",
+			"json.seconds": "时长",
 			"json.secondsHint": "仅视频协议使用",
 			"json.userText": "用户原话",
 			"json.planNote": "计划备注",
@@ -631,7 +631,7 @@ function writeConvSetting(id, settings) {
 			"json.referenceUrl": "参考图",
 			"json.referenceUrls": "参考图列表",
 			"json.image": "内联参考图",
-			"json.images": "内联参考图列表",
+			"json.images": "内联图列表",
 			"json.source": "来源",
 			"json.thinking": "思考辅助",
 			"json.thinkingProviderId": "思考供应商",
@@ -1430,7 +1430,7 @@ function writeConvSetting(id, settings) {
 			"json.mode": "Mode",
 			"json.modeGenerate": "Text to image",
 			"json.modeEdit": "Image edit",
-			"json.seconds": "Duration (s)",
+			"json.seconds": "Duration",
 			"json.secondsHint": "Video protocols only",
 			"json.userText": "User text",
 			"json.planNote": "Plan note",
@@ -1438,7 +1438,7 @@ function writeConvSetting(id, settings) {
 			"json.referenceUrl": "Reference",
 			"json.referenceUrls": "References",
 			"json.image": "Inline reference",
-			"json.images": "Inline references",
+			"json.images": "Inline refs",
 			"json.source": "Source",
 			"json.thinking": "Thinking assist",
 			"json.thinkingProviderId": "Thinking provider",
@@ -2846,7 +2846,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
  .vig-root .vig-ps-aside-toggle{position:static;grid-area:5/1;justify-self:end}
  .vig-ps-params-head{cursor:default!important;touch-action:auto!important}
 }
-.vig-json-modal{width:min(780px,100%);max-height:min(90dvh,100%)}
+.vig-json-modal{display:flex;flex-direction:column;width:min(780px,100%);max-height:min(90dvh,100%);overflow:auto}
 /* 表单、图库和管理列表按工作区本身重排；查看器仍是独立全屏工具。 */
 .vig-dialog-frame{box-sizing:border-box;inset:auto;margin:0;border:0;max-width:none;max-height:none;color:var(--vig-text);padding:clamp(6px,2%,18px);overflow:hidden}
 .vig-viewer.vig-dialog-frame{container:vig-viewer / inline-size}
@@ -2912,44 +2912,35 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 @media (hover:none){.vig-stage-nav{opacity:1;pointer-events:auto}.vig-stage-view.is-painting .vig-stage-nav{display:none}}
 .vig-json-editor{box-sizing:border-box;width:100%;height:clamp(100px,36dvh,320px);max-height:56dvh;font:12px ui-monospace,monospace;resize:vertical}
 .vig-json-editor[hidden]{display:none}
+.vig-json-head{display:flex;align-items:baseline;gap:12px;flex:none;margin:2px 0 10px}
+.vig-json-hint{margin:0;flex:1 1 auto;min-width:0;font-size:12px;line-height:1.5;color:var(--vig-text-muted)}
+.vig-json-badge{flex:none;font-size:11px;color:var(--vig-text-faint);white-space:nowrap;font-variant-numeric:tabular-nums}
+.vig-json-raw{display:flex;align-items:center;gap:8px;flex:none;margin:0 0 10px;padding-left:16px;font-size:12px;color:var(--vig-text)}
+.vig-json-add{display:grid;grid-template-columns:minmax(126px,200px) minmax(0,1fr) minmax(0,1.1fr) auto;align-items:center;gap:10px;flex:none;margin:0 0 10px;padding:8px 10px;border:1px dashed var(--vig-line-strong);border-radius:var(--vig-r-tile);background:var(--vig-surface-soft)}
+.vig-json-add-label{display:flex;align-items:center;font-size:12px;font-weight:500;color:var(--vig-text-muted);white-space:nowrap}
+.vig-json-fields{flex:0 1 auto;min-height:140px;max-height:max(140px,calc(90dvh - 390px));overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-bottom:10px;border-radius:var(--vig-r-tile);-webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 16px),transparent 100%);mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 16px),transparent 100%)}
 .vig-json-table{display:grid;gap:1px;border:1px solid var(--vig-line);border-radius:var(--vig-r-tile);background:var(--vig-line);overflow:hidden}
-.vig-json-row{display:grid;grid-template-columns:24px minmax(148px,auto) minmax(0,1fr) 22px;align-items:center;gap:8px;padding:4px 8px;background:var(--vig-surface-sunken)}
+.vig-json-row{display:grid;grid-template-columns:26px minmax(126px,200px) minmax(0,1fr) 26px;align-items:center;gap:10px;min-height:42px;padding:5px 10px;background:var(--vig-surface-sunken)}
 .vig-json-row.is-on{background:var(--vig-surface)}
-.vig-json-row.is-locked{opacity:.7}
-.vig-json-row-check{margin:0;width:14px;height:14px;accent-color:var(--vig-accent)}
-.vig-json-row-name{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:nowrap}.vig-json-row-name input.vig-json-row-key-input{width:clamp(56px,7vw,96px);min-width:0;flex:0 0 auto;height:24px;padding:0 6px;font:11.5px ui-monospace,monospace}
-.vig-json-row-label{font-size:12.5px;font-weight:500;color:var(--vig-text);white-space:nowrap;flex:none}
+.vig-json-row.is-locked{background:var(--vig-surface-sunken)}
+.vig-json-row-check{margin:0;width:14px;height:14px;accent-color:var(--vig-accent);justify-self:center}
+.vig-json-row-name{display:grid;grid-template-columns:minmax(52px,74px) minmax(0,1fr);align-items:center;gap:8px;min-width:0}
+.vig-json-row-label{font-size:12.5px;font-weight:500;color:var(--vig-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vig-json-row-key{font:11px ui-monospace,monospace;color:var(--vig-text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.vig-json-row-value{font:11px ui-monospace,monospace;color:var(--vig-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
-.vig-json-row :is(input.vig-input,.vig-sel){width:100%;min-width:0;height:28px;font-size:12.5px}
-.vig-json-row input.vig-input{box-sizing:border-box;padding:0 9px;border:1px solid var(--vig-line-strong);border-radius:8px;background:var(--vig-surface);color:var(--vig-text);font:12.5px/1 var(--vig-font)}
-.vig-json-row select.vig-sel{box-sizing:border-box;width:100%;max-width:none;min-width:0}
-.vig-json-row input.vig-input::placeholder{color:var(--vig-text-faint)}
-.vig-json-row input.vig-input:focus-visible,.vig-json-row .vig-sel:focus-visible{outline:2px solid var(--vig-accent);outline-offset:1px}
-.vig-json-row.is-on input.vig-input{border-color:var(--vig-accent-line)}
-.vig-json-empty{padding:14px;text-align:center;font-size:12px;color:var(--vig-text-muted)}
-.vig-json-row-del{flex:none;display:grid;place-items:center;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--vig-text-faint);font-size:14px;line-height:1;cursor:pointer}
-.vig-json-row-del:hover{background:var(--vig-surface-sunken);color:var(--danger,#d92121)}
-.vig-json-row{grid-template-columns:24px minmax(148px,auto) minmax(0,1fr) 22px}
-.vig-json-row-name input.vig-input{height:24px;padding:0 6px;font:11.5px ui-monospace,monospace}
-.vig-json-add{display:grid;grid-template-columns:24px minmax(148px,auto) minmax(0,1fr) auto;align-items:center;gap:8px;margin:0 0 8px;padding:6px 8px;border:1px dashed var(--vig-line-strong);border-radius:var(--vig-r-tile);background:var(--vig-surface-soft)}
-.vig-json-add input.vig-input{box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 9px;border:1px solid var(--vig-line-strong);border-radius:8px;background:var(--vig-surface);color:var(--vig-text);font:12.5px/1 var(--vig-font)}
-.vig-json-add .vig-btn{height:28px;min-height:28px;padding:0 10px;font-size:12px}
-.vig-json-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px}
-.vig-json-modes{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--vig-line-strong);border-radius:var(--vig-r-pill)}
-.vig-json-modes .vig-btn{min-height:26px;height:26px;padding:0 10px;border:0;border-radius:var(--vig-r-pill);background:transparent;font-size:12px;color:var(--vig-text-muted)}
-.vig-json-modes .vig-btn[aria-pressed="true"]{background:var(--vig-accent);color:var(--vig-surface)}
-.vig-json-badge{margin-left:auto;font-size:11px;color:var(--vig-text-faint);white-space:nowrap}
-.vig-json-fields{max-height:clamp(160px,52dvh,480px);overflow:auto;overscroll-behavior:contain;border-radius:var(--vig-r-tile)}
-.vig-json-field{display:grid;gap:4px;padding:6px 8px 8px;border-radius:9px}
-.vig-json-field.is-on{background:var(--vig-surface)}
-.vig-json-field-head{display:flex;align-items:center;gap:7px;min-width:0;cursor:pointer}
-.vig-json-field-name{font-size:12.5px;font-weight:500;color:var(--vig-text)}
-.vig-json-field-key{font:11px ui-monospace,monospace;color:var(--vig-text-faint)}
-.vig-json-field-base{margin-left:auto;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:11px ui-monospace,monospace;color:var(--vig-text-faint)}
-.vig-json-field :is(input.vig-input,textarea.vig-input,.vig-sel){width:100%;height:30px;font-size:12.5px}
-.vig-json-field textarea.vig-input{height:auto;min-height:58px;padding:6px 9px;resize:vertical;font:12.5px/1.5 var(--vig-font)}
-.vig-json-field:not(.is-on) :is(input.vig-input,textarea.vig-input,.vig-sel){border-color:var(--vig-line);color:var(--vig-text-muted)}
+.vig-json-row-value{font:11.5px/1.4 ui-monospace,monospace;color:var(--vig-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vig-json-row :is(input.vig-input,select.vig-sel,textarea.vig-input){box-sizing:border-box;width:100%;min-width:0;max-width:none;height:30px;padding:0 9px;border:1px solid var(--vig-line-strong);border-radius:8px;background:var(--vig-surface);color:var(--vig-text);font:12.5px/1 var(--vig-font)}
+.vig-json-row input.vig-json-row-key-input{height:26px;padding:0 7px;font:11.5px ui-monospace,monospace;color:var(--vig-text-muted)}
+.vig-json-row textarea.vig-json-value-json{height:auto;min-height:30px;max-height:92px;padding:6px 9px;resize:vertical;font:11.5px/1.5 ui-monospace,monospace}
+.vig-json-row :is(input.vig-input,select.vig-sel,textarea.vig-input)::placeholder{color:var(--vig-text-faint)}
+.vig-json-row :is(input.vig-input,select.vig-sel,textarea.vig-input):focus-visible{outline:2px solid var(--vig-accent);outline-offset:1px}
+.vig-json-row.is-on :is(input.vig-input,select.vig-sel){border-color:var(--vig-accent-line)}
+.vig-json-row input[type=number]{-moz-appearance:textfield;appearance:textfield}
+.vig-json-row input[type=number]::-webkit-outer-spin-button,.vig-json-row input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.vig-json-add :is(input.vig-input){box-sizing:border-box;width:100%;min-width:0;height:30px;padding:0 9px;border:1px solid var(--vig-line-strong);border-radius:8px;background:var(--vig-surface);color:var(--vig-text);font:12.5px/1 var(--vig-font)}
+.vig-json-add .vig-btn{height:30px;min-height:30px;padding:0 12px;font-size:12px}
+.vig-json-empty{padding:16px;text-align:center;font-size:12px;color:var(--vig-text-muted)}
+.vig-json-row-del{justify-self:center;display:grid;place-items:center;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--vig-text-faint);font-size:14px;line-height:1;cursor:pointer}
+.vig-json-row-del:hover{background:var(--vig-surface-sunken);color:#d92121}
 
 `;
 
@@ -5201,7 +5192,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						if (typeof raw === "boolean") {
 							return h("select", { ...shared, className: "vig-sel", style: { width: "100%", maxWidth: "none" } }, ["true", "false"].map((value) => h("option", { key: value, value }, value)));
 						}
-						return h("input", { ...shared, className: "vig-input", type: typeof raw === "number" ? "number" : "text" });
+						return h("input", { ...shared, className: "vig-input", type: "text", ...(typeof raw === "number" ? { inputMode: "numeric" } : {}) });
 					};
 					return h(
 						WorkbenchDialog,
@@ -5210,22 +5201,22 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							"div",
 							{ className: "vig-modal vig-json-modal", onClick: (event) => event.stopPropagation() },
 							h("span", { className: "vig-modal-title" }, t("chat.jsonBody")),
-							h("p", { className: "vig-muted", style: { fontSize: 12, margin: "4px 0 10px" } }, t("json.tableHint")),
 							h(
 								"div",
 								{ className: "vig-json-head" },
-								h("span", { className: "vig-json-badge" }, t("chat.jsonOverridden", { n: overriddenCount }))
+								h("p", { className: "vig-json-hint" }, t("json.tableHint")),
+								h("span", { className: "vig-json-badge", "data-json-badge": "1" }, t("chat.jsonOverridden", { n: overriddenCount }))
 							),
 							h(
 								"label",
-								{ className: "vig-ctx-row", style: { marginBottom: 8 } },
-								h("input", { type: "checkbox", className: "vig-ctx-check", checked: nativeGemini || sizeRaw, disabled: nativeGemini, "data-size-raw": "1", onChange: () => toggleJsonSize(!sizeRaw) }),
+								{ className: "vig-json-raw" },
+								h("input", { type: "checkbox", className: "vig-ctx-check vig-json-row-check", checked: nativeGemini || sizeRaw, disabled: nativeGemini, "data-size-raw": "1", onChange: () => toggleJsonSize(!sizeRaw) }),
 								h("span", null, t("chat.sizeRaw"))
 							),
 							h(
 								"div",
 								{ className: "vig-json-add", "data-json-add": "1" },
-								h("span", { className: "vig-json-row-del", "aria-hidden": "true" }),
+								h("span", { className: "vig-json-add-label" }, t("json.addField")),
 								h("input", {
 									className: "vig-input", "data-json-new-key": "1",
 									value: newFieldKey, placeholder: t("json.fieldNameHint"),
@@ -5296,7 +5287,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							}),
 							h(
 								"div",
-								{ style: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 } },
+								{ className: "vig-json-foot", style: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12, flex: "0 0 auto" } },
 								h("button", { className: "vig-btn", onClick: () => { actions.resetJsonBody(); } }, t("chat.jsonReset")),
 								h("button", { className: "vig-btn", onClick: () => setJsonOpen(false) }, "关闭"),
 								h("button", { className: "vig-btn is-primary", "data-json-apply": "1", onClick: () => actions.applyJsonBody() }, t("chat.jsonApply"))

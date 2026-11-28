@@ -910,6 +910,8 @@ function writeConvSetting(id, settings) {
 			"prov.save": "保存",
 			"prov.close": "关闭",
 			"common.empty": "无",
+			"common.close": "关闭",
+			"common.save": "保存",
 			"common.ok": "完成",
 			"common.failed": "失败",
 			"common.loading": "加载中…",
@@ -1535,6 +1537,8 @@ function writeConvSetting(id, settings) {
 			"prov.save": "Save",
 			"prov.close": "Close",
 			"common.empty": "none",
+			"common.close": "Close",
+			"common.save": "Save",
 			"common.ok": "Done",
 			"common.failed": "Failed",
 			"common.loading": "Loading…",
@@ -5465,10 +5469,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							{
 								className: "vig-icon-btn",
 								title: t("chat.renameConv"),
-								onClick: () => {
+								onClick: async () => {
 									const current = (conversations || []).find((item) => item.id === conversationId);
-									const next = window.prompt(t("chat.renameConv"), current?.title || "");
-									if (next != null && next.trim()) void actions.renameConversation(conversationId, next.trim());
+									const next = await actions.askName(t("chat.renameConv"), current?.title || "");
+									if (next) void actions.renameConversation(conversationId, next);
 								}
 							},
 							h(Icon, { name: "edit", size: 14 })
@@ -6943,7 +6947,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 														title: t("lib.rename"),
 														"aria-label": t("lib.rename"),
 														onClick: async () => {
-															const next = window.prompt(t("lib.rename"), current.name);
+															const next = await actions.askName(t("lib.rename"), current.name);
 															if (next != null && next.trim()) await actions.renameAsset(current.id, next.trim());
 														}
 													},
@@ -7075,7 +7079,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 													title: t("lib.rename"),
 													"aria-label": t("lib.rename"),
 													onClick: async () => {
-														const next = window.prompt(t("lib.rename"), asset.name);
+														const next = await actions.askName(t("lib.rename"), asset.name);
 														if (next != null && next.trim()) await actions.renameAsset(asset.id, next.trim());
 													}
 												},
@@ -7120,6 +7124,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			const assets = state.library || [];
 			const assetByUrl = useMemo(() => Object.fromEntries(assets.map((item) => [item.url, item])), [assets]);
 			const [picking, setPicking] = useState(null); // {modelId, slot}
+			/* 新建 / 改名都用应用内弹层：Electron 里没有 window.prompt。 */
+			const [draft, setDraft] = useState(null); // {id, name}
 			const [query, setQuery] = useState("");
 			const candidates = useMemo(() => {
 				const needle = query.trim().toLowerCase();
@@ -7137,7 +7143,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					h(Icon, { name: "user" }),
 					h("span", { className: "vig-item-title" }, t("muse.title")),
 					h("div", { className: "vig-spacer" }),
-					h("button", { className: "vig-btn is-primary", "data-muse-new": "1", onClick: () => void actions.createModel() }, t("muse.new"))
+					h("button", { className: "vig-btn is-primary", "data-muse-new": "1", onClick: () => setDraft({ id: "", name: "" }) }, t("muse.new"))
 				),
 				h(
 					"div",
@@ -7162,10 +7168,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												{ className: "vig-muse-acts" },
 												h("button", {
 													className: "vig-mini", title: t("muse.rename"),
-													onClick: () => {
-														const next = window.prompt(t("muse.nameAsk"), model.name);
-														if (next != null && next.trim()) void actions.saveModel({ id: model.id, name: next.trim() });
-													}
+													onClick: () => setDraft({ id: model.id, name: model.name })
 												}, h(Icon, { name: "edit", size: 13 })),
 												h("button", {
 													className: "vig-mini is-danger", title: t("muse.delete"),
@@ -7198,6 +7201,42 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								)
 							)
 				),
+				draft
+					? h(
+							WorkbenchDialog,
+							{ label: draft.id ? t("muse.rename") : t("muse.new"), onDismiss: () => setDraft(null) },
+							h(
+								"div",
+								{ className: "vig-modal vig-muse-name", onClick: (event) => event.stopPropagation() },
+								h("span", { className: "vig-modal-title" }, draft.id ? t("muse.rename") : t("muse.new")),
+								h("input", {
+									className: "vig-input", style: { margin: "10px 0" }, autoFocus: true,
+									"data-muse-name": "1", value: draft.name, placeholder: t("muse.nameAsk"),
+									"aria-label": t("muse.nameAsk"),
+									onChange: (event) => setDraft({ ...draft, name: event.target.value }),
+									onKeyDown: async (event) => {
+										if (event.key !== "Enter") return;
+										const name = draft.name.trim();
+										if (!name) return;
+										if (await actions.saveModel({ id: draft.id || undefined, name })) setDraft(null);
+									}
+								}),
+								h(
+									"div",
+									{ style: { display: "flex", gap: 8, justifyContent: "flex-end" } },
+									h("button", { className: "vig-btn", onClick: () => setDraft(null) }, t("common.close")),
+									h("button", {
+										className: "vig-btn is-primary", "data-muse-name-save": "1",
+										onClick: async () => {
+											const name = draft.name.trim();
+											if (!name) return;
+											if (await actions.saveModel({ id: draft.id || undefined, name })) setDraft(null);
+										}
+									}, t("common.save"))
+								)
+							)
+						)
+					: null,
 				picking
 					? h(
 							WorkbenchDialog,
@@ -13175,6 +13214,9 @@ h(
 			const [models, setModels] = useState([]);
 			/* 从结果卡「加入模特」带过来的图：{ assetId, name, url } */
 			const [modelTarget, setModelTarget] = useState(null);
+			/* 统一取名弹层：Electron 没有 window.prompt，重命名一律走这里。 */
+			const [promptDialog, setPromptDialog] = useState(null);
+			const promptResolve = useRef(null);
 			const [modelSlots, setModelSlots] = useState([]);
 			const [presets, setPresets] = useState([]);
 			/* JSON 面板：基于当前草稿，仅将编辑过的字段绑定到下一次发送。 */
@@ -14317,17 +14359,16 @@ h(
 					setDraft((value) => `${value}${value.length === 0 ? "" : "\n"}${parts}`.slice(0, 500));
 					setView("chat");
 				},
+				askName: (title, value = "") => new Promise((resolve) => {
+					promptResolve.current = resolve;
+					setPromptDialog({ title, value });
+				}),
 				openModelPicker: (image) => {
 					const assetId = image?.assetId || "";
 					if (!assetId) { toast(t("muse.onlyLibrary"), "err"); return; }
 					setModelTarget({ assetId, name: image.name || "", url: image.url || "" });
 				},
 				closeModelPicker: () => setModelTarget(null),
-				createModel: async () => {
-					const name = window.prompt(t("muse.nameAsk"), "");
-					if (name == null) return false;
-					return actions.saveModel({ name: name.trim() });
-				},
 				saveModel: async (model) => {
 					try {
 						const payload = await call("/muses/save", { method: "POST", body: model });
@@ -14595,6 +14636,37 @@ h(
 				"div",
 				{ className: "vig-root", ref: rootRef, "data-compact": wide ? "0" : "1" },
 				h("style", null, CSS),
+				promptDialog
+					? h(
+							WorkbenchDialog,
+							{ label: promptDialog.title, onDismiss: () => { promptResolve.current?.(null); promptResolve.current = null; setPromptDialog(null); } },
+							h(
+								"div",
+								{ className: "vig-modal vig-prompt", onClick: (event) => event.stopPropagation() },
+								h("span", { className: "vig-modal-title" }, promptDialog.title),
+								h("input", {
+									className: "vig-input", style: { margin: "10px 0" }, autoFocus: true,
+									"data-prompt-input": "1", value: promptDialog.value,
+									onChange: (event) => setPromptDialog({ ...promptDialog, value: event.target.value }),
+									onKeyDown: (event) => {
+										if (event.key !== "Enter") return;
+										promptResolve.current?.(promptDialog.value.trim() || null);
+										promptResolve.current = null;
+										setPromptDialog(null);
+									}
+								}),
+								h(
+									"div",
+									{ style: { display: "flex", gap: 8, justifyContent: "flex-end" } },
+									h("button", { className: "vig-btn", onClick: () => { promptResolve.current?.(null); promptResolve.current = null; setPromptDialog(null); } }, t("common.close")),
+									h("button", {
+										className: "vig-btn is-primary", "data-prompt-save": "1",
+										onClick: () => { promptResolve.current?.(promptDialog.value.trim() || null); promptResolve.current = null; setPromptDialog(null); }
+									}, t("common.save"))
+								)
+							)
+						)
+					: null,
 				h(
 					"div",
 					{ className: "vig-shell" },

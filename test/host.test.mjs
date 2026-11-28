@@ -1324,6 +1324,30 @@ check(
 );
 await call("/config", { method: "POST", body: { defaultEndpoint: "auto" } });
 
+/* ---- 2b3. 缩略图：网格用小图，不拉原图 ---------------- */
+{
+  const seeded = await call("/library?limit=5");
+  const withThumb = (seeded.body?.items || []).find((item) => typeof item.thumbUrl === "string" && item.thumbUrl.includes("/thumb/"));
+  check("图库条目带 thumbUrl（网格与选图走小图）", Boolean(withThumb), (seeded.body?.items || [])[0]?.thumbUrl);
+
+  // 有 Electron 或 System.Drawing 就给小图；都没有才退回原图（302）。两种都不能是 404。
+  const thumbName = withThumb ? withThumb.url.split("/").pop() : "nope.png";
+  const raw = await fetch(`${API}/thumb/${thumbName}?w=256`, { redirect: "manual" });
+  const viaRedirect = raw.status === 302 && String(raw.headers.get("location") || "").includes("/asset/");
+  let smallEnough = false, thumbBytes = 0;
+  if (raw.status === 200) {
+    const buf = Buffer.from(await raw.arrayBuffer());
+    thumbBytes = buf.length;
+    // 夹具图只有几十字节，缩略图不会更小；只在原图够大时才比体积。
+    const srcBytes = Number(withThumb?.bytes || 0);
+    smallEnough = srcBytes >= 50 * 1024 ? buf.length * 4 < srcBytes : buf.length > 0;
+  }
+  check("/thumb 给出小图或退回原图（大图缩略后体积至少降到 1/4 以下）", (smallEnough) || viaRedirect, `${raw.status} thumb=${thumbBytes} src=${withThumb?.bytes}`);
+
+  const bad = await fetch(`${API}/thumb/..%2fconfig.json?w=256`, { redirect: "manual" });
+  check("/thumb 不接受越界文件名", bad.status === 404);
+}
+
 /* ---- 删除对话记录：只摘 job，不动图库素材 ------------------------ */
 {
   const target = ((await call("/jobs?limit=1")).body?.items ?? [])[0] ?? null;

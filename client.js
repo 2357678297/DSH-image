@@ -7127,11 +7127,14 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			/* 新建 / 改名都用应用内弹层：Electron 里没有 window.prompt。 */
 			const [draft, setDraft] = useState(null); // {id, name}
 			const [query, setQuery] = useState("");
-			const candidates = useMemo(() => {
+			const PAGE = 40;
+			const [shown, setShown] = useState(PAGE);
+			const matched = useMemo(() => {
 				const needle = query.trim().toLowerCase();
-				if (!needle) return assets.slice(0, 60);
-				return assets.filter((asset) => `${asset.name} ${asset.prompt} ${asset.model}`.toLowerCase().includes(needle)).slice(0, 60);
+				if (!needle) return assets;
+				return assets.filter((asset) => `${asset.name} ${asset.prompt} ${asset.model}`.toLowerCase().includes(needle));
 			}, [assets, query]);
+			const candidates = useMemo(() => matched.slice(0, shown), [matched, shown]);
 			const slotLabel = (slot) => t(`slot.${slot}`);
 			const filled = (model) => slots.filter((slot) => model.slots?.[slot]).length;
 			return h(
@@ -7189,10 +7192,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 														className: `vig-muse-slot${asset ? " is-filled" : ""}`,
 														"data-muse-slot": slot, "data-muse-model": model.id,
 														title: asset ? `${slotLabel(slot)} · ${asset.name}` : `${slotLabel(slot)} · ${t("muse.pick")}`,
-														onClick: () => { setQuery(""); setPicking({ modelId: model.id, slot }); }
+														onClick: () => { setQuery(""); setShown(PAGE); setPicking({ modelId: model.id, slot }); }
 													},
 													asset
-														? h("img", { src: asset.url, alt: "", loading: "lazy" })
+														? h("img", { src: asset.thumbUrl || asset.url, alt: "", loading: "lazy", decoding: "async" })
 														: h("span", { className: "vig-muse-slot-empty" }, h(Icon, { name: "plus", size: 14 }), h("span", null, slotLabel(slot)))
 												);
 											})
@@ -7260,9 +7263,14 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												await actions.setModelSlot({ modelId: picking.modelId, slot: picking.slot, url: asset.url });
 												setPicking(null);
 											}
-										}, h("img", { src: asset.url, alt: "", loading: "lazy" }))
+										}, h("img", { src: asset.thumbUrl || asset.url, alt: "", loading: "lazy", decoding: "async" }))
 									)
 								),
+								matched.length > shown
+									? h("div", { style: { display: "flex", justifyContent: "center", marginTop: 8 } },
+											h("button", { className: "vig-btn", "data-muse-more": "1", onClick: () => setShown((n) => n + PAGE) },
+												t("lib.moreIndex", { n: shown, total: matched.length })))
+									: null,
 								h(
 									"div",
 									{ style: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 } },
@@ -8006,7 +8014,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												h(
 													"button",
 													{ className: "vig-preset-pick", key: asset.id, onClick: () => chooseImage(asset.url) },
-													h("img", { src: asset.url, alt: asset.name })
+													h("img", { src: asset.thumbUrl || asset.url, alt: asset.name })
 												)
 											)
 								)

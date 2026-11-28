@@ -609,6 +609,7 @@ function writeConvSetting(id, settings) {
 			"chat.jsonStandard": "标准值",
 			"chat.jsonShowFields": "按字段编辑",
 			"json.prompt": "提示词",
+			"json.promptHint": "本次要发送的提示词",
 			"json.model": "模型",
 			"json.provider": "供应商",
 			"json.endpoint": "接口协议",
@@ -1405,6 +1406,7 @@ function writeConvSetting(id, settings) {
 			"chat.jsonStandard": "standard",
 			"chat.jsonShowFields": "Edit by field",
 			"json.prompt": "Prompt",
+			"json.promptHint": "Prompt sent with this request",
 			"json.model": "Model",
 			"json.provider": "Provider",
 			"json.endpoint": "Endpoint protocol",
@@ -2900,6 +2902,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-json-row-key{font:11px ui-monospace,monospace;color:var(--vig-text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vig-json-row-value{font:11px ui-monospace,monospace;color:var(--vig-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
 .vig-json-row :is(input.vig-input,.vig-sel){width:100%;min-width:0;height:28px;font-size:12.5px}
+.vig-json-row input.vig-input{box-sizing:border-box;padding:0 9px;border:1px solid var(--vig-line-strong);border-radius:8px;background:var(--vig-surface);color:var(--vig-text);font:12.5px/1 var(--vig-font)}
+.vig-json-row input.vig-input::placeholder{color:var(--vig-text-faint)}
+.vig-json-row input.vig-input:focus-visible,.vig-json-row .vig-sel:focus-visible{outline:2px solid var(--vig-accent);outline-offset:1px}
+.vig-json-row.is-on input.vig-input{border-color:var(--vig-accent-line)}
 .vig-json-empty{padding:14px;text-align:center;font-size:12px;color:var(--vig-text-muted)}
 .vig-json-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px}
 .vig-json-modes{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--vig-line-strong);border-radius:var(--vig-r-pill)}
@@ -5110,7 +5116,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						quality: [{ value: "", label: t("json.qualityDefault") }, { value: "LOW", label: "LOW" }, { value: "MEDIUM", label: "MEDIUM" }, { value: "HIGH", label: "HIGH" }],
 						mode: [{ value: "generate", label: t("json.modeGenerate") }, { value: "edit", label: t("json.modeEdit") }]
 					};
-					const FIELD_PLACEHOLDERS = { size: t("json.sizeHint"), aspect_ratio: t("json.aspectRatioHint"), seconds: t("json.secondsHint") };
+					const FIELD_PLACEHOLDERS = { prompt: t("json.promptHint"), size: t("json.sizeHint"), aspect_ratio: t("json.aspectRatioHint"), seconds: t("json.secondsHint") };
 					const keys = [...FIELD_ORDER.filter((key) => Object.hasOwn(view, key) || Object.hasOwn(standard, key)),
 						...Object.keys(view).filter((key) => !FIELD_ORDER.includes(key))]
 						.filter((key, index, list) => list.indexOf(key) === index);

@@ -262,6 +262,28 @@ function writeConvSetting(id, settings) {
 			"nav.notes": "信息管理",
 			"nav.providers": "供应商管理",
 			"nav.ps": "图片处理",
+			"nav.models": "模特素材",
+			"muse.title": "模特素材",
+			"slot.front": "全身正面", "slot.back": "全身背面", "slot.side": "全身侧面",
+			"slot.foot": "脚", "slot.hand": "手", "slot.head": "头", "slot.ear": "耳朵",
+			"slot.chest": "胸口", "slot.thigh": "大腿", "slot.hairBack": "背面全头发",
+			"muse.sub": "一位模特一张卡；十格固定：全身正 / 背 / 侧，加脚、手、头、耳朵、胸口、大腿、背面全头发。",
+			"muse.new": "新建模特",
+			"muse.empty": "还没有模特。新建一张卡，再把图库里的图逐格放进去。",
+			"muse.emptyCard": "这一格还空着",
+			"muse.pick": "从图库选",
+			"muse.clear": "清空这一格",
+			"muse.rename": "重命名",
+			"muse.delete": "删除模特",
+			"muse.deleteAsk": "删除「{name}」？卡里的格子会一起删掉，图库原图不动。",
+			"muse.fill": "{n}/10 已填",
+			"muse.addTo": "加入模特",
+			"muse.addToHint": "选一位模特，再选放哪一格。",
+			"muse.noModels": "还没有模特卡：先到「模特素材」新建一位。",
+			"muse.added": "已放入「{name}」的「{slot}」",
+			"muse.nameAsk": "模特名字",
+			"muse.slot.assign": "放进这一格",
+			"muse.onlyLibrary": "只有图库里的图能放进模特卡",
 			"ps.tool.transform": "自由变换",
 			"ps.transform.pixels":"变换像素", "ps.transform.mask":"矩形蒙版", "ps.transform.resetMask":"移除矩形蒙版", "ps.transform.maskHint":"拖动锚点调整可见区域，不移动或拉伸图片像素。移除蒙版可恢复原图。", "ps.transform.limit":"变换后的画布超出像素或图层内存预算，请减小拖动距离。",
 			"ps.transform.hint": "拖中心移动，拖边点或角点缩放。按住 Shift 等比缩放，松开提交，Esc 取消本次拖动。",
@@ -954,6 +976,28 @@ function writeConvSetting(id, settings) {
 			"nav.notes": "Notes",
 			"nav.providers": "Providers",
 			"nav.ps": "Image tools",
+			"nav.models": "Muse assets",
+			"muse.title": "Muse assets",
+			"slot.front": "Front full body", "slot.back": "Back full body", "slot.side": "Side full body",
+			"slot.foot": "Foot", "slot.hand": "Hand", "slot.head": "Head", "slot.ear": "Ear",
+			"slot.chest": "Chest", "slot.thigh": "Thigh", "slot.hairBack": "Back hair",
+			"muse.sub": "One card per muse. Ten fixed slots: full-body front / back / side, plus foot, hand, head, ear, chest, thigh and back hair.",
+			"muse.new": "New muse",
+			"muse.empty": "No muse yet. Create a card, then drop library images into its slots.",
+			"muse.emptyCard": "Empty slot",
+			"muse.pick": "Pick from library",
+			"muse.clear": "Clear this slot",
+			"muse.rename": "Rename",
+			"muse.delete": "Delete muse",
+			"muse.deleteAsk": "Delete \u201c{name}\u201d? Slots go away; library originals stay.",
+			"muse.fill": "{n}/10 filled",
+			"muse.addTo": "Add to muse",
+			"muse.addToHint": "Pick a muse, then a slot.",
+			"muse.noModels": "No muse cards yet. Create one under Muse assets first.",
+			"muse.added": "Added to \u201c{name}\u201d / {slot}",
+			"muse.nameAsk": "Muse name",
+			"muse.slot.assign": "Put in this slot",
+			"muse.onlyLibrary": "Only library images can go into a muse card",
 			"ps.tool.select": "Marquee",
 			"ps.tool.transform": "Free transform",
 			"ps.transform.pixels":"Transform pixels", "ps.transform.mask":"Rectangle mask", "ps.transform.resetMask":"Remove rectangle mask", "ps.transform.maskHint":"Drag handles to change visibility without moving or resampling pixels. Remove the mask to restore the image.", "ps.transform.limit":"The transformed canvas exceeds the pixel or layer memory limit. Try a smaller drag.",
@@ -2653,6 +2697,33 @@ body[data-ds-dark-theme] .vig-tools-pop{background:rgba(20,20,22,.96)}
 .vig-tab-title{display:inline-flex;align-items:center;gap:6px;min-width:0;overflow:hidden}
 .vig-tab-title>svg{flex:none;display:block;border-radius:4px}
 .vig-tab-title-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------------- 模特素材 ---------------- */
+.vig-muse-body{display:flex;flex-direction:column;gap:12px;overflow:auto;padding:12px 14px 24px}
+.vig-muse-sub{margin:0;font-size:12px;line-height:1.6}
+.vig-muse-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:12px}
+.vig-muse-card{display:flex;flex-direction:column;gap:8px;padding:10px 12px 12px;border:1px solid var(--vig-line);border-radius:var(--vig-r-card);background:var(--vig-surface-soft)}
+.vig-muse-card-head{display:flex;align-items:center;gap:8px;min-width:0}
+.vig-muse-name{font-size:13.5px;font-weight:600;color:var(--vig-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vig-muse-count{margin-left:auto;font-size:11px;color:var(--vig-text-faint);font-variant-numeric:tabular-nums;white-space:nowrap}
+.vig-muse-acts{display:flex;gap:2px;flex:none}
+.vig-muse-slots{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.vig-muse-slot{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:3/4;padding:0;overflow:hidden;border:1px dashed var(--vig-line-strong);border-radius:9px;background:var(--vig-surface);color:var(--vig-text-faint);cursor:pointer}
+.vig-muse-slot.is-filled{border-style:solid;border-color:var(--vig-line)}
+.vig-muse-slot img{display:block;width:100%;height:100%;object-fit:cover}
+.vig-muse-slot:hover{border-color:var(--vig-accent-line);background:var(--vig-surface-sunken)}
+.vig-muse-slot-empty{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;line-height:1.25;text-align:center;padding:2px}
+.vig-muse-pick{width:min(720px,100%)}
+.vig-muse-pick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;max-height:min(52dvh,420px);overflow:auto}
+.vig-muse-pick-item{padding:0;border:1px solid var(--vig-line);border-radius:8px;overflow:hidden;background:var(--vig-surface-sunken);cursor:pointer;aspect-ratio:1}
+.vig-muse-pick-item img{display:block;width:100%;height:100%;object-fit:cover}
+.vig-muse-pick-item:hover{border-color:var(--vig-accent-line)}
+.vig-muse-add{width:min(720px,100%)}
+.vig-muse-add-list{display:flex;flex-direction:column;gap:8px;max-height:min(56dvh,460px);overflow:auto}
+.vig-muse-add-model{display:grid;gap:6px;padding:8px 10px;border:1px solid var(--vig-line);border-radius:var(--vig-r-tile);background:var(--vig-surface-soft)}
+.vig-muse-add-name{font-size:12.5px;font-weight:600}
+.vig-muse-add-slots{display:flex;flex-wrap:wrap;gap:6px}
+.vig-muse-add-slots .vig-btn{height:26px;min-height:26px;padding:0 10px;font-size:11.5px}
 /* 窄栏（宿主宽度不足）不摆锁标：它只占高度，会把参数面板挤到发送键上。 */
 .vig-root[data-compact="1"] .vig-brand-lockup{display:none}
 .vig-update{display:flex;flex-direction:column;gap:6px;padding:10px 2px 2px}
@@ -3006,7 +3077,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			zoomOut: "M7.2 3.6a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2zM10 10l3.4 3.4M5.7 7.2h3",
 			fit: "M3.4 6V3.4H6M10 3.4h2.6V6M12.6 10v2.6H10M6 12.6H3.4V10",
 			download: "M8 2.6v7.4M5 7.2L8 10l3-2.8M3 12.6h10",
-			move: "M8 2.4v11.2M2.4 8h11.2M8 2.4L6.2 4.2M8 2.4l1.8 1.8M8 13.6l-1.8-1.8M8 13.6l1.8-1.8M2.4 8l1.8-1.8M2.4 8l1.8 1.8M13.6 8l-1.8-1.8M13.6 8l-1.8 1.8"
+			move: "M8 2.4v11.2M2.4 8h11.2M8 2.4L6.2 4.2M8 2.4l1.8 1.8M8 13.6l-1.8-1.8M8 13.6l1.8-1.8M2.4 8l1.8-1.8M2.4 8l1.8 1.8M13.6 8l-1.8-1.8M13.6 8l-1.8 1.8",
+			user: "M8 2.8a2.4 2.4 0 1 1 0 4.8 2.4 2.4 0 0 1 0-4.8zM2.8 13.4c.5-2.6 2.6-4.2 5.2-4.2s4.7 1.6 5.2 4.2"
 		};
 
 		const REPO_URL = "https://github.com/2357678297/DSH-image";
@@ -3838,7 +3910,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			return out;
 		}
 
-		function Shot({ image, onReuse, onToast, onPreview, onSave, onGrid, onDelete }) {
+		function Shot({ image, onReuse, onToast, onPreview, onSave, onGrid, onDelete, onAddToModel }) {
 			const displayed = useRef(null);
 			const [busy, setBusy] = useState(false);
 			const safeName = (image.name || "image").replace(/[\\/:*?"<>|]+/g, "_");
@@ -3910,6 +3982,15 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						},
 						h(Icon, { name: "download", size: 13 })
 					),
+					onAddToModel ? h(
+						"button",
+						{
+							type: "button", className: "vig-mini vig-shot-act",
+							title: t("muse.addTo"), "aria-label": t("muse.addTo"),
+							"data-muse-add": "1", onClick: () => onAddToModel(image)
+						},
+						h(Icon, { name: "user", size: 13 })
+					) : null,
 					h(
 						"a",
 						{
@@ -4643,7 +4724,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		 * 以前只渲染回复，翻记录时看不出「当时让它做了什么」—— 提示词是这条任务的一部分，
 		 * 不能只活在输入框里。任务的 prompt 就是发出去的那句话，所以直接用它。
 		 */
-		function JobTurn({ job, onReuseImage, onToast, onRetry, onRefresh, onPreview, onSave, onDelete, onEdit, onGrid, onCancelThinking }) {
+		function JobTurn({ job, onReuseImage, onToast, onRetry, onRefresh, onPreview, onSave, onDelete, onEdit, onGrid, onCancelThinking, onAddToModel }) {
 			const pending = job.status === "queued" || job.status === "running";
 			const planning = pending && job.thinkingModel && ["pending", "running"].includes(job.thinkingStatus);
 			const prompt = typeof job.prompt === "string" ? job.prompt.trim() : "";
@@ -4890,7 +4971,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function ChatView({ state, actions }) {
-			const { config, providers, protocols, notes, jobs, busyJobIds, references, draft, conversations, conversationId, isVideoEndpoint, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft, sizeRaw, toggleJsonSize, jsonCustom, setJsonCustom, jsonBase, newFieldKey, setNewFieldKey, newFieldValue, setNewFieldValue } = state;
+			const { config, providers, protocols, notes, jobs, busyJobIds, references, draft, conversations, conversationId, isVideoEndpoint, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft, sizeRaw, toggleJsonSize, jsonCustom, setJsonCustom, jsonBase, newFieldKey, setNewFieldKey, newFieldValue, setNewFieldValue, modelTarget } = state;
 			const [overLimit, setOverLimit] = useState(false);
 			// 浮层只展示直出参数；编辑通过同一个 JSON 入口。
 			const [summaryOpen, setSummaryOpen] = useState(false);
@@ -5120,6 +5201,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						onSave: actions.exportAsset,
 						onDelete: actions.deleteJob,
 						onGrid: actions.openGrid,
+						onAddToModel: actions.openModelPicker,
 						onEdit: editInComposer
 					})
 				);
@@ -5138,6 +5220,47 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					}
 				},
 				/* 编辑当前会话的下一次请求：默认按字段改，需要时切到自定义 JSON。 */
+				modelTarget ? (() => {
+					const slots = state.modelSlots?.length ? state.modelSlots : ["front", "back", "side", "foot", "hand", "head", "ear", "chest", "thigh", "hairBack"];
+					const pool = state.models || [];
+					const drop = async (model, slot) => {
+						const ok = await actions.setModelSlot({ modelId: model.id, slot, url: modelTarget.url });
+						if (!ok) return;
+						actions.toast(t("muse.added", { name: model.name, slot: t(`slot.${slot}`) }));
+						actions.closeModelPicker();
+					};
+					return h(
+						WorkbenchDialog,
+						{ label: t("muse.addTo"), onDismiss: () => actions.closeModelPicker() },
+						h(
+							"div",
+							{ className: "vig-modal vig-muse-add", onClick: (event) => event.stopPropagation() },
+							h("span", { className: "vig-modal-title" }, t("muse.addTo")),
+							h("p", { className: "vig-muted", style: { fontSize: 12, margin: "4px 0 10px" } }, t("muse.addToHint")),
+							pool.length === 0
+								? h("p", { className: "vig-muted" }, t("muse.noModels"))
+								: h("div", { className: "vig-muse-add-list" }, pool.map((model) =>
+										h(
+											"div",
+											{ className: "vig-muse-add-model", key: model.id },
+											h("div", { className: "vig-muse-add-name" }, model.name),
+											h("div", { className: "vig-muse-add-slots" }, slots.map((slot) =>
+												h("button", {
+													key: slot, type: "button", className: "vig-btn",
+													"data-muse-add-slot": `${model.id}:${slot}`,
+													onClick: () => void drop(model, slot)
+												}, t(`slot.${slot}`))
+											))
+										)
+									)),
+							h(
+								"div",
+								{ style: { display: "flex", justifyContent: "flex-end", marginTop: 12 } },
+								h("button", { className: "vig-btn", onClick: () => actions.closeModelPicker() }, t("common.close"))
+							)
+						)
+					);
+				})() : null,
 				jsonOpen ? (() => {
 					let view = {};
 					try {
@@ -6989,6 +7112,129 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		/* ------------------------------------------------------------------ *
 		 * 信息管理
 		 * ------------------------------------------------------------------ */
+
+
+		/** 模特素材：一卡一模特，卡内十格；每格从图库挑一张，空着就摆提示位。 */
+		function ModelsView({ state, actions }) {
+			const slots = state.modelSlots?.length ? state.modelSlots : ["front", "back", "side", "foot", "hand", "head", "ear", "chest", "thigh", "hairBack"];
+			const assets = state.library || [];
+			const assetByUrl = useMemo(() => Object.fromEntries(assets.map((item) => [item.url, item])), [assets]);
+			const [picking, setPicking] = useState(null); // {modelId, slot}
+			const [query, setQuery] = useState("");
+			const candidates = useMemo(() => {
+				const needle = query.trim().toLowerCase();
+				if (!needle) return assets.slice(0, 60);
+				return assets.filter((asset) => `${asset.name} ${asset.prompt} ${asset.model}`.toLowerCase().includes(needle)).slice(0, 60);
+			}, [assets, query]);
+			const slotLabel = (slot) => t(`slot.${slot}`);
+			const filled = (model) => slots.filter((slot) => model.slots?.[slot]).length;
+			return h(
+				"div",
+				{ className: "vig-main vig-muse", "data-muse": "1" },
+				h(
+					"div",
+					{ className: "vig-main-head" },
+					h(Icon, { name: "user" }),
+					h("span", { className: "vig-item-title" }, t("muse.title")),
+					h("div", { className: "vig-spacer" }),
+					h("button", { className: "vig-btn is-primary", "data-muse-new": "1", onClick: () => void actions.createModel() }, t("muse.new"))
+				),
+				h(
+					"div",
+					{ className: "vig-main-body vig-muse-body" },
+					h("p", { className: "vig-muted vig-muse-sub" }, t("muse.sub")),
+					(state.models || []).length === 0
+						? h("div", { className: "vig-empty" }, t("muse.empty"))
+						: h(
+								"div",
+								{ className: "vig-muse-grid" },
+								state.models.map((model) =>
+									h(
+										"article",
+										{ className: "vig-muse-card", key: model.id, "data-muse-card": model.id },
+										h(
+											"header",
+											{ className: "vig-muse-card-head" },
+											h("span", { className: "vig-muse-name" }, model.name),
+											h("span", { className: "vig-muse-count" }, t("muse.fill", { n: filled(model) })),
+											h(
+												"div",
+												{ className: "vig-muse-acts" },
+												h("button", {
+													className: "vig-mini", title: t("muse.rename"),
+													onClick: () => {
+														const next = window.prompt(t("muse.nameAsk"), model.name);
+														if (next != null && next.trim()) void actions.saveModel({ id: model.id, name: next.trim() });
+													}
+												}, h(Icon, { name: "edit", size: 13 })),
+												h("button", {
+													className: "vig-mini is-danger", title: t("muse.delete"),
+													onClick: () => { if (window.confirm(t("muse.deleteAsk", { name: model.name }))) void actions.deleteModel(model.id); }
+												}, h(Icon, { name: "trash", size: 13 }))
+											)
+										),
+										h(
+											"div",
+											{ className: "vig-muse-slots" },
+											slots.map((slot) => {
+												const slotUrl = model.slots?.[slot] || "";
+												const asset = assetByUrl[slotUrl] || (slotUrl ? { url: slotUrl, name: slotUrl.split("/").pop() } : null);
+												return h(
+													"button",
+													{
+														type: "button", key: slot,
+														className: `vig-muse-slot${asset ? " is-filled" : ""}`,
+														"data-muse-slot": slot, "data-muse-model": model.id,
+														title: asset ? `${slotLabel(slot)} · ${asset.name}` : `${slotLabel(slot)} · ${t("muse.pick")}`,
+														onClick: () => { setQuery(""); setPicking({ modelId: model.id, slot }); }
+													},
+													asset
+														? h("img", { src: asset.url, alt: "", loading: "lazy" })
+														: h("span", { className: "vig-muse-slot-empty" }, h(Icon, { name: "plus", size: 14 }), h("span", null, slotLabel(slot)))
+												);
+											})
+										)
+									)
+								)
+							)
+				),
+				picking
+					? h(
+							WorkbenchDialog,
+							{ label: t("muse.pick"), onDismiss: () => setPicking(null) },
+							h(
+								"div",
+								{ className: "vig-modal vig-muse-pick", onClick: (event) => event.stopPropagation() },
+								h("span", { className: "vig-modal-title" }, `${slotLabel(picking.slot)} · ${t("muse.pick")}`),
+								h("input", {
+									className: "vig-input", style: { margin: "8px 0" }, value: query, placeholder: t("lib.search"),
+									"aria-label": t("muse.pick"), onChange: (event) => setQuery(event.target.value)
+								}),
+								h(
+									"div",
+									{ className: "vig-muse-pick-grid" },
+									candidates.map((asset) =>
+										h("button", {
+											type: "button", key: asset.id, className: "vig-muse-pick-item", "data-muse-candidate": asset.id,
+											title: asset.name,
+											onClick: async () => {
+												await actions.setModelSlot({ modelId: picking.modelId, slot: picking.slot, url: asset.url });
+												setPicking(null);
+											}
+										}, h("img", { src: asset.url, alt: "", loading: "lazy" }))
+									)
+								),
+								h(
+									"div",
+									{ style: { display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 } },
+									h("button", { className: "vig-btn", "data-muse-clear": "1", onClick: async () => { await actions.setModelSlot({ modelId: picking.modelId, slot: picking.slot, url: "" }); setPicking(null); } }, t("muse.clear")),
+									h("button", { className: "vig-btn", onClick: () => setPicking(null) }, t("common.close"))
+								)
+							)
+						)
+					: null
+			);
+		}
 
 		function NotesView({ state, actions }) {
 			const [editing, setEditing] = useState(null);
@@ -12925,6 +13171,11 @@ h(
 				setLibraryTotal(payload.total ?? rows.length);
 			};
 			const [notes, setNotes] = useState([]);
+			/* 模特素材：一卡一模特，卡内固定十格。 */
+			const [models, setModels] = useState([]);
+			/* 从结果卡「加入模特」带过来的图：{ assetId, name, url } */
+			const [modelTarget, setModelTarget] = useState(null);
+			const [modelSlots, setModelSlots] = useState([]);
 			const [presets, setPresets] = useState([]);
 			/* JSON 面板：基于当前草稿，仅将编辑过的字段绑定到下一次发送。 */
 			const [jsonOpen, setJsonOpen] = useState(false);
@@ -13325,6 +13576,8 @@ h(
 					setProviders(providerList.items || []);
 					replaceLibrary(lib);
 					setNotes(noteList.items || []);
+					setModels(Array.isArray(status.models) ? status.models : []);
+					setModelSlots(Array.isArray(status.modelSlots) ? status.modelSlots : []);
 					setPresets(presetList.items || status.presets || []);
 					/* 对话（会话）：挑一个当前对话（本地记着的那条还在就用它，否则用第一条），
 					   只拉这个会话的任务 —— 每个会话记忆互相隔离。 */
@@ -14064,6 +14317,47 @@ h(
 					setDraft((value) => `${value}${value.length === 0 ? "" : "\n"}${parts}`.slice(0, 500));
 					setView("chat");
 				},
+				openModelPicker: (image) => {
+					const assetId = image?.assetId || "";
+					if (!assetId) { toast(t("muse.onlyLibrary"), "err"); return; }
+					setModelTarget({ assetId, name: image.name || "", url: image.url || "" });
+				},
+				closeModelPicker: () => setModelTarget(null),
+				createModel: async () => {
+					const name = window.prompt(t("muse.nameAsk"), "");
+					if (name == null) return false;
+					return actions.saveModel({ name: name.trim() });
+				},
+				saveModel: async (model) => {
+					try {
+						const payload = await call("/muses/save", { method: "POST", body: model });
+						setModels(payload.items || []);
+						return true;
+					} catch (error) {
+						toast(String(error?.message ?? error), "err");
+						return false;
+					}
+				},
+				setModelSlot: async ({ modelId, slot, assetId }) => {
+					try {
+						const payload = await call("/muses/slot", { method: "POST", body: { modelId, slot, assetId } });
+						setModels(payload.items || []);
+						return true;
+					} catch (error) {
+						toast(String(error?.message ?? error), "err");
+						return false;
+					}
+				},
+				deleteModel: async (id) => {
+					try {
+						const payload = await call("/muses/delete", { method: "POST", body: { id } });
+						setModels(payload.items || []);
+						return true;
+					} catch (error) {
+						toast(String(error?.message ?? error), "err");
+						return false;
+					}
+				},
 				saveNote: async (note) => {
 					try {
 						const payload = await call("/notes", { method: "POST", body: note });
@@ -14238,6 +14532,9 @@ h(
 				providers,
 				library, libraryTotal, libraryLoadingMore, storageBusy:storageMoveLock.busy,
 				notes,
+				models,
+				modelSlots,
+				modelTarget,
 				presets,
 				protocols,
 				jobs,
@@ -14277,6 +14574,7 @@ h(
 				{ id: "library", icon: "grid", label: t("nav.library") },
 				{ id: "notes", icon: "note", label: t("nav.notes") },
 				{ id: "ps", icon: "crop", label: t("nav.ps") },
+				{ id: "models", icon: "user", label: t("nav.models") },
 				{ id: "providers", icon: "provider", label: t("nav.providers") }
 			];
 
@@ -14289,6 +14587,8 @@ h(
 							? h(NotesView, { state, actions })
 							: view === "ps"
 								? h(PsView, { state, actions, initialUrl: psImage, onConsumeInitialUrl: actions.clearPsImage })
+								: view === "models"
+								? h(ModelsView, { state, actions })
 								: h(ProvidersView, { state, actions });
 
 			return h(FeedbackContext?.Provider || react.Fragment, FeedbackContext ? {value:toasts} : null, h(

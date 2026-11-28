@@ -613,9 +613,9 @@ const PRESETS = [
     ids.join(" ")
   );
   check("每个动作都有图标和中英文案", ui.PS_TOOLS.every((item) => item.icon && text(`ps.tool.${item.id}`) && text(`ps.tool.${item.id}`) !== `ps.tool.${item.id}`));
-  check("左侧导航里有「图片处理」这一项", ["对话生图", "图片管理", "信息管理", "图片处理", "供应商管理"].every((label) => chat.includes(label)));
+  check("左侧导航六项齐全（含模特素材）", ["对话生图", "图片管理", "信息管理", "图片处理", "模特素材", "供应商管理"].every((label) => chat.includes(label)));
   // 只数 DOM 里的 class（CSS 里同名字符串也算「出现」，会把计数搅乱）
-  check("导航项是五的倍数（每个落点各渲染一份）", (chat.match(/class="vig-nav-item/g) || []).length % 5 === 0, String((chat.match(/class="vig-nav-item/g) || []).length));
+  check("导航项是六的倍数（每个落点各渲染一份）", (chat.match(/class="vig-nav-item/g) || []).length % 6 === 0, String((chat.match(/class="vig-nav-item/g) || []).length));
 
   const tiles = ui.psSplitTiles(120, 80, 3, 2);
   check("切割 3×2 = 6 块且面积铺满", tiles.length === 6 && tiles.reduce((sum, item) => sum + item.w * item.h, 0) === 120 * 80);

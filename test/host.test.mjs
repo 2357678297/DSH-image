@@ -265,6 +265,41 @@ const catalogList = await call("/models?providerId=catalog");
 check("GET /models 回目录条目（含 models id 数组）", catalogList.body?.items?.length === 3 && catalogList.body?.models?.length === 3);
 await new Promise((resolve) => catalogServer.close(resolve));
 
+/* ---- 2b2. 模特素材：一卡一模特，十格固定 ---------------- */
+{
+  const created = await call("/muses/save", { method: "POST", body: { name: "模特 A" } });
+  const modelId = created.body?.item?.id;
+  check("POST /muses/save 建卡：返回 id 与名字", created.status === 200 && !!modelId && created.body.item.name === "模特 A", JSON.stringify(created.body?.item?.name));
+
+  const list = await call("/muses");
+  check("GET /muses 列出模特与十格定义", list.status === 200 && list.body.items.some((item) => item.id === modelId) && list.body.slots.includes("hairBack"));
+
+  const uploaded = await call("/upload", { method: "POST", body: { name: "muse.png", data: `data:image/png;base64,${tinyPng}` } });
+  const uploadId = uploaded.body?.item?.id;
+
+  const badSlot = await call("/muses/slot", { method: "POST", body: { modelId, slot: "elbow", assetId: uploadId } });
+  check("POST /muses/slot 拒收未知格位（400）", badSlot.status === 400 && badSlot.body?.code === "bad_slot");
+
+  const badAsset = await call("/muses/slot", { method: "POST", body: { modelId, slot: "front", url: "https://evil.example/x.png" } });
+  check("POST /muses/slot 拒收外链地址（400）", badAsset.status === 400 && badAsset.body?.code === "asset_missing");
+
+  const smallPng = (await call("/upload", { method: "POST", body: { name: "muse2.png", data: `data:image/png;base64,${tinyPng}` } })).body?.item;
+  const placed = await call("/muses/slot", { method: "POST", body: { modelId, slot: "front", url: smallPng.url } });
+  check("POST /muses/slot 放进图库里的图并落盘", placed.status === 200 && placed.body.item.slots.front === smallPng.url && JSON.parse(fs.readFileSync(path.join(stateDir, "models.json"), "utf8")).find((item) => item.id === modelId)?.slots?.front === smallPng.url);
+
+  const cleared = await call("/muses/slot", { method: "POST", body: { modelId, slot: "front", assetId: "" } });
+  check("POST /muses/slot 空 assetId = 清空该格", cleared.status === 200 && cleared.body.item.slots.front === undefined);
+
+  const missing = await call("/muses/slot", { method: "POST", body: { modelId: "model_nope", slot: "front", url: smallPng.url } });
+  check("POST /muses/slot 模特不存在（404）", missing.status === 404 && missing.body?.code === "model_missing");
+
+  const renamed = await call("/muses/save", { method: "POST", body: { id: modelId, name: "模特 B" } });
+  check("POST /muses/save 带 id = 改名而不是新建", renamed.status === 200 && renamed.body.item.name === "模特 B" && renamed.body.items.filter((item) => item.id === modelId).length === 1);
+
+  const removed = await call("/muses/delete", { method: "POST", body: { id: modelId } });
+  check("POST /muses/delete 删卡", removed.status === 200 && !removed.body.items.some((item) => item.id === modelId));
+}
+
 /* ---- 2c. 预设卡：内置种子 + 增删改 + 随包参考图 -------------------- */
 
 const presets = await call("/presets");

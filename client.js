@@ -2649,6 +2649,10 @@ body[data-ds-dark-theme] .vig-tools-pop{background:rgba(20,20,22,.96)}
 .vig-brand-lockup img{display:block;width:min(150px,100%);height:auto}
 .vig-brand-lockup:hover{background:var(--vig-surface-sunken)}
 .vig-brand-lockup:focus-visible{outline:2px solid var(--vig-accent);outline-offset:2px}
+/* 标签标题：品牌标 + 标题文字，宿主标签栏里不再留空图标位。 */
+.vig-tab-title{display:inline-flex;align-items:center;gap:6px;min-width:0;overflow:hidden}
+.vig-tab-title>svg{flex:none;display:block;border-radius:4px}
+.vig-tab-title-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 窄栏（宿主宽度不足）不摆锁标：它只占高度，会把参数面板挤到发送键上。 */
 .vig-root[data-compact="1"] .vig-brand-lockup{display:none}
 .vig-update{display:flex;flex-direction:column;gap:6px;padding:10px 2px 2px}
@@ -14837,6 +14841,19 @@ h(
 					slots.inject("sidebar.right.pane.tab", () =>
 						slots.register({ name: "sidebar.right.pane.tab", key: TAB_ID }, function RightbarPane() {
 							return h(PluginBoundary, null, h(PaneHost, null, h(Workbench, { onOpenInRightbar: null })));
+						})
+					);
+					/* 标签标题插槽：宿主 renderSlot 按注册项的 id 匹配（entryKey = definition.id），
+					   所以在同名插槽里用 TAB_ID 注册就能接管标题——把品牌标画在标题前面。 */
+					slots.inject("sidebar.right.pane.tab.title", () =>
+						slots.register({ name: "sidebar.right.pane.tab.title", key: TAB_ID }, function RightbarTabTitle(props) {
+							const label = typeof props?.fallback === "string" && props.fallback ? props.fallback : t("tab.title");
+							return h(
+								"span",
+								{ className: "vig-tab-title", "data-vig-tab-title": "1" },
+								h(BrandIcon, { size: 14 }),
+								h("span", { className: "vig-tab-title-text" }, label)
+							);
 						})
 					);
 				} catch (error) {

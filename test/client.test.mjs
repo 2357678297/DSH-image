@@ -308,8 +308,10 @@ check("注册带唯一 id", tabDef?.id === "dsh-plugin-velapi-image-go", String(
 check("priority 是档位字符串而非数字", tabDef?.priority === "extension", String(tabDef?.priority));
 check("面板席位用注册 id 当 key", mounted.slots.get("sidebar.right.pane.tab")?.options?.key === "dsh-plugin-velapi-image-go");
 check(
-  "不重复注册标题席（宿主自己会渲染 tab 标题，重复注册会在右上角多出一个标题）",
-  mounted.slots.has("sidebar.right.pane.tab.title") === false
+  "接管标签标题插槽：品牌标 + 标题一起渲染（宿主的 renderSlot 有注册项就用注册项）",
+  /slots\.inject\("sidebar\.right\.pane\.tab\.title"/.test(SOURCE) &&
+    SOURCE.includes('"data-vig-tab-title"') &&
+    /name: "sidebar\.right\.pane\.tab\.title", key: TAB_ID/.test(SOURCE)
 );
 check(
   "贡献「开始页」条目（右侧栏空白处的那个按钮）",
@@ -351,6 +353,7 @@ check("没有渲染出 undefined", !/undefined/.test(chat), chat.match(/undefine
 
 const pane = htmlFor(mounted.slots, "sidebar.right.pane.tab");
 check("右侧栏 tab 也能渲染", pane.includes('data-brand-lockup="1"') && pane.length > 500, `${pane.length} bytes`);
+check("接管标签标题插槽：品牌标 + 标题一起渲染", (()=>{const reg=mounted.slots.registrations ?? []; return reg.some(r=>r.name==="sidebar.right.pane.tab.title");})() || SOURCE.includes('slots.inject("sidebar.right.pane.tab.title"') , "source check");
 
 // 停靠面板默认展开：DSH 自更新会换端口 → origin 变 → localStorage 清空，
 // 默认收起就等于「更新完插件不见了」。只有用户亲手存过 "0" 才收起。

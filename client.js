@@ -3086,6 +3086,8 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		};
 
 		const REPO_URL = "https://github.com/2357678297/DSH-image";
+/** 左侧栏面板 id（顶部功能栏那一行用它选中面板）。 */
+const PANEL_ID = "velapi-image-go";
 		/* 品牌标：仓库 assets/brand/blue-badge-96.png 的 96px 内联副本（原图在该目录的 @4x 里）。
 		   内联而不是走 HTTP：图标要在首屏立刻出现，且不依赖宿主能否读插件静态目录。 */
 		/* 横版锁标（Vell 洼浪）：侧栏底部「更新」上方那一块用它。 */
@@ -15205,21 +15207,24 @@ h(
 								patterns: [`sidebar://${KIND}`],
 								title: () => t("tab.title"),
 								icon: BrandIcon,
-								keepMounted: true,
-								guide: [
-									{
-										id: "open-workbench",
-										order: 20,
-										icon: GuideIcon,
-										title: () => t("tab.title"),
-										description: () => t("guide.desc")
-									}
-								]
+								keepMounted: true
 							}),
 						"velapi-image-go: rightbar tab type"
 					);
 					slots.inject("sidebar.right.pane.tab", () =>
 						slots.register({ name: "sidebar.right.pane.tab", key: TAB_ID }, function RightbarPane() {
+							return h(PluginBoundary, null, h(PaneHost, null, h(Workbench, { onOpenInRightbar: null })));
+						})
+					);
+					/* 左侧栏顶部「功能栏」入口：面板图标 + 面板主体（main 槽按同一个 id 取内容）。 */
+					slots.inject("sidebar.panellist", () =>
+						slots.register(
+							{ name: "sidebar.panellist", id: PANEL_ID, order: 30, label: () => t("tab.title") },
+							function WorkbenchPanelIcon({ size }) { return h(BrandIcon, { size: size ?? 18 }); }
+						)
+					);
+					slots.inject("main", () =>
+						slots.register({ name: "main", key: PANEL_ID }, function WorkbenchPanel() {
 							return h(PluginBoundary, null, h(PaneHost, null, h(Workbench, { onOpenInRightbar: null })));
 						})
 					);

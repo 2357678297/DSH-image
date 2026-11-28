@@ -314,21 +314,14 @@ check(
     /name: "sidebar\.right\.pane\.tab\.title", key: TAB_ID/.test(SOURCE)
 );
 check(
-  "贡献「开始页」条目（右侧栏空白处的那个按钮）",
-  Array.isArray(tabDef?.guide) &&
-    tabDef.guide.length === 1 &&
-    Number.isFinite(tabDef.guide[0].order) &&
-    typeof tabDef.guide[0].icon === "function",
-  JSON.stringify(tabDef?.guide?.map((entry) => ({ id: entry.id, order: entry.order })))
+  "入口挪到左侧栏顶部功能栏：注册 sidebar.panellist + main 面板",
+  /slots\.inject\("sidebar\.panellist"/.test(SOURCE) &&
+    /name: "sidebar\.panellist", id: PANEL_ID, order: 30, label: \(\) => t\("tab\.title"\)/.test(SOURCE) &&
+    /slots\.inject\("main"/.test(SOURCE) &&
+    /name: "main", key: PANEL_ID/.test(SOURCE),
+  "panellist + main"
 );
-check(
-  "条目的标题/描述是惰性文案且能取值",
-  tabDef.guide[0].title() === "生图工作台" && tabDef.guide[0].description() === "对话生图 · 图库 · 供应商",
-  `${tabDef.guide[0].title()} / ${tabDef.guide[0].description()}`
-);
-const guideIconMarkup = renderToStaticMarkup(React.createElement(tabDef.guide[0].icon, { size: 26 }));
-check("条目图标能渲染成 svg（宿主的 EntryBox 会这么调）", guideIconMarkup.startsWith("<svg"), guideIconMarkup.slice(0, 40));
-check("条目标题可渲染", tabDef.guide[0].title() === "生图工作台");
+check("不再贡献开始页条目（底栏那条随 guide 一起撤掉）", tabDef?.guide === undefined, JSON.stringify(tabDef?.guide));
 
 /* ---- 3. 真的渲染出界面 ------------------------------------------- */
 
@@ -2236,19 +2229,15 @@ check(
   const before = late.fetchCalls.length;
   late.waiters[0].callback(late.makeScope(true));
   check(
-    "sidebarRightTabs 一到货：tab 类型 + 开始页那张卡 + 面板席位都补上",
-    late.tabDefs.length === 1 &&
-      late.tabDefs[0].kind === "velapi-image-go" &&
-      late.tabDefs[0].id === "dsh-plugin-velapi-image-go" &&
-      Array.isArray(late.tabDefs[0].guide) &&
-      late.tabDefs[0].guide[0]?.id === "open-workbench" &&
-      late.tabDefs[0].guide[0]?.order === 20 &&
-      late.slots.has("sidebar.right.pane.tab") &&
-      late.slots.get("sidebar.right.pane.tab")?.options?.key === "dsh-plugin-velapi-image-go" &&
-      late.sandbox.window.__velapiImageGo?.rightbarReady === true &&
-      late.sandbox.window.__velapiImageGo?.rightbarWaiting === false,
-    `tabDefs=${late.tabDefs.length}`
-  );
+    "sidebarRightTabs 一到货：tab 类型 + 面板席位都补上",
+  late.tabDefs.length === 1 &&
+    late.tabDefs[0].kind === "velapi-image-go" &&
+    late.slots.has("sidebar.right.pane.tab") &&
+    late.slots.has("sidebar.right.pane.tab.title") &&
+    late.slots.has("sidebar.panellist") &&
+    late.slots.has("main"),
+  JSON.stringify({ tabDefs: late.tabDefs.length })
+);
   check(
     "补登记之后发回执：服务面快照 + dom 实况一起写回宿主（宿主侧落盘 client-report.json）",
     late.fetchCalls.length > before &&
@@ -2271,12 +2260,9 @@ check(
   );
   guarded.waiters[0].callback(guarded.makeScope(true));
   check(
-    "守卫那一档：席位到货后照样把 tab 类型 + 开始页卡片补上",
-    guarded.tabDefs.length === 1 &&
-      guarded.tabDefs[0].guide?.[0]?.id === "open-workbench" &&
-      guarded.sandbox.window.__velapiImageGo?.rightbarReady === true,
-    `tabDefs=${guarded.tabDefs.length}`
-  );
+    "守卫那一档：席位到货后照样把 tab 类型与面板入口补上",
+  guarded.tabDefs.length === 1 && guarded.slots.has("sidebar.panellist") && guarded.slots.has("main")
+);
   check(
     "登记过程留痕：探针被守卫拒绝的原文 + 尝试次数都会发回宿主",
     /let rightbarProbeError = "";/.test(SOURCE) &&
@@ -2338,7 +2324,7 @@ check(
     /reportClient\("settled"/.test(SOURCE) &&
     /function serviceSnapshot\(scope\)/.test(SOURCE) &&
     /hasKind/.test(SOURCE) &&
-    /guide:/.test(SOURCE) &&
+    /sidebar\.panellist"/.test(SOURCE) &&
     /function domSnapshot\(\)/.test(SOURCE) &&
     /guideHost: document\.querySelectorAll\("\[data-sidebar-right-guide\]"\)\.length/.test(SOURCE) &&
     /launcher: Boolean\(document\.querySelector\("\.vig-launch"\)\)/.test(SOURCE)

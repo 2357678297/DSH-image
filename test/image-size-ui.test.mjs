@@ -128,8 +128,15 @@ export async function auditImageSizeUI({host,check,wait,waitFor,flushSync,posts}
 
     // 字段视图：勾选态来自「与标准值的差异」，取消勾选即回到标准值。
     editor=await openJson();const field=key=>need(get('[data-json-field="'+key+'"]'),'字段 '+key),box=key=>need(get('[data-json-check="'+key+'"]'),'勾选 '+key);
-    check('默认按字段编辑：中文名与原始字段名并列，未改动不勾选',!!get('[data-json-fields]')&&get('[data-json-fields]').textContent.includes('提示词')&&get('[data-json-fields]').textContent.includes('quality')&&!box('quality').checked);
+    check('默认按字段编辑：中文名与可改的字段名并列，未改动不勾选',!!get('[data-json-fields]')&&get('[data-json-fields]').textContent.includes('提示词')&&!!get('[data-json-rename="quality"]')&&!box('quality').checked);
     const jsonKeys=Object.keys(parseJson()),rowKeys=all('[data-json-row]').map(n=>n.getAttribute('data-json-row'));
+    check('没有可见的原始文本框：编辑入口只有表格',get('[data-json-editor]').hidden===true&&!!get('[data-json-fields]'));
+    check('数组字段在表格里按 JSON 文本可编辑',!!get('[data-json-json="referenceUrls"]')&&!get('[data-json-fields]').textContent.includes('切到'));
+    const arrBox=()=>get('[data-json-json="referenceUrls"]');set(arrBox(),'["https://example.com/qa.png"]');flushSync(()=>arrBox().dispatchEvent(new FocusEvent('focusout',{bubbles:true})));
+    await until(()=>Array.isArray(parseJson().referenceUrls)&&parseJson().referenceUrls[0]==='https://example.com/qa.png','数组改动生效');
+    check('数组在表格里改成合法 JSON 会落地',Array.isArray(parseJson().referenceUrls)&&parseJson().referenceUrls.length===1);
+    set(arrBox(),'{坏值');flushSync(()=>arrBox().dispatchEvent(new FocusEvent('focusout',{bubbles:true})));await wait(80);
+    check('数组写成非法 JSON 会还原，不污染请求体',Array.isArray(parseJson().referenceUrls)&&parseJson().referenceUrls[0]==='https://example.com/qa.png',String(arrBox().value));
     check('表格覆盖请求体里的每一个字段，键与行一一对应',jsonKeys.length>0&&rowKeys.length===jsonKeys.length&&jsonKeys.every(k=>rowKeys.includes(k)),JSON.stringify({rows:rowKeys,keys:jsonKeys}));
     const newKey=get('[data-json-new-key]'),newValue=get('[data-json-new-value]'),addButton=get('[data-json-add-apply]');
     set(newKey,'seed');set(newValue,'42');click(addButton);await until(()=>!!get('[data-json-row="seed"]'),'新增字段入表');
@@ -152,9 +159,6 @@ export async function auditImageSizeUI({host,check,wait,waitFor,flushSync,posts}
     check('取消勾选回到标准值',parseJson().quality===standardQuality,JSON.stringify({standard:standardQuality,now:parseJson().quality}));
     const secondQuality=qualities.find(q=>q!==standardQuality&&q!==firstQuality)||firstQuality;
     set(field('quality'),secondQuality);await until(()=>box('quality').checked,'再次勾选');
-    click(get('[data-json-mode="custom"]'));await until(()=>get('[data-json-editor]').hidden===false,'切到自定义 JSON');
-    check('自定义 JSON 按钮展开原文并收起字段表',parseJson().quality===secondQuality&&!get('[data-json-fields]'));
-    click(get('[data-json-mode="fields"]'));await until(()=>!!get('[data-json-fields]'),'切回字段');
     click(get('[data-json-apply]'));await until(()=>!get('[data-json-editor]'),'应用字段覆盖');
     body=await submit('imagesize field view fixture');
     check('字段覆盖如实进入下一次请求',body.quality===secondQuality,bodyDetail(body));

@@ -649,6 +649,7 @@ function writeConvSetting(id, settings) {
 			"json.remove": "删除字段",
 			"json.keyInvalid": "字段名只能用字母、数字、下划线和点，不能重复。",
 			"json.customField": "自定字段",
+			"json.invalidValue": "值不是合法 JSON，已还原。",
 			"chat.jsonHint": "修改的字段仅用于本会话的下一次发送；会话 ID 由工作台管理。size 是档位，aspect_ratio 是宽高比。关闭原样发送则转换为像素。",
 			"chat.jsonApply": "应用",
 			"chat.jsonReset": "恢复默认",
@@ -1455,6 +1456,7 @@ function writeConvSetting(id, settings) {
 			"json.remove": "Remove field",
 			"json.keyInvalid": "Field names allow letters, digits, underscore and dot only, and must be unique.",
 			"json.customField": "Custom",
+			"json.invalidValue": "Not valid JSON; reverted.",
 			"chat.geminiRatio": "Image aspect ratio", "chat.geminiSize": "Image resolution",
 			"chat.geminiRatioAuto": "Auto", "chat.geminiRatioAutoHint": "Auto: omit the fixed ratio. With references, let the model follow the original framing; otherwise let it choose.",
 			"prov.shortRerank": "Rerank",
@@ -2844,7 +2846,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
  .vig-root .vig-ps-aside-toggle{position:static;grid-area:5/1;justify-self:end}
  .vig-ps-params-head{cursor:default!important;touch-action:auto!important}
 }
-.vig-json-modal{width:min(560px,100%);max-height:min(90dvh,100%)}
+.vig-json-modal{width:min(780px,100%);max-height:min(90dvh,100%)}
 /* 表单、图库和管理列表按工作区本身重排；查看器仍是独立全屏工具。 */
 .vig-dialog-frame{box-sizing:border-box;inset:auto;margin:0;border:0;max-width:none;max-height:none;color:var(--vig-text);padding:clamp(6px,2%,18px);overflow:hidden}
 .vig-viewer.vig-dialog-frame{container:vig-viewer / inline-size}
@@ -2911,25 +2913,26 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-json-editor{box-sizing:border-box;width:100%;height:clamp(100px,36dvh,320px);max-height:56dvh;font:12px ui-monospace,monospace;resize:vertical}
 .vig-json-editor[hidden]{display:none}
 .vig-json-table{display:grid;gap:1px;border:1px solid var(--vig-line);border-radius:var(--vig-r-tile);background:var(--vig-line);overflow:hidden}
-.vig-json-row{display:grid;grid-template-columns:24px minmax(88px,auto) minmax(0,1fr);align-items:center;gap:8px;padding:4px 8px;background:var(--vig-surface-sunken)}
+.vig-json-row{display:grid;grid-template-columns:24px minmax(148px,auto) minmax(0,1fr) 22px;align-items:center;gap:8px;padding:4px 8px;background:var(--vig-surface-sunken)}
 .vig-json-row.is-on{background:var(--vig-surface)}
 .vig-json-row.is-locked{opacity:.7}
 .vig-json-row-check{margin:0;width:14px;height:14px;accent-color:var(--vig-accent)}
-.vig-json-row-name{display:flex;align-items:baseline;gap:6px;min-width:0}
-.vig-json-row-label{font-size:12.5px;font-weight:500;color:var(--vig-text);white-space:nowrap}
+.vig-json-row-name{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:nowrap}.vig-json-row-name input.vig-json-row-key-input{width:clamp(56px,7vw,96px);min-width:0;flex:0 0 auto;height:24px;padding:0 6px;font:11.5px ui-monospace,monospace}
+.vig-json-row-label{font-size:12.5px;font-weight:500;color:var(--vig-text);white-space:nowrap;flex:none}
 .vig-json-row-key{font:11px ui-monospace,monospace;color:var(--vig-text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vig-json-row-value{font:11px ui-monospace,monospace;color:var(--vig-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
 .vig-json-row :is(input.vig-input,.vig-sel){width:100%;min-width:0;height:28px;font-size:12.5px}
 .vig-json-row input.vig-input{box-sizing:border-box;padding:0 9px;border:1px solid var(--vig-line-strong);border-radius:8px;background:var(--vig-surface);color:var(--vig-text);font:12.5px/1 var(--vig-font)}
+.vig-json-row select.vig-sel{box-sizing:border-box;width:100%;max-width:none;min-width:0}
 .vig-json-row input.vig-input::placeholder{color:var(--vig-text-faint)}
 .vig-json-row input.vig-input:focus-visible,.vig-json-row .vig-sel:focus-visible{outline:2px solid var(--vig-accent);outline-offset:1px}
 .vig-json-row.is-on input.vig-input{border-color:var(--vig-accent-line)}
 .vig-json-empty{padding:14px;text-align:center;font-size:12px;color:var(--vig-text-muted)}
 .vig-json-row-del{flex:none;display:grid;place-items:center;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--vig-text-faint);font-size:14px;line-height:1;cursor:pointer}
 .vig-json-row-del:hover{background:var(--vig-surface-sunken);color:var(--danger,#d92121)}
-.vig-json-row{grid-template-columns:24px minmax(84px,auto) minmax(0,1fr) 22px}
+.vig-json-row{grid-template-columns:24px minmax(148px,auto) minmax(0,1fr) 22px}
 .vig-json-row-name input.vig-input{height:24px;padding:0 6px;font:11.5px ui-monospace,monospace}
-.vig-json-add{display:grid;grid-template-columns:24px minmax(84px,auto) minmax(0,1fr) auto;align-items:center;gap:8px;margin:0 0 8px;padding:6px 8px;border:1px dashed var(--vig-line-strong);border-radius:var(--vig-r-tile);background:var(--vig-surface-soft)}
+.vig-json-add{display:grid;grid-template-columns:24px minmax(148px,auto) minmax(0,1fr) auto;align-items:center;gap:8px;margin:0 0 8px;padding:6px 8px;border:1px dashed var(--vig-line-strong);border-radius:var(--vig-r-tile);background:var(--vig-surface-soft)}
 .vig-json-add input.vig-input{box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 9px;border:1px solid var(--vig-line-strong);border-radius:8px;background:var(--vig-surface);color:var(--vig-text);font:12.5px/1 var(--vig-font)}
 .vig-json-add .vig-btn{height:28px;min-height:28px;padding:0 10px;font-size:12px}
 .vig-json-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px}
@@ -5165,7 +5168,22 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 					const fieldControl = (key) => {
 						const raw = Object.hasOwn(view, key) ? view[key] : undefined;
 						if (LOCKED_FIELDS.has(key)) return h("span", { className: "vig-json-row-value", title: t("json.locked") }, summary(raw));
-						if (raw !== null && raw !== undefined && typeof raw === "object") return h("span", { className: "vig-json-row-value", title: t("json.complexHint") }, summary(raw));
+						if (raw !== null && typeof raw === "object") {
+							// 数组 / 对象：在行内按 JSON 文本编辑，失焦解析；写坏了就还原并提示。
+							const text = JSON.stringify(raw, null, 2);
+							return h("textarea", {
+								className: "vig-input vig-json-value-json", "data-json-field": key, "data-json-json": key,
+								defaultValue: text, "aria-label": `${FIELD_LABELS[key] || key}（${key}，JSON）`,
+								onBlur: (event) => {
+									try {
+										actions.writeJsonField(key, JSON.parse(event.target.value));
+									} catch (error) {
+										actions.toast(t("json.invalidValue"), "err");
+										event.target.value = text;
+									}
+								}
+							});
+						}
 						const shared = {
 							"data-json-field": key,
 							"aria-label": `${FIELD_LABELS[key] || key}（${key}）`,
@@ -5178,10 +5196,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 						const options = FIELD_SELECTS[key];
 						if (options) {
 							const list = options.some((option) => option.value === shared.value) ? options : [...options, { value: shared.value, label: shared.value || "—" }];
-							return h("select", { ...shared, className: "vig-sel" }, list.map((option) => h("option", { key: option.value, value: option.value }, option.label)));
+							return h("select", { ...shared, className: "vig-sel", style: { width: "100%", maxWidth: "none" } }, list.map((option) => h("option", { key: option.value, value: option.value }, option.label)));
 						}
 						if (typeof raw === "boolean") {
-							return h("select", { ...shared, className: "vig-sel" }, ["true", "false"].map((value) => h("option", { key: value, value }, value)));
+							return h("select", { ...shared, className: "vig-sel", style: { width: "100%", maxWidth: "none" } }, ["true", "false"].map((value) => h("option", { key: value, value }, value)));
 						}
 						return h("input", { ...shared, className: "vig-input", type: typeof raw === "number" ? "number" : "text" });
 					};
@@ -5192,16 +5210,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 							"div",
 							{ className: "vig-modal vig-json-modal", onClick: (event) => event.stopPropagation() },
 							h("span", { className: "vig-modal-title" }, t("chat.jsonBody")),
-							h("p", { className: "vig-muted", style: { fontSize: 12, margin: "4px 0 10px" } }, jsonCustom ? t("chat.jsonCustomHint") : t("json.tableHint")),
+							h("p", { className: "vig-muted", style: { fontSize: 12, margin: "4px 0 10px" } }, t("json.tableHint")),
 							h(
 								"div",
 								{ className: "vig-json-head" },
-								h(
-									"div",
-									{ className: "vig-json-modes", role: "group" },
-									h("button", { type: "button", className: "vig-btn", "data-json-mode": "fields", "aria-pressed": !jsonCustom, onClick: () => setJsonCustom(false) }, t("chat.jsonShowFields")),
-									h("button", { type: "button", className: "vig-btn", "data-json-mode": "custom", "aria-pressed": jsonCustom, onClick: () => setJsonCustom(true) }, t("chat.jsonCustom"))
-								),
 								h("span", { className: "vig-json-badge" }, t("chat.jsonOverridden", { n: overriddenCount }))
 							),
 							h(
@@ -5239,7 +5251,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 									onClick: () => { if (actions.addJsonField(newFieldKey, newFieldValue)) { setNewFieldKey(""); setNewFieldValue(""); } }
 								}, t("json.add"))
 							),
-							jsonCustom ? null : h(
+							h(
 								"div",
 								{ className: "vig-json-fields", "data-json-fields": "1" },
 								keys.length === 0
@@ -5258,7 +5270,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 											}),
 											h("div", { className: "vig-json-row-name" },
 												h("span", { className: "vig-json-row-label", title: locked ? t("json.locked") : undefined }, FIELD_LABELS[key] || t("json.customField")),
-												FIELD_LABELS[key] || locked
+												locked
 													? h("code", { className: "vig-json-row-key" }, key)
 													: h("input", {
 														className: "vig-input vig-json-row-key-input", "data-json-rename": key,
@@ -5275,10 +5287,10 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 										);
 									})),
 							),
+							/* 原始文本副本：不显示，只给自动化与排错读取完整请求体。 */
 							h("textarea", {
 								className: "vig-input vig-json-editor", "aria-label": t("chat.jsonBody"),
-								"data-json-editor": "1",
-								hidden: !jsonCustom,
+								"data-json-editor": "1", hidden: true,
 								value: jsonDraft,
 								onChange: (event) => setJsonDraft(event.target.value)
 							}),

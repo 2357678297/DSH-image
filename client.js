@@ -2546,7 +2546,7 @@ body[data-ds-dark-theme] .vig-send:hover{background:#fff}
 .vig-density-btn.is-on{background:var(--vig-accent);color:var(--vig-surface)}
 .vig-tiles[data-density="compact"]{grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px;padding:12px}
 .vig-tiles[data-density="large"]{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;padding:18px}
-.vig-tile{min-width:0;align-self:start}
+.vig-tile{min-width:0;align-self:start;content-visibility:auto;contain-intrinsic-size:auto 210px}
 .vig-tile img{height:auto;aspect-ratio:1/1;width:100%;object-fit:cover;display:block}
 .vig-tiles[data-density="compact"] .vig-tile-sub{display:none}
 .vig-tiles[data-density="compact"] .vig-tile-acts .vig-mini{width:22px;min-width:22px;height:22px}
@@ -2719,7 +2719,7 @@ body[data-ds-dark-theme] .vig-tools-pop{background:rgba(20,20,22,.96)}
 .vig-muse-slot-empty{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;line-height:1.25;text-align:center;padding:2px}
 .vig-muse-pick{width:min(720px,100%)}
 .vig-muse-pick-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;max-height:min(52dvh,420px);overflow:auto}
-.vig-muse-pick-item{padding:0;border:1px solid var(--vig-line);border-radius:8px;overflow:hidden;background:var(--vig-surface-sunken);cursor:pointer;aspect-ratio:1}
+.vig-muse-pick-item{content-visibility:auto;contain-intrinsic-size:auto 96px;padding:0;border:1px solid var(--vig-line);border-radius:8px;overflow:hidden;background:var(--vig-surface-sunken);cursor:pointer;aspect-ratio:1}
 .vig-muse-pick-item img{display:block;width:100%;height:100%;object-fit:cover}
 .vig-muse-pick-item:hover{border-color:var(--vig-accent-line)}
 .vig-muse-add{width:min(720px,100%)}
@@ -7263,7 +7263,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												await actions.setModelSlot({ modelId: picking.modelId, slot: picking.slot, url: asset.url });
 												setPicking(null);
 											}
-										}, h("img", { src: asset.thumbUrl || asset.url, alt: "", loading: "lazy", decoding: "async" }))
+										}, h(GalleryThumb, { asset }))
 									)
 								),
 								matched.length > shown

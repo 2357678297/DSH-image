@@ -255,6 +255,7 @@ function writeConvSetting(id, settings) {
 			"tab.title": "生图工作台",
 			"guide.desc": "对话生图 · 图库 · 供应商",
 			"nav.title": "API 对话生图工作台",
+			"nav.github": "在 GitHub 打开 DSH-image",
 			"nav.kicker": "STUDIO",
 			"nav.chat": "对话生图",
 			"nav.library": "图片管理",
@@ -946,6 +947,7 @@ function writeConvSetting(id, settings) {
 			"tab.title": "Image workbench",
 			"guide.desc": "Chat to image · library · providers",
 			"nav.title": "API Chat-to-Image Workbench",
+			"nav.github": "Open DSH-image on GitHub",
 			"nav.kicker": "STUDIO",
 			"nav.chat": "Chat",
 			"nav.library": "Library",
@@ -2997,9 +2999,24 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 			move: "M8 2.4v11.2M2.4 8h11.2M8 2.4L6.2 4.2M8 2.4l1.8 1.8M8 13.6l-1.8-1.8M8 13.6l1.8-1.8M2.4 8l1.8-1.8M2.4 8l1.8 1.8M13.6 8l-1.8-1.8M13.6 8l-1.8 1.8"
 		};
 
+		const REPO_URL = "https://github.com/2357678297/DSH-image";
+
+		/** 品牌标：蓝底白字的圆角块，和仓库里的品牌图同一套语汇。 */
+		function BrandIcon({ size = 24, className }) {
+			return h(
+				"svg",
+				{ className: className ?? "vig-brand-ic", width: size, height: size, viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false" },
+				h("rect", { x: 0, y: 0, width: 24, height: 24, rx: 7, fill: "#0b2ea8" }),
+				h("path", {
+					d: "M5.1 7.3c1.35 3.2 2.6 6.35 3.7 9.5 1.35-2.75 3.15-6.15 4.7-8.9.6-1.05 2.05-1.05 2.35.15.3 1.25-.7 2.15-1.85 2.2-.75.03-1.3-.25-1.75-.75",
+					fill: "none", stroke: "#fff", "stroke-width": 1.75, "stroke-linecap": "round", "stroke-linejoin": "round"
+				})
+			);
+		}
+
 		/** 「开始页」那张卡的图标：宿主的 EntryBox 以 <Icon size={…} className={…} /> 调用它。 */
 		function GuideIcon({ size = 24, className }) {
-			return h(Icon, { name: "spark", size, className });
+			return h(BrandIcon, { size, className });
 		}
 
 		function Icon({ name, size = 16, className }) {
@@ -14268,23 +14285,21 @@ h(
 				{ className: "vig-root", ref: rootRef, "data-compact": wide ? "0" : "1" },
 				h("style", null, CSS),
 				h(
-					"header",
-					{ className: "vig-head" },
-					h("span", { className: "vig-mark" }, h(Icon, { name: "spark", size: 12 })),
-					h("span", { className: "vig-title" }, t("nav.title")),
-					// 刊头 kicker：一行小号大写字距的英文副标，给顶部一点杂志刊头的气口
-					h("span", { className: "vig-kicker" }, t("nav.kicker")),
-					h("div", { className: "vig-spacer" }),
-					// 头部只留刊头。状态点、刷新与重载按钮都已去掉：这些入口在
-					// 供应商管理和图库里各有归属，挂在刊头上只是重复。
-					fatal ? h(Pill, { tone: "warn" }, t("common.service")) : null
-				),
-				h(
 					"div",
 					{ className: "vig-shell" },
 					h(
 						"nav",
 						{ className: "vig-nav vig-card" },
+						/* 品牌标：原来刊头里的那个方块位置，点一下去仓库。 */
+						h(
+							"a",
+							{
+								className: "vig-brand", href: REPO_URL, target: "_blank", rel: "noreferrer noopener",
+								title: t("nav.github"), "aria-label": t("nav.github"), "data-brand": "1"
+							},
+							h(BrandIcon, { size: 26 })
+						),
+						fatal ? h(Pill, { tone: "warn" }, t("common.service")) : null,
 						navItems.map((item) => {
 							const active = view === item.id, chat = item.id === "chat";
 							return h(react.Fragment, { key:item.id },

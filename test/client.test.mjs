@@ -331,7 +331,8 @@ check("条目标题可渲染", tabDef.guide[0].title() === "生图工作台");
 /* ---- 3. 真的渲染出界面 ------------------------------------------- */
 
 const chat = htmlFor(mounted.slots, "settings.section");
-check("左上角是品牌标，指向仓库", chat.includes('data-brand="1"') && chat.includes("github.com/2357678297/DSH-image") && chat.includes('target="_blank"') && !chat.includes("API 对话生图工作台"));
+check("侧栏底部「更新」上方是品牌锁标，指向仓库", chat.includes('data-brand-lockup="1"') && chat.includes("github.com/2357678297/DSH-image") && chat.includes('target="_blank"') && chat.indexOf('data-brand-lockup="1"') < chat.indexOf('class="vig-update-row"') && !chat.includes('data-brand="1"'));
+
 for (const label of ["对话生图", "图片管理", "信息管理", "供应商管理"]) {
   check(`导航含「${label}」`, chat.includes(label));
 }
@@ -349,7 +350,7 @@ check("注入样式表", chat.includes("--vig-r-card:18px") && chat.includes(".v
 check("没有渲染出 undefined", !/undefined/.test(chat), chat.match(/undefined/g)?.length + " 处");
 
 const pane = htmlFor(mounted.slots, "sidebar.right.pane.tab");
-check("右侧栏 tab 也能渲染", pane.includes('data-brand="1"') && pane.length > 500, `${pane.length} bytes`);
+check("右侧栏 tab 也能渲染", pane.includes('data-brand-lockup="1"') && pane.length > 500, `${pane.length} bytes`);
 
 // 停靠面板默认展开：DSH 自更新会换端口 → origin 变 → localStorage 清空，
 // 默认收起就等于「更新完插件不见了」。只有用户亲手存过 "0" 才收起。

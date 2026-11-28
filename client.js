@@ -640,6 +640,15 @@ function writeConvSetting(id, settings) {
 			"json.locked": "由工作台管理，不可在这里改",
 			"json.complexHint": "复杂值：切到「自定义 JSON」修改",
 			"json.tableHint": "每行一个字段；勾选表示本行覆盖了标准值，取消勾选即回到标准值。",
+			"json.addField": "加字段",
+			"json.fieldName": "字段名",
+			"json.fieldValue": "值",
+			"json.fieldNameHint": "如 seed",
+			"json.fieldValueHint": "自动识别数字 / true / false / JSON",
+			"json.add": "添加",
+			"json.remove": "删除字段",
+			"json.keyInvalid": "字段名只能用字母、数字、下划线和点，不能重复。",
+			"json.customField": "自定字段",
 			"chat.jsonHint": "修改的字段仅用于本会话的下一次发送；会话 ID 由工作台管理。size 是档位，aspect_ratio 是宽高比。关闭原样发送则转换为像素。",
 			"chat.jsonApply": "应用",
 			"chat.jsonReset": "恢复默认",
@@ -1437,6 +1446,15 @@ function writeConvSetting(id, settings) {
 			"json.locked": "Managed by the workbench; not editable here",
 			"json.complexHint": "Complex value: switch to Custom JSON",
 			"json.tableHint": "One field per row; checked means this row overrides the standard value. Unchecking restores it.",
+			"json.addField": "Add field",
+			"json.fieldName": "Field name",
+			"json.fieldValue": "Value",
+			"json.fieldNameHint": "e.g. seed",
+			"json.fieldValueHint": "Numbers, true/false and JSON are detected",
+			"json.add": "Add",
+			"json.remove": "Remove field",
+			"json.keyInvalid": "Field names allow letters, digits, underscore and dot only, and must be unique.",
+			"json.customField": "Custom",
 			"chat.geminiRatio": "Image aspect ratio", "chat.geminiSize": "Image resolution",
 			"chat.geminiRatioAuto": "Auto", "chat.geminiRatioAutoHint": "Auto: omit the fixed ratio. With references, let the model follow the original framing; otherwise let it choose.",
 			"prov.shortRerank": "Rerank",
@@ -2907,6 +2925,13 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 .vig-json-row input.vig-input:focus-visible,.vig-json-row .vig-sel:focus-visible{outline:2px solid var(--vig-accent);outline-offset:1px}
 .vig-json-row.is-on input.vig-input{border-color:var(--vig-accent-line)}
 .vig-json-empty{padding:14px;text-align:center;font-size:12px;color:var(--vig-text-muted)}
+.vig-json-row-del{flex:none;display:grid;place-items:center;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--vig-text-faint);font-size:14px;line-height:1;cursor:pointer}
+.vig-json-row-del:hover{background:var(--vig-surface-sunken);color:var(--danger,#d92121)}
+.vig-json-row{grid-template-columns:24px minmax(84px,auto) minmax(0,1fr) 22px}
+.vig-json-row-name input.vig-input{height:24px;padding:0 6px;font:11.5px ui-monospace,monospace}
+.vig-json-add{display:grid;grid-template-columns:24px minmax(84px,auto) minmax(0,1fr) auto;align-items:center;gap:8px;margin:0 0 8px;padding:6px 8px;border:1px dashed var(--vig-line-strong);border-radius:var(--vig-r-tile);background:var(--vig-surface-soft)}
+.vig-json-add input.vig-input{box-sizing:border-box;width:100%;min-width:0;height:28px;padding:0 9px;border:1px solid var(--vig-line-strong);border-radius:8px;background:var(--vig-surface);color:var(--vig-text);font:12.5px/1 var(--vig-font)}
+.vig-json-add .vig-btn{height:28px;min-height:28px;padding:0 10px;font-size:12px}
 .vig-json-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 8px}
 .vig-json-modes{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--vig-line-strong);border-radius:var(--vig-r-pill)}
 .vig-json-modes .vig-btn{min-height:26px;height:26px;padding:0 10px;border:0;border-radius:var(--vig-r-pill);background:transparent;font-size:12px;color:var(--vig-text-muted)}
@@ -4843,7 +4868,7 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 		}
 
 		function ChatView({ state, actions }) {
-			const { config, providers, protocols, notes, jobs, busyJobIds, references, draft, conversations, conversationId, isVideoEndpoint, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft, sizeRaw, toggleJsonSize, jsonCustom, setJsonCustom, jsonBase } = state;
+			const { config, providers, protocols, notes, jobs, busyJobIds, references, draft, conversations, conversationId, isVideoEndpoint, jsonOpen, jsonDraft, setJsonOpen, setJsonDraft, sizeRaw, toggleJsonSize, jsonCustom, setJsonCustom, jsonBase, newFieldKey, setNewFieldKey, newFieldValue, setNewFieldValue } = state;
 			const [overLimit, setOverLimit] = useState(false);
 			// 浮层只展示直出参数；编辑通过同一个 JSON 入口。
 			const [summaryOpen, setSummaryOpen] = useState(false);
@@ -5185,6 +5210,35 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 								h("input", { type: "checkbox", className: "vig-ctx-check", checked: nativeGemini || sizeRaw, disabled: nativeGemini, "data-size-raw": "1", onChange: () => toggleJsonSize(!sizeRaw) }),
 								h("span", null, t("chat.sizeRaw"))
 							),
+							h(
+								"div",
+								{ className: "vig-json-add", "data-json-add": "1" },
+								h("span", { className: "vig-json-row-del", "aria-hidden": "true" }),
+								h("input", {
+									className: "vig-input", "data-json-new-key": "1",
+									value: newFieldKey, placeholder: t("json.fieldNameHint"),
+									"aria-label": t("json.fieldName"),
+									onChange: (event) => setNewFieldKey(event.target.value),
+									onKeyDown: (event) => {
+										if (event.key !== "Enter") return;
+										if (actions.addJsonField(newFieldKey, newFieldValue)) { setNewFieldKey(""); setNewFieldValue(""); }
+									}
+								}),
+								h("input", {
+									className: "vig-input", "data-json-new-value": "1",
+									value: newFieldValue, placeholder: t("json.fieldValueHint"),
+									"aria-label": t("json.fieldValue"),
+									onChange: (event) => setNewFieldValue(event.target.value),
+									onKeyDown: (event) => {
+										if (event.key !== "Enter") return;
+										if (actions.addJsonField(newFieldKey, newFieldValue)) { setNewFieldKey(""); setNewFieldValue(""); }
+									}
+								}),
+								h("button", {
+									type: "button", className: "vig-btn", "data-json-add-apply": "1",
+									onClick: () => { if (actions.addJsonField(newFieldKey, newFieldValue)) { setNewFieldKey(""); setNewFieldValue(""); } }
+								}, t("json.add"))
+							),
 							jsonCustom ? null : h(
 								"div",
 								{ className: "vig-json-fields", "data-json-fields": "1" },
@@ -5203,12 +5257,23 @@ body[data-ds-dark-theme] .vig-bottom-jump{background:rgba(26,26,28,.94);border-c
 												onChange: (event) => { if (!event.target.checked) actions.toggleJsonField(key); }
 											}),
 											h("div", { className: "vig-json-row-name" },
-												h("span", { className: "vig-json-row-label", title: locked ? t("json.locked") : undefined }, FIELD_LABELS[key] || key),
-												h("code", { className: "vig-json-row-key" }, key)
+												h("span", { className: "vig-json-row-label", title: locked ? t("json.locked") : undefined }, FIELD_LABELS[key] || t("json.customField")),
+												FIELD_LABELS[key] || locked
+													? h("code", { className: "vig-json-row-key" }, key)
+													: h("input", {
+														className: "vig-input vig-json-row-key-input", "data-json-rename": key,
+														defaultValue: key, "aria-label": `${t("json.fieldName")}（${key}）`,
+														onBlur: (event) => actions.renameJsonField(key, event.target.value)
+													})
 											),
-											fieldControl(key)
+											fieldControl(key),
+											locked ? h("span", { className: "vig-json-row-del", "aria-hidden": "true" }) : h("button", {
+												type: "button", className: "vig-json-row-del", "data-json-remove": key,
+												title: t("json.remove"), "aria-label": `${t("json.remove")}：${key}`,
+												onClick: () => actions.removeJsonField(key)
+											}, "×")
 										);
-									}))
+									})),
 							),
 							h("textarea", {
 								className: "vig-input vig-json-editor", "aria-label": t("chat.jsonBody"),
@@ -12863,6 +12928,9 @@ h(
 				}
 			};
 			const [jsonDraft, setJsonDraft] = useState("");
+			// JSON 表格底部「加字段」：字段名与值各一个输入，回车或点添加即入表
+			const [newFieldKey, setNewFieldKey] = useState("");
+			const [newFieldValue, setNewFieldValue] = useState("");
 			/* 结构化字段视图与自定义 JSON 视图二选一；勾选态由「与标准值的差异」直接派生。 */
 			const [jsonCustom, setJsonCustom] = useState(false);
 			const jsonOverrideRef = useRef(null);
@@ -12918,6 +12986,43 @@ h(
 				if (!parsed) { toast(t("chat.jsonInvalid"), "err"); return; }
 				if (value === undefined) delete parsed[key]; else parsed[key] = value;
 				setJsonDraft(JSON.stringify(parsed, null, 2));
+			};
+			const jsonKeyOk = (key) => /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(key);
+			/* 值按字面量收：能当 JSON 解析就用解析结果，否则按字符串。 */
+			const jsonFieldValue = (raw) => {
+				const text = String(raw ?? "").trim();
+				if (text === "") return "";
+				try {
+					const parsed = JSON.parse(text);
+					if (parsed === null || ["number", "boolean", "object"].includes(typeof parsed)) return parsed;
+				} catch (error) { /* 不是 JSON 就当字符串 */ }
+				return String(raw);
+			};
+			const addJsonField = (rawKey, rawValue) => {
+				const key = String(rawKey ?? "").trim();
+				const parsed = jsonParsedObject();
+				if (!parsed) { toast(t("chat.jsonInvalid"), "err"); return false; }
+				if (!jsonKeyOk(key) || Object.hasOwn(parsed, key)) { toast(t("json.keyInvalid"), "err"); return false; }
+				parsed[key] = jsonFieldValue(rawValue);
+				setJsonDraft(JSON.stringify(parsed, null, 2));
+				return true;
+			};
+			const removeJsonField = (key) => {
+				const parsed = jsonParsedObject();
+				if (!parsed) { toast(t("chat.jsonInvalid"), "err"); return; }
+				delete parsed[key];
+				setJsonDraft(JSON.stringify(parsed, null, 2));
+			};
+			const renameJsonField = (from, to) => {
+				const key = String(to ?? "").trim();
+				if (from === key) return true;
+				const parsed = jsonParsedObject();
+				if (!parsed) { toast(t("chat.jsonInvalid"), "err"); return false; }
+				if (!jsonKeyOk(key) || Object.hasOwn(parsed, key)) { toast(t("json.keyInvalid"), "err"); return false; }
+				const next = {};
+				for (const [name, value] of Object.entries(parsed)) next[name === from ? key : name] = value;
+				setJsonDraft(JSON.stringify(next, null, 2));
+				return true;
 			};
 			const toggleJsonField = (key) => {
 				const parsed = jsonParsedObject();
@@ -13511,6 +13616,9 @@ h(
 				applyJsonBody: () => applyJsonDraft(),
 				writeJsonField,
 				toggleJsonField,
+				addJsonField,
+				removeJsonField,
+				renameJsonField,
 				toast,
 				reload,
 				setView,
@@ -14149,6 +14257,10 @@ h(
 				jsonBase: jsonBaseRef.current,
 				writeJsonField,
 				toggleJsonField,
+				newFieldKey,
+				setNewFieldKey,
+				newFieldValue,
+				setNewFieldValue,
 				sizeRaw,
 				toggleJsonSize,
 				chatModels

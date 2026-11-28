@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-velapi-image-go",
-  "version": "0.2.100-rev.129",
+  "version": "0.2.100-rev.130",
   "description": "velapi-image-go —— DeepSeek Harness 右侧栏「API 对话生图工作台」：对话生图 / 图片管理 / 信息管理 / 供应商管理，后端对接 velapi 兼容生图接口。",
   "type": "module",
   "main": "lib/index.js",
